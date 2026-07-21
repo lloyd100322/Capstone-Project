@@ -28,16 +28,6 @@ EnerJeep is a modern Android application built as a Capstone Project. It is desi
 
 The project adheres to the recommended Android Architecture components:
 
-⚙️ Getting Started
-Prerequisites
-• Android Studio Ladybug | 2024.2.1 or newer.
-• JDK 17 or higher.
-• Android SDK 36 (target and compile SDK).
-
-Installation
-1.
-Clone the repository:
-Java
 ## ⚙️ Getting Started
 
 ### Prerequisites
