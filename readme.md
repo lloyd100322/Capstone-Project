@@ -1,9 +1,12 @@
 # EnerJeep - Capstone Project
 
-EnerJeep is a modern Android application built as a Capstone Project. It focuses on [briefly describe the app's purpose here, e.g., "optimizing energy consumption for modern public transport"]. The project follows the latest Android development standards, utilizing a fully declarative UI and a robust dependency injection framework.
+EnerJeep is a modern Android application built as a Capstone Project. It is designed to streamline public transport operations by providing a centralized platform for managing jeepney terminals, coordinating drivers, and monitoring daily earnings. The project follows the latest Android development standards, utilizing a fully declarative UI and a robust dependency injection framework.
 
 ## 🚀 Key Features
 
+*   **Terminal Management**: Efficiently oversee jeepney terminal operations and scheduling.
+*   **Driver Coordination**: Track and manage driver assignments and status.
+*   **Earnings Monitoring**: Real-time tracking and reporting of daily revenue and financial performance.
 *   **Modern UI**: Built entirely with Jetpack Compose for a reactive and fluid user experience.
 *   **Material 3 Design**: Implements the latest Material Design system for a consistent look and feel.
 *   **Dependency Injection**: Uses Hilt for scalable and testable architecture.
@@ -24,6 +27,7 @@ EnerJeep is a modern Android application built as a Capstone Project. It focuses
 ## 🏗 Architecture & Project Structure
 
 The project adheres to the recommended Android Architecture components:
+
 ⚙️ Getting Started
 Prerequisites
 •
