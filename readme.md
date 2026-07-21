@@ -30,12 +30,10 @@ The project adheres to the recommended Android Architecture components:
 
 ⚙️ Getting Started
 Prerequisites
-•
-Android Studio Ladybug | 2024.2.1 or newer.
-•
-JDK 17 or higher.
-•
-Android SDK 36 (target and compile SDK).
+• Android Studio Ladybug | 2024.2.1 or newer.
+• JDK 17 or higher.
+• Android SDK 36 (target and compile SDK).
+
 Installation
 1.
 Clone the repository:
