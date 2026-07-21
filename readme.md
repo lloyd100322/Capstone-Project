@@ -46,10 +46,7 @@ Java
 
 ### Installation
 
-1.  **Clone the repository:**
-2.
-Open the project in Android Studio.
-3.
-Wait for the Gradle sync to finish.
-4.
-Run the application on an emulator or a device running Android 10 (API 29) or higher.
+1. **Clone the repository:**
+2. **Open the project in Android Studio.**
+3. **Wait for the Gradle sync to finish.**
+4. **Run the application on an emulator or a device running Android 10 (API 29) or higher.**
