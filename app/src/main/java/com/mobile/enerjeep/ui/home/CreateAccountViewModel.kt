@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 import javax.inject.Inject
 
 /** 
@@ -42,8 +43,10 @@ class CreateAccountViewModel @Inject constructor(
         }
 
         val cleanPhoneNumber = phoneNumber.lowercase()
+        val generatedUserId = UUID.randomUUID().toString()
 
         val userMap = mutableMapOf(
+            "userId" to generatedUserId,
             "firstName" to firstName,
             "lastName" to lastName,
             "phoneNumber" to cleanPhoneNumber,

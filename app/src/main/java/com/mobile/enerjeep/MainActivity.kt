@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ContentView(
                 appNavigator = appNavigator,
+                activity = this,
                 finishActivity = {
                     finish()
                 }

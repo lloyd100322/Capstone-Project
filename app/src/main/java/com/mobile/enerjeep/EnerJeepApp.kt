@@ -19,15 +19,15 @@ class EnerJeepApp: Application() {
     override fun onCreate() {
         super.onCreate()
         FirebaseApp.initializeApp(this)
-        val firebaseAppCheck = Firebase.appCheck
-        if (BuildConfig.DEBUG) {
-            firebaseAppCheck.installAppCheckProviderFactory(
-                DebugAppCheckProviderFactory.getInstance()
-            )
-        } else {
-            firebaseAppCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        }
+//        val firebaseAppCheck = Firebase.appCheck
+//        if (BuildConfig.DEBUG) {
+//            firebaseAppCheck.installAppCheckProviderFactory(
+//                DebugAppCheckProviderFactory.getInstance()
+//            )
+//        } else {
+//            firebaseAppCheck.installAppCheckProviderFactory(
+//                PlayIntegrityAppCheckProviderFactory.getInstance()
+//            )
+//        }
     }
 }

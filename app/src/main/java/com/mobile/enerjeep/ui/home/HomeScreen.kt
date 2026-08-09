@@ -17,7 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.components.*
@@ -40,8 +41,12 @@ fun HomeScreen(
     var selectedTab by remember { mutableStateOf(HomeTab.Home) }
     val userProfile = viewModel.userProfile
     val isAdmin = viewModel.isAdmin()
+    
+    val activeJeeps by viewModel.activeJeepsCount.collectAsStateWithLifecycle()
+    val totalJeeps by viewModel.totalJeepsCount.collectAsStateWithLifecycle()
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
             NavigationBar(
                 containerColor = Color.White,
@@ -100,13 +105,20 @@ fun HomeScreen(
             }
         },
         containerColor = LightGrayBackground
-    ) { paddingValues: PaddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+        ) {
             when (selectedTab) {
                 HomeTab.Home -> {
                     if (isAdmin) {
                         HomeContent(
                             firstName = userProfile?.firstName ?: "Admin",
+                            activeJeeps = activeJeeps,
+                            totalJeeps = totalJeeps,
                             onCreateAccountClick = { appNavigator.navigateTo(Screen.CreateAccount) }
                         )
                     } else {
@@ -127,6 +139,8 @@ fun HomeScreen(
 @Composable
 fun HomeContent(
     firstName: String,
+    activeJeeps: Int,
+    totalJeeps: Int,
     onCreateAccountClick: () -> Unit
 ) {
     Column(
@@ -189,7 +203,7 @@ fun HomeContent(
             SummaryCard(
                 modifier = Modifier.weight(1f),
                 title = "Aktibong Jeep",
-                value = "1/2",
+                value = "$activeJeeps/$totalJeeps",
                 icon = { TruckIcon(modifier = Modifier.size(24.dp), color = SuccessGreen) },
                 iconBackground = SuccessGreenLight
             )
@@ -242,7 +256,7 @@ fun HomeContent(
                         color = Color.Gray
                     )
                     Text(
-                        text = "1",
+                        text = activeJeeps.toString(),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.Black

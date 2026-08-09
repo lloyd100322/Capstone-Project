@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.mobile.enerjeep.MainActivity
 import com.mobile.enerjeep.ui.home.CreateAccountScreen
 import com.mobile.enerjeep.ui.home.HomeScreen
 import com.mobile.enerjeep.ui.login.LoginScreen
@@ -17,7 +18,9 @@ import com.mobile.enerjeep.ui.login.LoginScreen
 @Composable
 fun NavGraph(
     navController: NavHostController,
-    appNavigator: AppNavigator
+    appNavigator: AppNavigator,
+    activity: MainActivity,
+    startDestination: Screen
 ) {
     LaunchedEffect(Unit) {
         appNavigator.navigationEvents.collect { event ->
@@ -34,10 +37,11 @@ fun NavGraph(
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Login
+        startDestination = startDestination
     ) {
         composable<Screen.Login> {
             LoginScreen(
+                activity = activity,
                 onLoginSuccess = {
                     appNavigator.navigateTo(Screen.Home) {
                         popUpTo(Screen.Login) { inclusive = true }

@@ -1,6 +1,7 @@
 package com.mobile.enerjeep.ui.login
 
 import android.app.Activity
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseException
@@ -76,6 +77,7 @@ class LoginViewModel @Inject constructor(
                 } ?: UserRole.Driver
 
                 pendingProfile = UserProfile(
+                    userId = data?.get("userId") as? String ?: "",
                     firstName = data?.get("firstName") as? String ?: "",
                     lastName = data?.get("lastName") as? String ?: "",
                     phoneNumber = data?.get("phoneNumber") as? String ?: "",
@@ -97,7 +99,6 @@ class LoginViewModel @Inject constructor(
     private fun triggerSmsVerification(phoneNumber: String, activity: Activity) {
         // This disables reCAPTCHA/Play Integrity for testing with fictional phone numbers.
 //        auth.firebaseAuthSettings.setAppVerificationDisabledForTesting(true)
-        auth.firebaseAuthSettings.forceRecaptchaFlowForTesting(true)
 
         val options = PhoneAuthOptions.newBuilder(auth)
             .setPhoneNumber(phoneNumber)
@@ -109,6 +110,7 @@ class LoginViewModel @Inject constructor(
                 }
 
                 override fun onVerificationFailed(e: FirebaseException) {
+                    Log.e("PhoneAuth", "Phone verification failed", e)
                     _uiState.value = LoginUiState.Error(e.message ?: "Hindi maipadala ang code")
                 }
 

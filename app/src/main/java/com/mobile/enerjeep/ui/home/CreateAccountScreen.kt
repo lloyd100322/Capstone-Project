@@ -22,7 +22,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.ui.theme.*
@@ -60,14 +60,16 @@ fun CreateAccountScreen(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Color(0xFFF0F2F5)
-    ) {
+    Scaffold(
+        containerColor = Color(0xFFF0F2F5)
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -284,6 +286,7 @@ fun CustomInputField(
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
         ),

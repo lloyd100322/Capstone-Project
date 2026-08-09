@@ -26,6 +26,7 @@ class UserSession @Inject constructor() {
 }
 
 data class UserProfile(
+    val userId: String = "",
     val firstName: String = "",
     val lastName: String = "",
     val phoneNumber: String = "",
