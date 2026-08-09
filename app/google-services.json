@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "414145127543",
+    "project_id": "enerjeep-b8f3a",
+    "storage_bucket": "enerjeep-b8f3a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:414145127543:android:e4085500391b1282f7d272",
+        "android_client_info": {
+          "package_name": "com.mobile.enerjeep"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHJPDiazq3qn65-bi5evM7ZmF4vYRqEdg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

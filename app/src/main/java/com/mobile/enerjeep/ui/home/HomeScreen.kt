@@ -1,31 +1,314 @@
 package com.mobile.enerjeep.ui.home
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.mobile.enerjeep.navigation.AppNavigator
+import com.mobile.enerjeep.navigation.Screen
+import com.mobile.enerjeep.ui.components.*
+import com.mobile.enerjeep.ui.theme.*
 
 /** 
  * Created by Bry1337 on 8/1/26.
  * Copyright (c) 2026. All rights reserved.
  */
 
+enum class HomeTab {
+    Home, Pila, Talaan, Insidente, MgaUlat, Profile
+}
+
 @Composable
-fun HomeScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+fun HomeScreen(
+    appNavigator: AppNavigator,
+    viewModel: HomeViewModel = hiltViewModel()
+) {
+    var selectedTab by remember { mutableStateOf(HomeTab.Home) }
+    val userProfile = viewModel.userProfile
+    val isAdmin = viewModel.isAdmin()
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(
+                containerColor = Color.White,
+                tonalElevation = 8.dp
+            ) {
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.Home,
+                    onClick = { selectedTab = HomeTab.Home },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
+                    label = { Text("Home", fontSize = 10.sp) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = EnerjeepBlue,
+                        selectedTextColor = EnerjeepBlue,
+                        unselectedIconColor = Color.Gray,
+                        unselectedTextColor = Color.Gray,
+                        indicatorColor = Color.Transparent
+                    )
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.Pila,
+                    onClick = { selectedTab = HomeTab.Pila },
+                    icon = { ListIcon(modifier = Modifier.size(24.dp)) },
+                    label = { Text("Pila", fontSize = 10.sp) }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.Talaan,
+                    onClick = { selectedTab = HomeTab.Talaan },
+                    icon = { DocumentIcon(modifier = Modifier.size(24.dp)) },
+                    label = { Text("Talaan", fontSize = 10.sp) }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.Insidente,
+                    onClick = { selectedTab = HomeTab.Insidente },
+                    icon = { WarningIcon(modifier = Modifier.size(24.dp)) },
+                    label = { Text("Insidente", fontSize = 10.sp) }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.MgaUlat,
+                    onClick = { selectedTab = HomeTab.MgaUlat },
+                    icon = { DocumentIcon(modifier = Modifier.size(24.dp)) },
+                    label = { Text("Mga Ulat", fontSize = 10.sp) }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == HomeTab.Profile,
+                    onClick = { selectedTab = HomeTab.Profile },
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
+                    label = { Text("Profile", fontSize = 10.sp) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = EnerjeepBlue,
+                        selectedTextColor = EnerjeepBlue,
+                        unselectedIconColor = Color.Gray,
+                        unselectedTextColor = Color.Gray,
+                        indicatorColor = Color.Transparent
+                    )
+                )
+            }
+        },
+        containerColor = LightGrayBackground
+    ) { paddingValues: PaddingValues ->
+        Box(modifier = Modifier.padding(paddingValues)) {
+            when (selectedTab) {
+                HomeTab.Home -> {
+                    if (isAdmin) {
+                        HomeContent(
+                            firstName = userProfile?.firstName ?: "Admin",
+                            onCreateAccountClick = { appNavigator.navigateTo(Screen.CreateAccount) }
+                        )
+                    } else {
+                        DriverContent(firstName = userProfile?.firstName ?: "Driver")
+                    }
+                }
+                HomeTab.Profile -> ProfileScreen()
+                else -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "Coming Soon: ${selectedTab.name}", color = Color.Gray)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeContent(
+    firstName: String,
+    onCreateAccountClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
     ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(EnerjeepBlue, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                BusIconCustom(modifier = Modifier.size(24.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "Enerjeep",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Greeting
         Text(
-            text = "Welcome to Home Screen!",
-            fontSize = 24.sp,
+            text = "Musta, $firstName!",
+            fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black
+        )
+        Text(
+            text = "Buod ng kooperatiba sa isang tingin.",
+            fontSize = 16.sp,
+            color = Color.Gray
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Summary Stats Grid
+        Row(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                title = "Kabuuang Benta",
+                value = "₱0",
+                icon = { SalesIcon(modifier = Modifier.size(24.dp), color = EnerjeepBlue) },
+                iconBackground = Color.White
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                title = "Aktibong Jeep",
+                value = "1/2",
+                icon = { TruckIcon(modifier = Modifier.size(24.dp), color = SuccessGreen) },
+                iconBackground = SuccessGreenLight
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        SummaryCard(
+            modifier = Modifier.fillMaxWidth(0.5f),
+            title = "Insidente",
+            value = "0",
+            icon = { WarningIcon(modifier = Modifier.size(24.dp), color = WarningOrange) },
+            iconBackground = WarningOrangeLight
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Tracking Summary
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TruckIcon(modifier = Modifier.size(20.dp), color = EnerjeepBlue)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Buod ng Tracking",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Aktibong Jeep Ngayon",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Text(
+                        text = "1",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Quick Actions
+        Text(
+            text = "Mabilis na Aksyon",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                text = "Gumawa ng Account",
+                icon = { Text("+", fontSize = 20.sp, color = SuccessGreen, fontWeight = FontWeight.Bold) },
+                backgroundColor = SuccessGreenLight,
+                contentColor = SuccessGreen,
+                onClick = onCreateAccountClick
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                text = "Itala ang Terminal Fee",
+                icon = { DocumentIcon(modifier = Modifier.size(20.dp), color = Color.Black) },
+                backgroundColor = Color.White,
+                contentColor = Color.Black,
+                onClick = {}
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                text = "I-report ang Insidente",
+                icon = { WarningIcon(modifier = Modifier.size(20.dp), color = Color.Black) },
+                backgroundColor = Color.White,
+                contentColor = Color.Black,
+                onClick = {}
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                text = "Tingnan ang Pila",
+                icon = { ListIcon(modifier = Modifier.size(20.dp), color = Color.Black) },
+                backgroundColor = Color.White,
+                contentColor = Color.Black,
+                onClick = {}
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        QuickActionButton(
+            modifier = Modifier.fillMaxWidth(0.5f),
+            text = "Emergency",
+            icon = { SirenIcon(modifier = Modifier.size(20.dp), color = ErrorRed) },
+            backgroundColor = ErrorRedLight,
+            contentColor = ErrorRed,
+            onClick = {}
         )
     }
 }

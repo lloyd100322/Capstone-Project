@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.mobile.enerjeep.ui.home.CreateAccountScreen
 import com.mobile.enerjeep.ui.home.HomeScreen
 import com.mobile.enerjeep.ui.login.LoginScreen
 
@@ -45,7 +46,10 @@ fun NavGraph(
             )
         }
         composable<Screen.Home> {
-            HomeScreen()
+            HomeScreen(appNavigator = appNavigator)
+        }
+        composable<Screen.CreateAccount> {
+            CreateAccountScreen()
         }
     }
 }
