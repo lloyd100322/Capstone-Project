@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.MainActivity
-import com.mobile.enerjeep.ui.components.BusIconCustom
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.EnerjeepTheme
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
@@ -81,14 +83,11 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             // App Logo
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(EnerjeepBlue, RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                BusIconCustom(modifier = Modifier.size(48.dp))
-            }
+            Image(
+                painter = painterResource(id = R.drawable.app_icon),
+                contentDescription = "Enerjeep App Logo",
+                modifier = Modifier.size(60.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
