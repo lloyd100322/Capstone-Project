@@ -16,4 +16,6 @@ sealed interface Screen {
 
     @Serializable
     data object CreateAccount : Screen
+    @Serializable
+    data object ResetPassword : Screen
 }

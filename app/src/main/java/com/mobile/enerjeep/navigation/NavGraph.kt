@@ -9,6 +9,7 @@ import com.mobile.enerjeep.MainActivity
 import com.mobile.enerjeep.ui.home.CreateAccountScreen
 import com.mobile.enerjeep.ui.home.HomeScreen
 import com.mobile.enerjeep.ui.login.LoginScreen
+import com.mobile.enerjeep.ui.login.ResetPasswordScreen
 
 /** 
  * Created by Bry1337 on 8/1/26.
@@ -41,6 +42,7 @@ fun NavGraph(
     ) {
         composable<Screen.Login> {
             LoginScreen(
+                appNavigator = appNavigator,
                 activity = activity,
                 onLoginSuccess = {
                     appNavigator.navigateTo(Screen.Home) {
@@ -54,6 +56,9 @@ fun NavGraph(
         }
         composable<Screen.CreateAccount> {
             CreateAccountScreen()
+        }
+        composable<Screen.ResetPassword> {
+            ResetPasswordScreen(appNavigator = appNavigator)
         }
     }
 }

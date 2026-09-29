@@ -1,7 +1,6 @@
 package com.mobile.enerjeep.ui.login
 
-import android.app.Activity
-import androidx.compose.foundation.Canvas
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -16,12 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,12 +28,15 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.MainActivity
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.res.painterResource
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.EnerjeepTheme
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.navigation.Screen
 
 /** 
  * Created by Bry1337 on 8/1/26.
@@ -49,6 +46,7 @@ import com.mobile.enerjeep.ui.theme.LightGrayBackground
 
 @Composable
 fun LoginScreen(
+    appNavigator: AppNavigator,
     onLoginSuccess: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel(),
     activity: MainActivity
@@ -199,6 +197,15 @@ fun LoginScreen(
                                 focusedBorderColor = EnerjeepBlue
                             )
                         )
+                        Text(
+                            text = "Nakalimutan ang Password?",
+                            color = EnerjeepBlue,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.clickable {
+                                appNavigator.navigateTo(Screen.ResetPassword)
+                            }
+                        )
                     } else {
                         // OTP Field
                         Text(
@@ -282,80 +289,5 @@ fun LoginScreen(
                 }
             }
         }
-    }
-}
-
-
-
-@Composable
-fun LockIconCustom(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-
-        // Base
-        drawRoundRect(
-            color = Color.Gray,
-            topLeft = Offset(width * 0.2f, height * 0.45f),
-            size = Size(width * 0.6f, height * 0.45f),
-            cornerRadius = CornerRadius(width * 0.05f)
-        )
-
-        // Shackle
-        drawPath(
-            path = Path().apply {
-                moveTo(width * 0.3f, height * 0.45f)
-                lineTo(width * 0.3f, height * 0.25f)
-                cubicTo(
-                    width * 0.3f,
-                    height * 0.1f,
-                    width * 0.7f,
-                    height * 0.1f,
-                    width * 0.7f,
-                    height * 0.25f
-                )
-                lineTo(width * 0.7f, height * 0.45f)
-            },
-            color = Color.Gray,
-            style = Stroke(width = width * 0.1f)
-        )
-    }
-}
-
-@Composable
-fun EyeIconCustom(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-
-        // Eye shape
-        drawPath(
-            path = Path().apply {
-                moveTo(width * 0.1f, height * 0.5f)
-                quadraticTo(width * 0.5f, height * 0.1f, width * 0.9f, height * 0.5f)
-                quadraticTo(width * 0.5f, height * 0.9f, width * 0.1f, height * 0.5f)
-            },
-            color = Color.Gray,
-            style = Stroke(width = width * 0.05f)
-        )
-
-        // Pupil
-        drawCircle(
-            color = Color.Gray,
-            radius = width * 0.15f,
-            center = Offset(width * 0.5f, height * 0.5f)
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun LoginScreenPreview() {
-    val context = LocalContext.current
-    EnerjeepTheme {
-        LoginScreen(
-            onLoginSuccess = {},
-            activity = context as MainActivity
-        )
     }
 }
