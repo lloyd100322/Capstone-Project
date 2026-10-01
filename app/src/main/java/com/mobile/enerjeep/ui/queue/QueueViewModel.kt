@@ -2,15 +2,25 @@ package com.mobile.enerjeep.ui.queue
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.FirestoreIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
-// --- 1. DATA MODELS ---
+
 data class QueueVehicle(
     val id: String,
+    val driverId: String = "",
     val position: Int,
     val plateNumber: String,
     val driverName: String,
@@ -28,7 +38,6 @@ data class HistoryVehicle(
     val status: String
 )
 
-// --- 2. UI STATE (Sealed Interface) ---
 sealed interface QueueUiState {
     data object Loading : QueueUiState
     data class Success(
@@ -40,90 +49,170 @@ sealed interface QueueUiState {
     data class Error(val message: String) : QueueUiState
 }
 
-// --- 3. VIEWMODEL ---
 @HiltViewModel
-class QueueViewModel @Inject constructor() : ViewModel() {
+class QueueViewModel @Inject constructor(
+    private val firestore: FirebaseFirestore
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow<QueueUiState>(QueueUiState.Loading)
     val uiState = _uiState.asStateFlow()
 
-    // 1. Keep the data stored in memory locally so we can manipulate it
-    private var activeQueueList = mutableListOf(
-        QueueVehicle("1", 1, "123das", "asdasd asdasd", "Monumento – Marilao", "2026-08-19", "Handa", false),
-        QueueVehicle("2", 2, "657dgs", "Juan Dela Cruz", "Monumento – Marilao", "2026-08-19", "Nakapila", false),
-        QueueVehicle("3", 3, "XYZ-987", "Pedro Penduko", "Monumento – Marilao", "2026-08-19", "Nakapila", false)
-    )
-
-    private var historyQueueList = mutableListOf(
-        HistoryVehicle("4", "GHI 012", "Jose Reyes", "09:05 AM • Jul 17, 2026", "Nakansela"),
-        HistoryVehicle("5", "DEF 789", "Maria Garcia", "08:47 AM • Jul 17, 2026", "Na-Dispatch")
-    )
+    private var queueListener: ListenerRegistration? = null
 
     init {
-        pushStateToUI()
+        startQueueListener()
     }
 
-    // Helper function to bundle the current memory lists and send them to the Screen
-    private fun pushStateToUI() {
-        _uiState.value = QueueUiState.Success(
-            activeQueue = activeQueueList.toList(),
-            historyQueue = historyQueueList.toList(),
-            totalInQueue = activeQueueList.size,
-            totalDispatchedToday = historyQueueList.count { it.status == "Na-Dispatch" }
-        )
-    }
+    private fun startQueueListener() {
+        queueListener = firestore.collection(FirestoreCollections.QUEUE)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _uiState.value = QueueUiState.Error(error.message ?: "Hindi mabasa ang pila")
+                    return@addSnapshotListener
+                }
+                if (snapshot == null) return@addSnapshotListener
 
-    // --- BUSINESS ACTIONS ---
+                val active = snapshot.documents
+                    .filter { isActiveStatus(it.getString("status")) }
+                    .sortedBy { it.getLong("position") ?: Long.MAX_VALUE }
+                    .mapIndexed { index, document ->
+                        QueueVehicle(
+                            id = document.id,
+                            driverId = document.getString("driverId").orEmpty(),
+                            position = (document.getLong("position")?.toInt() ?: (index + 1)),
+                            plateNumber = document.getString("plateNumber").orEmpty(),
+                            driverName = document.getString("driverName").orEmpty(),
+                            route = document.getString("route").orEmpty(),
+                            time = formatTimestamp(document.getTimestamp("createdAt"))
+                                .ifBlank { document.getString("time").orEmpty() },
+                            status = document.getString("status") ?: "Nakapila"
+                        )
+                    }
+
+                val history = snapshot.documents
+                    .filter { !isActiveStatus(it.getString("status")) }
+                    .sortedByDescending { it.getTimestamp("dispatchedAt")?.seconds ?: it.getTimestamp("createdAt")?.seconds ?: 0L }
+                    .map { document ->
+                        val timestamp = document.getTimestamp("dispatchedAt")
+                            ?: document.getTimestamp("updatedAt")
+                            ?: document.getTimestamp("createdAt")
+                        HistoryVehicle(
+                            id = document.id,
+                            plateNumber = document.getString("plateNumber").orEmpty(),
+                            driverName = document.getString("driverName").orEmpty(),
+                            time = formatTimestamp(timestamp).ifBlank { document.getString("time").orEmpty() },
+                            status = when (document.getString("status")?.lowercase()) {
+                                "cancelled" -> "Nakansela"
+                                else -> "Na-Dispatch"
+                            }
+                        )
+                    }
+
+                val today = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+                val dispatchedToday = snapshot.documents.count { document ->
+                    if (document.getString("status")?.lowercase() != "dispatched") return@count false
+                    val timestamp = document.getTimestamp("dispatchedAt") ?: return@count false
+                    SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(timestamp.toDate()) == today
+                }
+
+                _uiState.value = QueueUiState.Success(
+                    activeQueue = active,
+                    historyQueue = history,
+                    totalInQueue = active.size,
+                    totalDispatchedToday = dispatchedToday
+                )
+            }
+    }
 
     fun dispatchVehicle(vehicleId: String, income: Double, otherFees: Double) {
-        // Find the vehicle in the active queue
-        val vehicle = activeQueueList.find { it.id == vehicleId } ?: return
+        val currentState = _uiState.value as? QueueUiState.Success ?: return
+        val vehicle = currentState.activeQueue.firstOrNull { it.id == vehicleId } ?: return
 
-        // Remove it from the active queue
-        activeQueueList.remove(vehicle)
+        viewModelScope.launch {
+            try {
+                val batch = firestore.batch()
+                val queueRef = firestore.collection(FirestoreCollections.QUEUE).document(vehicleId)
 
-        // Add it to the top of the history queue
-        historyQueueList.add(
-            0, // Insert at top
-            HistoryVehicle(
-                id = vehicle.id,
-                plateNumber = vehicle.plateNumber,
-                driverName = vehicle.driverName,
-                time = "Ngayon", // In a real app, format the current timestamp
-                status = "Na-Dispatch"
-            )
-        )
+                batch.update(
+                    queueRef,
+                    mapOf(
+                        "status" to "dispatched",
+                        "income" to income,
+                        "otherFees" to otherFees,
+                        "netAmount" to (income - otherFees),
+                        "dispatchedAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp(),
+                        "position" to 0
+                    )
+                )
 
-        // Re-index the remaining active queue so positions are correct (1, 2, 3...)
-        activeQueueList = activeQueueList.mapIndexed { index, v ->
-            v.copy(position = index + 1)
-        }.toMutableList()
+                val ledgerId = "${vehicleId}_dispatch_${System.currentTimeMillis()}"
+                val ledgerRef = firestore.collection(FirestoreCollections.LEDGER).document(ledgerId)
+                batch.set(ledgerRef, mapOf(
+                    "id" to ledgerId,
+                    "driverId" to vehicle.driverId,
+                    "driverName" to vehicle.driverName,
+                    "plateNumber" to vehicle.plateNumber,
+                    "date" to SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date()),
+                    "amount" to (income - otherFees),
+                    "grossAmount" to income,
+                    "otherFees" to otherFees,
+                    "feeType" to "Dispatch",
+                    "status" to "Bayad",
+                    "source" to "queue_dispatch",
+                    "createdAt" to FieldValue.serverTimestamp()
+                ))
 
-        pushStateToUI()
+                batch.commit().await()
+            } catch (e: Exception) {
+                _uiState.value = QueueUiState.Error(e.message ?: "Hindi ma-dispatch ang sasakyan")
+            }
+        }
     }
 
     fun updateVehiclePosition(vehicleId: String, newPosition: Int) {
-        // 1. Find the current index of the vehicle
-        val currentIndex = activeQueueList.indexOfFirst { it.id == vehicleId }
+        val currentState = _uiState.value as? QueueUiState.Success ?: return
+        val active = currentState.activeQueue.toMutableList()
+        val currentIndex = active.indexOfFirst { it.id == vehicleId }
         if (currentIndex == -1) return
 
-        // 2. Remove the vehicle temporarily
-        val vehicleToMove = activeQueueList.removeAt(currentIndex)
+        val vehicle = active.removeAt(currentIndex)
+        active.add((newPosition - 1).coerceIn(0, active.size), vehicle)
 
-        // 3. Calculate the new index (0-based).
-        // We use coerceIn to ensure the user can't pick a position outside the list size.
-        val newIndex = (newPosition - 1).coerceIn(0, activeQueueList.size)
+        viewModelScope.launch {
+            try {
+                val batch = firestore.batch()
+                active.forEachIndexed { index, item ->
+                    batch.update(
+                        firestore.collection(FirestoreCollections.QUEUE).document(item.id),
+                        mapOf(
+                            "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+                batch.commit().await()
+            } catch (e: Exception) {
+                _uiState.value = QueueUiState.Error(e.message ?: "Hindi ma-update ang posisyon")
+            }
+        }
+    }
 
-        // 4. Insert the vehicle at its new location
-        activeQueueList.add(newIndex, vehicleToMove)
+    private fun isActiveStatus(status: String?): Boolean {
+        return when (status?.lowercase()) {
+            "dispatched", "cancelled", "completed", "resolved" -> false
+            else -> true
+        }
+    }
 
-        // 5. Re-assign the position numbers sequentially (1, 2, 3, etc.)
-        // This ensures that when someone moves up, the person they replaced slides down naturally.
-        activeQueueList = activeQueueList.mapIndexed { index, vehicle ->
-            vehicle.copy(position = index + 1)
-        }.toMutableList()
+    private fun formatTimestamp(timestamp: com.google.firebase.Timestamp?): String {
+        return timestamp?.toDate()?.let {
+            SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()).format(it)
+        }.orEmpty()
+    }
 
-        // 6. Push the updated list back to the UI!
-        pushStateToUI()
+    override fun onCleared() {
+        queueListener?.remove()
+        super.onCleared()
     }
 }

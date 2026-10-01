@@ -1,10 +1,17 @@
 package com.mobile.enerjeep.ui.kita
 
 import androidx.lifecycle.ViewModel
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.UserSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 data class KitaRecord(
@@ -12,8 +19,8 @@ data class KitaRecord(
     val title: String,
     val date: String,
     val amount: Double,
-    val type: String, // "Kita", "Bayad", "Multiya"
-    val isHistory: Boolean // false = Kasalukuyan, true = Kasaysayan
+    val type: String,
+    val isHistory: Boolean
 )
 
 enum class KitaTabType {
@@ -32,24 +39,49 @@ data class KitaUiState(
 )
 
 @HiltViewModel
-class KitaViewModel @Inject constructor() : ViewModel() {
+class KitaViewModel @Inject constructor(
+    private val firestore: FirebaseFirestore,
+    private val userSession: UserSession
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(KitaUiState())
     val uiState: StateFlow<KitaUiState> = _uiState.asStateFlow()
+    private var listener: ListenerRegistration? = null
 
     init {
-        loadKitaData()
+        startListener()
     }
 
-    private fun loadKitaData() {
-        // Dynamic dataset that feeds calculations (ready for Firebase integration)
-        val mockRecords = listOf(
-            KitaRecord("1", "Pasahe Dagdag", "Aug 30, 2026", 0.0, "Kita", false),
-            KitaRecord("2", "Terminal Fee", "Aug 29, 2026", 0.0, "Bayad", false),
-            KitaRecord("3", "Kasaysayan Record", "Jul 15, 2026", 1200.0, "Kita", true)
-        )
+    private fun startListener() {
+        val userId = userSession.userProfile?.userId
 
-        updateMetricsAndFilter(mockRecords, _uiState.value.selectedTab, _uiState.value.searchQuery)
+        // "Aking Kita" is driver-specific. The driverId stored in kita must
+        // match users.userId, so never use the users document ID (phone number) here.
+        if (userId.isNullOrBlank()) {
+            _uiState.value = KitaUiState()
+            return
+        }
+
+        listener = firestore.collection(FirestoreCollections.KITA)
+            .whereEqualTo("driverId", userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+
+                val records = snapshot.documents.map { document ->
+                    val isHistory = document.getBoolean("isHistory")
+                        ?: !isToday(document.getTimestamp("createdAt"))
+                    KitaRecord(
+                        id = document.id,
+                        title = document.getString("title") ?: document.getString("description") ?: "Record",
+                        date = document.getString("date") ?: formatTimestamp(document.getTimestamp("createdAt")),
+                        amount = document.getDouble("amount") ?: 0.0,
+                        type = document.getString("type") ?: "Kita",
+                        isHistory = isHistory
+                    )
+                }.sortedByDescending { it.id }
+
+                updateMetricsAndFilter(records, _uiState.value.selectedTab, _uiState.value.searchQuery)
+            }
     }
 
     fun onTabSelected(tab: KitaTabType) {
@@ -62,14 +94,11 @@ class KitaViewModel @Inject constructor() : ViewModel() {
 
     private fun updateMetricsAndFilter(allRecords: List<KitaRecord>, tab: KitaTabType, query: String) {
         val isHistory = tab == KitaTabType.KASAYSAYAN
-
-        // Filter items for the active tab view
         val currentTabRecords = allRecords.filter { it.isHistory == isHistory }
 
-        // Dynamically compute summaries
-        val kitaSum = currentTabRecords.filter { it.type == "Kita" }.sumOf { it.amount }
-        val bayadSum = currentTabRecords.filter { it.type == "Bayad" }.sumOf { it.amount }
-        val multiyaSum = currentTabRecords.filter { it.type == "Multiya" }.sumOf { it.amount }
+        val kitaSum = currentTabRecords.filter { it.type.equals("Kita", true) }.sumOf { it.amount }
+        val bayadSum = currentTabRecords.filter { it.type.equals("Bayad", true) }.sumOf { it.amount }
+        val multiyaSum = currentTabRecords.filter { it.type.equals("Multiya", true) }.sumOf { it.amount }
         val net = kitaSum - (bayadSum + multiyaSum)
 
         val filtered = currentTabRecords.filter { record ->
@@ -87,5 +116,22 @@ class KitaViewModel @Inject constructor() : ViewModel() {
             records = allRecords,
             filteredRecords = filtered
         )
+    }
+
+    private fun isToday(timestamp: com.google.firebase.Timestamp?): Boolean {
+        if (timestamp == null) return false
+        val key = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+        return SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(timestamp.toDate()) == key
+    }
+
+    private fun formatTimestamp(timestamp: com.google.firebase.Timestamp?): String {
+        return timestamp?.toDate()?.let {
+            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(it)
+        }.orEmpty()
+    }
+
+    override fun onCleared() {
+        listener?.remove()
+        super.onCleared()
     }
 }
