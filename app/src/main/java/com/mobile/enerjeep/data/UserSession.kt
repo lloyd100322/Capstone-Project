@@ -3,10 +3,7 @@ package com.mobile.enerjeep.data
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 
- * Created by Bry1337 on 8/9/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @Singleton
 class UserSession @Inject constructor() {

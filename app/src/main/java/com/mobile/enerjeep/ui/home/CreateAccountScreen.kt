@@ -27,10 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.ui.theme.*
 
-/** 
- * Created by Bry1337 on 8/9/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

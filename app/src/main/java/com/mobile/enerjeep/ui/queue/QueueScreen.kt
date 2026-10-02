@@ -32,10 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.theme.*
 
-/**
- * Created by Bry1337 on 8/19/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

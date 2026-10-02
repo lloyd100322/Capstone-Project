@@ -15,10 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
-/** 
- * Created by Bry1337 on 8/9/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @HiltViewModel
 class ContentViewModel @Inject constructor(

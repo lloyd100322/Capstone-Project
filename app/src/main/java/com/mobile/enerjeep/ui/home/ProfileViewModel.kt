@@ -8,10 +8,7 @@ import com.mobile.enerjeep.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
-/** 
- * Created by Bry1337 on 8/9/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(

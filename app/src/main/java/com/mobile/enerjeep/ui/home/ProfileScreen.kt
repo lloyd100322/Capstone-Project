@@ -13,10 +13,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 
-/** 
- * Created by Bry1337 on 8/9/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @Composable
 fun ProfileScreen(

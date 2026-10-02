@@ -14,10 +14,6 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepTheme
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 
-/** 
- * Created by Bry1337 on 7/21/26.
- * Copyright (c) 2026. All rights reserved.
- */
 
 @Composable
 fun ContentView(

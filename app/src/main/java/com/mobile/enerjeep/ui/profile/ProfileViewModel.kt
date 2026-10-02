@@ -2,12 +2,15 @@ package com.mobile.enerjeep.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.navigation.AppNavigator
+import com.mobile.enerjeep.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,14 +24,16 @@ data class ProfileData(
     val phoneNumber: String,
     val role: String
 ) {
-
     val initials: String
         get() =
             "${firstName.firstOrNull()?.uppercase() ?: ""}" +
                     "${lastName.firstOrNull()?.uppercase() ?: ""}"
 
     val fullName: String
-        get() = "$firstName $lastName"
+        get() =
+            listOf(firstName, lastName)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
 }
 
 sealed interface ProfileUiState {
@@ -48,7 +53,9 @@ sealed interface ProfileUiState {
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val userSession: UserSession
+    private val userSession: UserSession,
+    private val auth: FirebaseAuth,
+    private val appNavigator: AppNavigator
 ) : ViewModel() {
 
     private val _uiState =
@@ -67,21 +74,29 @@ class ProfileViewModel @Inject constructor(
     private fun loadProfile() {
 
         val phone =
-            userSession.userProfile?.phoneNumber
+            userSession.userProfile
+                ?.phoneNumber
+                ?.trim()
 
         if (phone.isNullOrBlank()) {
+
             _uiState.value =
                 ProfileUiState.Error(
                     "Walang naka-login na user"
                 )
+
             return
         }
 
         listener =
             firestore
-                .collection(FirestoreCollections.USERS)
+                .collection(
+                    FirestoreCollections.USERS
+                )
                 .document(phone)
-                .addSnapshotListener { document, error ->
+                .addSnapshotListener {
+                        document,
+                        error ->
 
                     if (error != null) {
                         _uiState.value =
@@ -89,6 +104,7 @@ class ProfileViewModel @Inject constructor(
                                 error.message
                                     ?: "Hindi mabasa ang profile"
                             )
+
                         return@addSnapshotListener
                     }
 
@@ -100,6 +116,7 @@ class ProfileViewModel @Inject constructor(
                             ProfileUiState.Error(
                                 "Hindi makita ang user profile"
                             )
+
                         return@addSnapshotListener
                     }
 
@@ -121,137 +138,76 @@ class ProfileViewModel @Inject constructor(
                 ?: return
 
         val currentPhone =
-            oldProfile.phoneNumber
+            oldProfile.phoneNumber.trim()
 
-        val newPhone =
-            phoneNumber
-                .ifBlank { currentPhone }
-                .trim()
+        val requestedPhone =
+            phoneNumber.trim()
+
+        /*
+         * Firebase Phone Auth controls the actual authenticated
+         * phone number. Changing only the Firestore document would
+         * make Firebase Auth and Firestore inconsistent.
+         */
+        if (
+            requestedPhone.isNotBlank() &&
+            requestedPhone != currentPhone
+        ) {
+
+            _uiState.value =
+                ProfileUiState.Error(
+                    "Hindi muna maaaring palitan ang phone number dito. Kailangan itong dumaan sa phone verification."
+                )
+
+            return
+        }
 
         val first =
             firstName
-                .ifBlank { oldProfile.firstName }
                 .trim()
+                .ifBlank {
+                    oldProfile.firstName
+                }
 
         val last =
             lastName
-                .ifBlank { oldProfile.lastName }
                 .trim()
+                .ifBlank {
+                    oldProfile.lastName
+                }
 
         viewModelScope.launch {
 
             try {
 
-                val users =
-                    firestore.collection(
+                firestore
+                    .collection(
                         FirestoreCollections.USERS
                     )
-
-                val oldRef =
-                    users.document(currentPhone)
-
-                val newRef =
-                    users.document(newPhone)
-
-                if (newPhone != currentPhone) {
-
-                    if (
-                        newRef
-                            .get()
-                            .await()
-                            .exists()
-                    ) {
-
-                        _uiState.value =
-                            ProfileUiState.Error(
-                                "May account nang gumagamit ng bagong numero"
-                            )
-
-                        return@launch
-                    }
-
-                    val newData =
-                        mutableMapOf<String, Any>(
-                            "userId" to oldProfile.userId,
-                            "firstName" to first,
-                            "lastName" to last,
-                            "phoneNumber" to newPhone,
-                            "password" to oldProfile.password,
-                            "role" to oldProfile.role.name.lowercase(),
-                            "status" to "active",
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-
-                    oldProfile.licenseNumber?.let {
-                        newData["licenseNumber"] = it
-                    }
-
-                    oldProfile.plateNumber?.let {
-                        newData["plateNumber"] = it
-                    }
-
-                    oldProfile.emergencyContact?.let {
-                        newData["emergencyContact"] = it
-                    }
-
-                    val batch =
-                        firestore.batch()
-
-                    batch.set(
-                        newRef,
-                        newData
-                    )
-
-                    batch.delete(oldRef)
-
-                    batch.commit().await()
-
-                    listener?.remove()
-
-                    listener =
-                        newRef.addSnapshotListener {
-                                document,
-                                error ->
-
-                            if (
-                                error == null &&
-                                document != null &&
-                                document.exists()
-                            ) {
-
-                                pushFromDocument(
-                                    document,
-                                    null
-                                )
-                            }
-                        }
-
-                } else {
-
-                    oldRef.update(
+                    .document(currentPhone)
+                    .update(
                         mapOf(
                             "firstName" to first,
                             "lastName" to last,
-                            "phoneNumber" to newPhone,
-                            "updatedAt" to FieldValue.serverTimestamp()
+                            "updatedAt" to
+                                    FieldValue.serverTimestamp()
                         )
-                    ).await()
-                }
+                    )
+                    .await()
 
                 userSession.setUser(
                     oldProfile.copy(
                         firstName = first,
-                        lastName = last,
-                        phoneNumber = newPhone
+                        lastName = last
                     )
                 )
 
                 pushFromValues(
-                    first,
-                    last,
-                    newPhone,
-                    oldProfile.role,
-                    "Profile updated successfully!"
+                    firstName = first,
+                    lastName = last,
+                    phone = currentPhone,
+                    role = oldProfile.role,
+                    message =
+                        "Profile updated successfully!"
                 )
 
             } catch (e: Exception) {
@@ -271,16 +227,6 @@ class ProfileViewModel @Inject constructor(
         confirmPass: String
     ): Boolean {
 
-        if (newPass != confirmPass) {
-
-            _uiState.value =
-                ProfileUiState.Error(
-                    "Passwords do not match."
-                )
-
-            return false
-        }
-
         if (newPass.isBlank()) {
 
             _uiState.value =
@@ -291,9 +237,20 @@ class ProfileViewModel @Inject constructor(
             return false
         }
 
+        if (newPass != confirmPass) {
+
+            _uiState.value =
+                ProfileUiState.Error(
+                    "Passwords do not match."
+                )
+
+            return false
+        }
+
         val phone =
             userSession.userProfile
                 ?.phoneNumber
+                ?.trim()
                 ?: return false
 
         viewModelScope.launch {
@@ -310,7 +267,8 @@ class ProfileViewModel @Inject constructor(
                         .await()
 
                 val savedPassword =
-                    document.getString("password")
+                    document
+                        .getString("password")
 
                 if (savedPassword != oldPass) {
 
@@ -328,26 +286,29 @@ class ProfileViewModel @Inject constructor(
                     )
                     .document(phone)
                     .update(
-                        "password",
-                        newPass
+                        mapOf(
+                            "password" to newPass,
+                            "updatedAt" to
+                                    FieldValue.serverTimestamp()
+                        )
                     )
                     .await()
 
-                val old =
+                val oldProfile =
                     userSession.userProfile
                         ?: return@launch
 
                 userSession.setUser(
-                    old.copy(
+                    oldProfile.copy(
                         password = newPass
                     )
                 )
 
                 pushFromValues(
-                    old.firstName,
-                    old.lastName,
-                    old.phoneNumber,
-                    old.role,
+                    oldProfile.firstName,
+                    oldProfile.lastName,
+                    oldProfile.phoneNumber,
+                    oldProfile.role,
                     "Password updated successfully!"
                 )
 
@@ -364,36 +325,52 @@ class ProfileViewModel @Inject constructor(
         return true
     }
 
-    fun clearMessage() {
+    fun signOut() {
 
-        if (
-            _uiState.value
-                    is ProfileUiState.Success
-        ) {
+        viewModelScope.launch {
 
-            val current =
-                userSession.userProfile
-                    ?: return
+            try {
+                auth.signOut()
+            } finally {
 
-            pushFromValues(
-                current.firstName,
-                current.lastName,
-                current.phoneNumber,
-                current.role,
-                null
-            )
+                userSession.clear()
+
+                appNavigator.navigateTo(
+                    Screen.Login
+                ) {
+                    popUpTo(Screen.Home) {
+                        inclusive = true
+                    }
+                }
+            }
         }
     }
 
+    fun clearMessage() {
+
+        val current =
+            userSession.userProfile
+                ?: return
+
+        pushFromValues(
+            current.firstName,
+            current.lastName,
+            current.phoneNumber,
+            current.role,
+            null
+        )
+    }
+
     private fun pushFromDocument(
-        document: com.google.firebase.firestore.DocumentSnapshot,
+        document:
+        com.google.firebase.firestore.DocumentSnapshot,
         message: String?
     ) {
 
         val roleString =
             document
                 .getString("role")
-                ?: UserRole.Admin.name
+                ?: UserRole.Driver.name
 
         val role =
             UserRole.entries.find {
@@ -401,7 +378,7 @@ class ProfileViewModel @Inject constructor(
                     roleString,
                     ignoreCase = true
                 )
-            } ?: UserRole.Admin
+            } ?: UserRole.Driver
 
         pushFromValues(
             document
@@ -431,14 +408,12 @@ class ProfileViewModel @Inject constructor(
 
         _uiState.value =
             ProfileUiState.Success(
-                profile =
-                    ProfileData(
-                        firstName = firstName,
-                        lastName = lastName,
-                        phoneNumber = phone,
-                        role = role.name
-                    ),
-
+                profile = ProfileData(
+                    firstName = firstName,
+                    lastName = lastName,
+                    phoneNumber = phone,
+                    role = role.name
+                ),
                 updateMessage = message
             )
     }

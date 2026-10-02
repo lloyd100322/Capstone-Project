@@ -9,10 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
-/** 
- * Created by Bry1337 on 8/9/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -42,7 +39,7 @@ class HomeViewModel @Inject constructor(
                     _totalJeepsCount.value = snapshot.size()
                     // For now, assuming all registered drivers are "active" for demo
                     // In a real app, you'd check a 'status' field
-                    _activeJeepsCount.value = snapshot.size() 
+                    _activeJeepsCount.value = snapshot.size()
                 }
             }
     }

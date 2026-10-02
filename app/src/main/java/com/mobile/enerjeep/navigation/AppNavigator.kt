@@ -7,10 +7,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 
- * Created by Bry1337 on 8/1/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @Singleton
 class AppNavigator @Inject constructor() {

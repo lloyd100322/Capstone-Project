@@ -38,10 +38,7 @@ import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.navigation.Screen
 
-/** 
- * Created by Bry1337 on 8/1/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 
 @Composable

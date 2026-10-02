@@ -36,10 +36,7 @@ import com.mobile.enerjeep.ui.incident.IncidentReportFormScreen
 import com.mobile.enerjeep.ui.report.ReportScreen
 import com.mobile.enerjeep.ui.profile.ProfileScreen
 
-/**
- * Created by Bry1337 on 8/1/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 enum class HomeTab {
     Home, Pila, Talaan, Insidente, MgaUlat, Profile

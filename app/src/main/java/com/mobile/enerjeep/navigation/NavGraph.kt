@@ -11,10 +11,7 @@ import com.mobile.enerjeep.ui.home.HomeScreen
 import com.mobile.enerjeep.ui.login.LoginScreen
 import com.mobile.enerjeep.ui.login.ResetPasswordScreen
 
-/** 
- * Created by Bry1337 on 8/1/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @Composable
 fun NavGraph(

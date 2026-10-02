@@ -8,10 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-/** 
- * Created by Bry1337 on 8/8/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @Module
 @InstallIn(SingletonComponent::class)

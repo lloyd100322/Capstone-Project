@@ -21,10 +21,7 @@ import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
-/** 
- * Created by Bry1337 on 8/8/26.
- * Copyright (c) 2026. All rights reserved.
- */
+
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
