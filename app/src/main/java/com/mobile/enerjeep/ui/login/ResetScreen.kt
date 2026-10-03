@@ -46,69 +46,137 @@ fun ResetPasswordScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LightGrayBackground)
-            .verticalScroll(rememberScrollState())
+            .background(
+                LightGrayBackground
+            )
+            .verticalScroll(
+                rememberScrollState()
+            )
             .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment =
+            Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(48.dp))
 
-        // App Logo & Title
+        Spacer(
+            modifier = Modifier.height(48.dp)
+        )
+
         Surface(
             modifier = Modifier.size(72.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Image(painter = painterResource(id = R.drawable.app_icon), contentDescription = null, modifier = Modifier.size(60.dp))
+            Box(
+                contentAlignment =
+                    Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(
+                        id = R.drawable.app_icon
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.size(60.dp)
+                )
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Enerjeep", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-        Spacer(modifier = Modifier.height(32.dp))
+
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
+
+        Text(
+            text = "Enerjeep",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+
+        Spacer(
+            modifier = Modifier.height(32.dp)
+        )
 
         if (uiState.step == ResetStep.SUCCESS) {
+
             Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        bottom = 16.dp
+                    ),
                 color = Color(0xFFDCFCE7),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
-                    text = "Tagumpay! Na-reset ang password. Mag-sign in.",
+                    text =
+                        "Tagumpay! Na-reset ang password. Mag-sign in.",
                     color = Color(0xFF166534),
                     fontSize = 14.sp,
-                    modifier = Modifier.padding(16.dp)
+                    modifier =
+                        Modifier.padding(16.dp)
                 )
             }
+
             Button(
-                onClick = { appNavigator.navigateTo(Screen.Login) }, // Or whatever your login route is named
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                onClick = {
+                    appNavigator.navigateTo(
+                        Screen.Login
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
                 shape = RoundedCornerShape(24.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor =
+                        EnerjeepBlue
+                )
             ) {
-                Text(text = "Bumalik sa Login", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Bumalik sa Login",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             }
+
         } else {
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
                 shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 2.dp
+                )
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
+
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+
                     when (uiState.step) {
-                        ResetStep.PHONE_INPUT -> PhoneInputContent(
-                            uiState = uiState,
-                            viewModel = viewModel,
-                            onBack = { appNavigator.navigateBack() }
-                        )
-                        ResetStep.OTP_INPUT -> OtpInputContent(
-                            uiState = uiState,
-                            viewModel = viewModel
-                        )
-                        ResetStep.NEW_PASSWORD -> NewPasswordContent(
-                            uiState = uiState,
-                            viewModel = viewModel
-                        )
+
+                        ResetStep.PHONE_INPUT ->
+                            PhoneInputContent(
+                                uiState = uiState,
+                                viewModel = viewModel,
+                                onBack = {
+                                    appNavigator.navigateBack()
+                                }
+                            )
+
+                        ResetStep.OTP_INPUT ->
+                            OtpInputContent(
+                                uiState = uiState,
+                                viewModel = viewModel
+                            )
+
+                        ResetStep.NEW_PASSWORD ->
+                            NewPasswordContent(
+                                uiState = uiState,
+                                viewModel = viewModel
+                            )
+
                         else -> {}
                     }
                 }
@@ -118,149 +186,441 @@ fun ResetPasswordScreen(
 }
 
 @Composable
-fun PhoneInputContent(uiState: ResetPasswordUiState, viewModel: ResetPasswordViewModel, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onBack() }) {
-        Icon(Icons.Default.ArrowBack, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "Nakalimutan ang Password", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+fun PhoneInputContent(
+    uiState: ResetPasswordUiState,
+    viewModel: ResetPasswordViewModel,
+    onBack: () -> Unit
+) {
+    Row(
+        verticalAlignment =
+            Alignment.CenterVertically,
+        modifier =
+            Modifier.clickable {
+                onBack()
+            }
+    ) {
+        Icon(
+            Icons.Default.ArrowBack,
+            contentDescription = null
+        )
+
+        Spacer(
+            modifier = Modifier.width(8.dp)
+        )
+
+        Text(
+            text = "Nakalimutan ang Password",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
-    Spacer(modifier = Modifier.height(16.dp))
-    Text(text = "Ilagay ang iyong nakarehistrong numero.", fontSize = 14.sp, color = Color.Gray)
-    Spacer(modifier = Modifier.height(24.dp))
+
+    Spacer(
+        modifier = Modifier.height(16.dp)
+    )
+
+    Text(
+        text =
+            "Ilagay ang iyong nakarehistrong numero.",
+        fontSize = 14.sp,
+        color = Color.Gray
+    )
+
+    Spacer(
+        modifier = Modifier.height(24.dp)
+    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .border(1.dp, FieldBorderColor, RoundedCornerShape(12.dp))
+            .border(
+                1.dp,
+                FieldBorderColor,
+                RoundedCornerShape(12.dp)
+            )
             .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment =
+            Alignment.CenterVertically
     ) {
-        Text(text = "+63", fontSize = 16.sp, color = Color.Gray)
-        Box(modifier = Modifier.padding(horizontal = 12.dp).height(24.dp).width(1.dp).background(FieldBorderColor))
+        Text(
+            text = "+63",
+            fontSize = 16.sp,
+            color = Color.Gray
+        )
+
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 12.dp)
+                .height(24.dp)
+                .width(1.dp)
+                .background(
+                    FieldBorderColor
+                )
+        )
+
         TextField(
             value = uiState.phoneNumber,
-            onValueChange = { viewModel.updatePhoneNumber(it) },
-            placeholder = { Text("9171234567", color = Color.LightGray) },
+            onValueChange = {
+                viewModel.updatePhoneNumber(
+                    it
+                )
+            },
+            placeholder = {
+                Text(
+                    "9171234567",
+                    color = Color.LightGray
+                )
+            },
             modifier = Modifier.fillMaxWidth(),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
+                focusedContainerColor =
+                    Color.Transparent,
+                unfocusedContainerColor =
+                    Color.Transparent,
+                disabledContainerColor =
+                    Color.Transparent,
+                focusedIndicatorColor =
+                    Color.Transparent,
+                unfocusedIndicatorColor =
+                    Color.Transparent
             ),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType =
+                        KeyboardType.Phone
+                ),
             singleLine = true
         )
     }
-    Spacer(modifier = Modifier.height(24.dp))
+
+    Spacer(
+        modifier = Modifier.height(24.dp)
+    )
+
     Button(
-        onClick = { viewModel.navigateToOtp() },
-        modifier = Modifier.fillMaxWidth().height(48.dp),
+        onClick = {
+            viewModel.navigateToOtp()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+        colors = ButtonDefaults.buttonColors(
+            containerColor =
+                EnerjeepBlue
+        )
     ) {
-        Text(text = "Magpatuloy", color = Color.White, fontWeight = FontWeight.Bold)
+        Text(
+            text = "Magpatuloy",
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 @Composable
-fun OtpInputContent(uiState: ResetPasswordUiState, viewModel: ResetPasswordViewModel) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.navigateBack() }) {
-        Icon(Icons.Default.ArrowBack, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "I-verify ang OTP", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+fun OtpInputContent(
+    uiState: ResetPasswordUiState,
+    viewModel: ResetPasswordViewModel
+) {
+    Row(
+        verticalAlignment =
+            Alignment.CenterVertically,
+        modifier =
+            Modifier.clickable {
+                viewModel.navigateBack()
+            }
+    ) {
+        Icon(
+            Icons.Default.ArrowBack,
+            contentDescription = null
+        )
+
+        Spacer(
+            modifier = Modifier.width(8.dp)
+        )
+
+        Text(
+            text = "I-verify ang OTP",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
-    Spacer(modifier = Modifier.height(16.dp))
-    Text(text = "Ilagay ang 6-digit na code na ipinadala sa +63${uiState.phoneNumber}", fontSize = 14.sp, color = Color.Gray)
-    Spacer(modifier = Modifier.height(24.dp))
+
+    Spacer(
+        modifier = Modifier.height(16.dp)
+    )
+
+    Text(
+        text =
+            "Ilagay ang 6-digit na code na ipinadala sa +63${uiState.phoneNumber}",
+        fontSize = 14.sp,
+        color = Color.Gray
+    )
+
+    Spacer(
+        modifier = Modifier.height(24.dp)
+    )
 
     BasicTextField(
         value = uiState.otp,
-        onValueChange = { viewModel.updateOtp(it) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        onValueChange = {
+            viewModel.updateOtp(it)
+        },
+        keyboardOptions =
+            KeyboardOptions(
+                keyboardType =
+                    KeyboardType.NumberPassword
+            ),
         modifier = Modifier.fillMaxWidth(),
         decorationBox = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                    Arrangement.SpaceBetween
+            ) {
                 repeat(6) { index ->
-                    val char = if (index >= uiState.otp.length) "" else uiState.otp[index].toString()
-                    val isFocused = index == uiState.otp.length
+
+                    val char =
+                        if (
+                            index >=
+                            uiState.otp.length
+                        ) {
+                            ""
+                        } else {
+                            uiState
+                                .otp[index]
+                                .toString()
+                        }
+
+                    val isFocused =
+                        index ==
+                                uiState.otp.length
+
                     Box(
                         modifier = Modifier
                             .size(45.dp)
-                            .border(1.dp, if (isFocused) EnerjeepBlue else Color.LightGray, RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
+                            .border(
+                                1.dp,
+                                if (isFocused)
+                                    EnerjeepBlue
+                                else
+                                    Color.LightGray,
+                                RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment =
+                            Alignment.Center
                     ) {
-                        Text(text = char, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black, textAlign = TextAlign.Center)
+                        Text(
+                            text = char,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            textAlign =
+                                TextAlign.Center
+                        )
                     }
                 }
             }
         }
     )
-    Spacer(modifier = Modifier.height(24.dp))
+
+    Spacer(
+        modifier = Modifier.height(24.dp)
+    )
+
     Button(
-        onClick = { viewModel.navigateToNewPassword() },
-        modifier = Modifier.fillMaxWidth().height(48.dp),
+        onClick = {
+            viewModel.navigateToNewPassword()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+        colors = ButtonDefaults.buttonColors(
+            containerColor =
+                EnerjeepBlue
+        )
     ) {
-        Text(text = "I-verify", color = Color.White, fontWeight = FontWeight.Bold)
+        Text(
+            text = "I-verify",
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 @Composable
-fun NewPasswordContent(uiState: ResetPasswordUiState, viewModel: ResetPasswordViewModel) {
-    var newPassVisible by remember { mutableStateOf(false) }
-    var confirmPassVisible by remember { mutableStateOf(false) }
-
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.navigateBack() }) {
-        Icon(Icons.Default.ArrowBack, contentDescription = null)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = "I-reset ang Password", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+fun NewPasswordContent(
+    uiState: ResetPasswordUiState,
+    viewModel: ResetPasswordViewModel
+) {
+    var newPassVisible by remember {
+        mutableStateOf(false)
     }
-    Spacer(modifier = Modifier.height(24.dp))
 
-    Text(text = "Bagong Password", fontSize = 12.sp, color = Color.Gray)
-    Spacer(modifier = Modifier.height(4.dp))
+    var confirmPassVisible by remember {
+        mutableStateOf(false)
+    }
+
+    Row(
+        verticalAlignment =
+            Alignment.CenterVertically,
+        modifier =
+            Modifier.clickable {
+                viewModel.navigateBack()
+            }
+    ) {
+        Icon(
+            Icons.Default.ArrowBack,
+            contentDescription = null
+        )
+
+        Spacer(
+            modifier = Modifier.width(8.dp)
+        )
+
+        Text(
+            text = "I-reset ang Password",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+
+    Spacer(
+        modifier = Modifier.height(24.dp)
+    )
+
+    Text(
+        text = "Bagong Password",
+        fontSize = 12.sp,
+        color = Color.Gray
+    )
+
+    Spacer(
+        modifier = Modifier.height(4.dp)
+    )
+
     OutlinedTextField(
         value = uiState.newPassword,
-        onValueChange = { viewModel.updateNewPassword(it) },
+        onValueChange = {
+            viewModel.updateNewPassword(
+                it
+            )
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue),
-        visualTransformation = if (newPassVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        colors =
+            OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor =
+                    FieldBorderColor,
+                focusedBorderColor =
+                    EnerjeepBlue
+            ),
+        visualTransformation =
+            if (newPassVisible)
+                VisualTransformation.None
+            else
+                PasswordVisualTransformation(),
         trailingIcon = {
-            IconButton(onClick = { newPassVisible = !newPassVisible }) {
-                Icon(imageVector = if (newPassVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null, tint = Color.Gray)
+            IconButton(
+                onClick = {
+                    newPassVisible =
+                        !newPassVisible
+                }
+            ) {
+                Icon(
+                    imageVector =
+                        if (newPassVisible)
+                            Icons.Default.Visibility
+                        else
+                            Icons.Default.VisibilityOff,
+                    contentDescription = null,
+                    tint = Color.Gray
+                )
             }
         }
     )
-    Spacer(modifier = Modifier.height(16.dp))
-    Text(text = "Kumpirmahin ang Password", fontSize = 12.sp, color = Color.Gray)
-    Spacer(modifier = Modifier.height(4.dp))
+
+    Spacer(
+        modifier = Modifier.height(16.dp)
+    )
+
+    Text(
+        text = "Kumpirmahin ang Password",
+        fontSize = 12.sp,
+        color = Color.Gray
+    )
+
+    Spacer(
+        modifier = Modifier.height(4.dp)
+    )
+
     OutlinedTextField(
         value = uiState.confirmPassword,
-        onValueChange = { viewModel.updateConfirmPassword(it) },
+        onValueChange = {
+            viewModel.updateConfirmPassword(
+                it
+            )
+        },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue),
-        visualTransformation = if (confirmPassVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        colors =
+            OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor =
+                    FieldBorderColor,
+                focusedBorderColor =
+                    EnerjeepBlue
+            ),
+        visualTransformation =
+            if (confirmPassVisible)
+                VisualTransformation.None
+            else
+                PasswordVisualTransformation(),
         trailingIcon = {
-            IconButton(onClick = { confirmPassVisible = !confirmPassVisible }) {
-                Icon(imageVector = if (confirmPassVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null, tint = Color.Gray)
+            IconButton(
+                onClick = {
+                    confirmPassVisible =
+                        !confirmPassVisible
+                }
+            ) {
+                Icon(
+                    imageVector =
+                        if (confirmPassVisible)
+                            Icons.Default.Visibility
+                        else
+                            Icons.Default.VisibilityOff,
+                    contentDescription = null,
+                    tint = Color.Gray
+                )
             }
         }
     )
-    Spacer(modifier = Modifier.height(24.dp))
+
+    Spacer(
+        modifier = Modifier.height(24.dp)
+    )
+
     Button(
-        onClick = { viewModel.completeReset() },
-        modifier = Modifier.fillMaxWidth().height(48.dp),
+        onClick = {
+            viewModel.completeReset()
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+        colors = ButtonDefaults.buttonColors(
+            containerColor =
+                EnerjeepBlue
+        )
     ) {
-        Text(text = "I-reset ang Password", color = Color.White, fontWeight = FontWeight.Bold)
+        Text(
+            text = "I-reset ang Password",
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        )
     }
 }

@@ -21,8 +21,6 @@ import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
-
-
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val auth: FirebaseAuth,
@@ -30,139 +28,325 @@ class LoginViewModel @Inject constructor(
     private val userSession: UserSession
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
-    val uiState = _uiState.asStateFlow()
+    private val _uiState =
+        MutableStateFlow<LoginUiState>(
+            LoginUiState.Idle
+        )
+
+    val uiState =
+        _uiState.asStateFlow()
 
     private var verificationId: String? = null
     private var pendingProfile: UserProfile? = null
 
-    fun sendVerificationCode(phoneNumber: String, password: String, activity: Activity) {
-        if (phoneNumber.length < 10) {
-            _uiState.value = LoginUiState.Error("Maling format ng numero")
+    companion object {
+        private val PH_PHONE_REGEX =
+            Regex("^\\+639\\d{9}$")
+    }
+
+    fun sendVerificationCode(
+        phoneNumber: String,
+        password: String,
+        activity: Activity
+    ) {
+        val cleanPhoneNumber =
+            phoneNumber.trim()
+
+        if (!PH_PHONE_REGEX.matches(cleanPhoneNumber)) {
+            _uiState.value =
+                LoginUiState.Error(
+                    "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
+                )
             return
         }
-        
+
         if (password.isBlank()) {
-            _uiState.value = LoginUiState.Error("Pakilagay ang iyong password")
+            _uiState.value =
+                LoginUiState.Error(
+                    "Pakilagay ang iyong password"
+                )
             return
         }
 
-        val lowerPhoneNumber = phoneNumber.lowercase()
-
-        _uiState.value = LoginUiState.Loading
+        _uiState.value =
+            LoginUiState.Loading
 
         viewModelScope.launch {
             try {
-                // Check if user exists in Firestore AND password matches
-                val userQuery = firestore.collection("users")
-                    .whereEqualTo("phoneNumber", lowerPhoneNumber)
-                    .whereEqualTo("password", password)
-                    .get()
-                    .await()
+
+                val userQuery =
+                    firestore
+                        .collection("users")
+                        .whereEqualTo(
+                            "phoneNumber",
+                            cleanPhoneNumber
+                        )
+                        .whereEqualTo(
+                            "password",
+                            password
+                        )
+                        .get()
+                        .await()
 
                 if (userQuery.isEmpty) {
-                    _uiState.value = LoginUiState.Error("Maling numero o password")
+                    _uiState.value =
+                        LoginUiState.Error(
+                            "Maling numero o password"
+                        )
                     return@launch
                 }
 
-                val doc = userQuery.documents.first()
-                // Manual mapping to handle Enum conversion safely with lowercase roles
-                val data = doc.data
-                val roleString = data?.get("role") as? String ?: UserRole.Driver.name
-                val matchedRole = UserRole.entries.find { 
-                    it.name.lowercase() == roleString.lowercase() 
-                } ?: UserRole.Driver
+                val doc =
+                    userQuery.documents.first()
 
-                pendingProfile = UserProfile(
-                    userId = data?.get("userId") as? String ?: "",
-                    firstName = data?.get("firstName") as? String ?: "",
-                    lastName = data?.get("lastName") as? String ?: "",
-                    phoneNumber = data?.get("phoneNumber") as? String ?: "",
-                    password = data?.get("password") as? String ?: "",
-                    role = matchedRole,
-                    licenseNumber = data?.get("licenseNumber") as? String,
-                    plateNumber = data?.get("plateNumber") as? String,
-                    emergencyContact = data?.get("emergencyContact") as? String
+                val data =
+                    doc.data
+
+                val roleString =
+                    data?.get(
+                        "role"
+                    ) as? String
+                        ?: UserRole.Driver.name
+
+                val matchedRole =
+                    UserRole.entries.find {
+                        it.name.lowercase() ==
+                                roleString.lowercase()
+                    }
+                        ?: UserRole.Driver
+
+                pendingProfile =
+                    UserProfile(
+                        userId =
+                            data?.get(
+                                "userId"
+                            ) as? String
+                                ?: "",
+
+                        firstName =
+                            data?.get(
+                                "firstName"
+                            ) as? String
+                                ?: "",
+
+                        lastName =
+                            data?.get(
+                                "lastName"
+                            ) as? String
+                                ?: "",
+
+                        phoneNumber =
+                            data?.get(
+                                "phoneNumber"
+                            ) as? String
+                                ?: "",
+
+                        password =
+                            data?.get(
+                                "password"
+                            ) as? String
+                                ?: "",
+
+                        role =
+                            matchedRole,
+
+                        licenseNumber =
+                            data?.get(
+                                "licenseNumber"
+                            ) as? String,
+
+                        plateNumber =
+                            data?.get(
+                                "plateNumber"
+                            ) as? String,
+
+                        emergencyContact =
+                            data?.get(
+                                "emergencyContact"
+                            ) as? String
+                    )
+
+                triggerSmsVerification(
+                    cleanPhoneNumber,
+                    activity
                 )
 
-                // If credentials are correct, proceed to SMS OTP
-                triggerSmsVerification(lowerPhoneNumber, activity)
             } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error("Hindi ma-verify ang account: ${e.message}")
+
+                _uiState.value =
+                    LoginUiState.Error(
+                        "Hindi ma-verify ang account: ${e.message}"
+                    )
             }
         }
     }
 
-    private fun triggerSmsVerification(phoneNumber: String, activity: Activity) {
-        // This disables reCAPTCHA/Play Integrity for testing with fictional phone numbers.
-//        auth.firebaseAuthSettings.setAppVerificationDisabledForTesting(true)
+    private fun triggerSmsVerification(
+        phoneNumber: String,
+        activity: Activity
+    ) {
+        /*
+         * This disables reCAPTCHA/Play Integrity for testing
+         * with fictional phone numbers.
+         *
+         * auth.firebaseAuthSettings
+         *     .setAppVerificationDisabledForTesting(true)
+         */
 
-        val options = PhoneAuthOptions.newBuilder(auth)
-            .setPhoneNumber(phoneNumber)
-            .setTimeout(60L, TimeUnit.SECONDS)
-            .setActivity(activity)
-            .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-                override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                    signInWithPhoneAuthCredential(credential)
-                }
+        val options =
+            PhoneAuthOptions
+                .newBuilder(auth)
+                .setPhoneNumber(phoneNumber)
+                .setTimeout(
+                    60L,
+                    TimeUnit.SECONDS
+                )
+                .setActivity(activity)
+                .setCallbacks(
+                    object :
+                        PhoneAuthProvider
+                        .OnVerificationStateChangedCallbacks() {
 
-                override fun onVerificationFailed(e: FirebaseException) {
-                    Log.e("PhoneAuth", "Phone verification failed", e)
-                    _uiState.value = LoginUiState.Error(e.message ?: "Hindi maipadala ang code")
-                }
+                        override fun onVerificationCompleted(
+                            credential: PhoneAuthCredential
+                        ) {
+                            signInWithPhoneAuthCredential(
+                                credential
+                            )
+                        }
 
-                override fun onCodeSent(
-                    verificationId: String,
-                    token: PhoneAuthProvider.ForceResendingToken
-                ) {
-                    this@LoginViewModel.verificationId = verificationId
-                    _uiState.value = LoginUiState.CodeSent
-                }
-            })
-            .build()
+                        override fun onVerificationFailed(
+                            e: FirebaseException
+                        ) {
+                            Log.e(
+                                "PhoneAuth",
+                                "Phone verification failed",
+                                e
+                            )
 
-        PhoneAuthProvider.verifyPhoneNumber(options)
+                            _uiState.value =
+                                LoginUiState.Error(
+                                    e.message
+                                        ?: "Hindi maipadala ang code"
+                                )
+                        }
+
+                        override fun onCodeSent(
+                            verificationId: String,
+                            token: PhoneAuthProvider
+                            .ForceResendingToken
+                        ) {
+                            this@LoginViewModel
+                                .verificationId =
+                                verificationId
+
+                            _uiState.value =
+                                LoginUiState.CodeSent
+                        }
+                    }
+                )
+                .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(
+            options
+        )
     }
 
-    fun verifyOtp(otp: String) {
-        if (otp.length != 6) {
-            _uiState.value = LoginUiState.Error("Dapat ay 6 na digit ang code")
+    fun verifyOtp(
+        otp: String
+    ) {
+        val cleanOtp =
+            otp.filter {
+                it.isDigit()
+            }
+
+        if (cleanOtp.length != 6) {
+            _uiState.value =
+                LoginUiState.Error(
+                    "Dapat ay 6 na digit ang code"
+                )
             return
         }
 
-        val id = verificationId ?: run {
-            _uiState.value = LoginUiState.Error("Nawala ang session, pakisubukan ulit")
-            return
-        }
+        val id =
+            verificationId
+                ?: run {
+                    _uiState.value =
+                        LoginUiState.Error(
+                            "Nawala ang session, pakisubukan ulit"
+                        )
 
-        val credential = PhoneAuthProvider.getCredential(id, otp)
-        signInWithPhoneAuthCredential(credential)
+                    return
+                }
+
+        val credential =
+            PhoneAuthProvider.getCredential(
+                id,
+                cleanOtp
+            )
+
+        signInWithPhoneAuthCredential(
+            credential
+        )
     }
 
-    private fun signInWithPhoneAuthCredential(credential: PhoneAuthCredential) {
+    private fun signInWithPhoneAuthCredential(
+        credential: PhoneAuthCredential
+    ) {
         viewModelScope.launch {
-            _uiState.value = LoginUiState.Loading
+            _uiState.value =
+                LoginUiState.Loading
+
             try {
-                auth.signInWithCredential(credential).await()
-                pendingProfile?.let { userSession.setUser(it) }
-                _uiState.value = LoginUiState.Success
+
+                auth
+                    .signInWithCredential(
+                        credential
+                    )
+                    .await()
+
+                pendingProfile?.let {
+                    userSession.setUser(it)
+                }
+
+                _uiState.value =
+                    LoginUiState.Success
+
             } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error(e.message ?: "Maling code, pakisubukan ulit")
+
+                _uiState.value =
+                    LoginUiState.Error(
+                        e.message
+                            ?: "Maling code, pakisubukan ulit"
+                    )
             }
         }
     }
 
     fun resetState() {
-        _uiState.value = LoginUiState.Idle
+        _uiState.value =
+            LoginUiState.Idle
+
         verificationId = null
         pendingProfile = null
     }
 }
 
 sealed interface LoginUiState {
-    data object Idle : LoginUiState
-    data object Loading : LoginUiState
-    data object CodeSent : LoginUiState
-    data object Success : LoginUiState
-    data class Error(val message: String) : LoginUiState
+
+    data object Idle :
+        LoginUiState
+
+    data object Loading :
+        LoginUiState
+
+    data object CodeSent :
+        LoginUiState
+
+    data object Success :
+        LoginUiState
+
+    data class Error(
+        val message: String
+    ) : LoginUiState
 }
