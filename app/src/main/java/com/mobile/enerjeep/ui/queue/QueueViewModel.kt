@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.queue
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -39,7 +40,8 @@ data class HistoryVehicle(
 
 sealed interface QueueUiState {
 
-    data object Loading : QueueUiState
+    data object Loading :
+        QueueUiState
 
     data class Success(
         val activeQueue: List<QueueVehicle>,
@@ -68,6 +70,11 @@ class QueueViewModel @Inject constructor(
 
     private var queueListener:
             ListenerRegistration? = null
+
+    companion object {
+        private const val DEFAULT_ROUTE =
+            "Monumento – Marilao"
+    }
 
     init {
         startQueueListener()
@@ -100,7 +107,8 @@ class QueueViewModel @Inject constructor(
                     }
 
                     val active =
-                        snapshot.documents
+                        snapshot
+                            .documents
                             .filter {
                                 isActiveStatus(
                                     it.getString(
@@ -108,12 +116,19 @@ class QueueViewModel @Inject constructor(
                                     )
                                 )
                             }
-                            .sortedBy {
-                                it.getLong(
-                                    "position"
-                                )
-                                    ?: Long.MAX_VALUE
-                            }
+                            .sortedWith(
+                                compareBy<DocumentSnapshot> {
+                                    it.getLong(
+                                        "position"
+                                    )
+                                        ?: Long.MAX_VALUE
+                                }.thenBy {
+                                    it.getTimestamp(
+                                        "createdAt"
+                                    )?.seconds
+                                        ?: Long.MAX_VALUE
+                                }
+                            )
                             .mapIndexed {
                                     index,
                                     document ->
@@ -130,14 +145,15 @@ class QueueViewModel @Inject constructor(
                                             .orEmpty(),
 
                                     position =
-                                        (
-                                                document
-                                                    .getLong(
-                                                        "position"
-                                                    )
-                                                    ?.toInt()
-                                                    ?: index + 1
-                                                ),
+                                        document
+                                            .getLong(
+                                                "position"
+                                            )
+                                            ?.toInt()
+                                            ?.takeIf {
+                                                it > 0
+                                            }
+                                            ?: index + 1,
 
                                     plateNumber =
                                         document
@@ -166,14 +182,13 @@ class QueueViewModel @Inject constructor(
                                                 .getTimestamp(
                                                     "createdAt"
                                                 )
-                                        )
-                                            .ifBlank {
-                                                document
-                                                    .getString(
-                                                        "time"
-                                                    )
-                                                    .orEmpty()
-                                            },
+                                        ).ifBlank {
+                                            document
+                                                .getString(
+                                                    "time"
+                                                )
+                                                .orEmpty()
+                                        },
 
                                     status =
                                         document
@@ -185,7 +200,8 @@ class QueueViewModel @Inject constructor(
                             }
 
                     val history =
-                        snapshot.documents
+                        snapshot
+                            .documents
                             .filter {
                                 !isActiveStatus(
                                     it.getString(
@@ -194,7 +210,6 @@ class QueueViewModel @Inject constructor(
                                 )
                             }
                             .sortedByDescending {
-
                                 it.getTimestamp(
                                     "dispatchedAt"
                                 )?.seconds
@@ -240,14 +255,13 @@ class QueueViewModel @Inject constructor(
                                     time =
                                         formatTimestamp(
                                             timestamp
-                                        )
-                                            .ifBlank {
-                                                document
-                                                    .getString(
-                                                        "time"
-                                                    )
-                                                    .orEmpty()
-                                            },
+                                        ).ifBlank {
+                                            document
+                                                .getString(
+                                                    "time"
+                                                )
+                                                .orEmpty()
+                                        },
 
                                     status =
                                         when (
@@ -270,27 +284,31 @@ class QueueViewModel @Inject constructor(
                         SimpleDateFormat(
                             "yyyyMMdd",
                             Locale.getDefault()
-                        ).format(Date())
+                        ).format(
+                            Date()
+                        )
 
                     val dispatchedToday =
-                        snapshot.documents.count {
-                            val status =
-                                it.getString(
-                                    "status"
-                                )
-                                    ?.lowercase()
+                        snapshot
+                            .documents
+                            .count { document ->
 
-                            if (
-                                status !=
-                                "dispatched"
-                            ) {
-                                false
-                            } else {
+                                if (
+                                    document
+                                        .getString(
+                                            "status"
+                                        )
+                                        ?.lowercase()
+                                    != "dispatched"
+                                ) {
+                                    return@count false
+                                }
 
                                 val timestamp =
-                                    it.getTimestamp(
-                                        "dispatchedAt"
-                                    )
+                                    document
+                                        .getTimestamp(
+                                            "dispatchedAt"
+                                        )
 
                                 timestamp != null &&
                                         SimpleDateFormat(
@@ -300,7 +318,6 @@ class QueueViewModel @Inject constructor(
                                             timestamp.toDate()
                                         ) == today
                             }
-                        }
 
                     _uiState.value =
                         QueueUiState.Success(
@@ -320,8 +337,9 @@ class QueueViewModel @Inject constructor(
     }
 
     /**
-     * Adds a REAL driver account to the queue.
-     * driverId MUST be users.userId.
+     * Adds a real driver to the queue.
+     *
+     * A driver must not have more than one ACTIVE queue entry.
      */
     fun addVehicleToQueue(
         driverId: String,
@@ -357,6 +375,35 @@ class QueueViewModel @Inject constructor(
                             "Hindi makita ang driver account."
                         )
 
+                val existingQueue =
+                    firestore
+                        .collection(
+                            FirestoreCollections.QUEUE
+                        )
+                        .whereEqualTo(
+                            "driverId",
+                            driverId
+                        )
+                        .get()
+                        .await()
+
+                val alreadyQueued =
+                    existingQueue
+                        .documents
+                        .any {
+                            isActiveStatus(
+                                it.getString(
+                                    "status"
+                                )
+                            )
+                        }
+
+                if (alreadyQueued) {
+                    throw IllegalStateException(
+                        "Nasa pila na ang driver na ito."
+                    )
+                }
+
                 val plate =
                     driver
                         .getString(
@@ -364,6 +411,7 @@ class QueueViewModel @Inject constructor(
                         )
                         .orEmpty()
                         .trim()
+                        .uppercase()
 
                 if (plate.isBlank()) {
                     throw IllegalStateException(
@@ -398,24 +446,46 @@ class QueueViewModel @Inject constructor(
                             "Driver"
                         }
 
-                val currentActiveCount =
-                    (
-                            _uiState.value as?
-                                    QueueUiState.Success
+                val queueSnapshot =
+                    firestore
+                        .collection(
+                            FirestoreCollections.QUEUE
+                        )
+                        .get()
+                        .await()
+
+                val activeQueue =
+                    queueSnapshot
+                        .documents
+                        .filter {
+                            isActiveStatus(
+                                it.getString(
+                                    "status"
+                                )
                             )
-                        ?.activeQueue
-                        ?.size
-                        ?: 0
+                        }
+
+                val nextPosition =
+                    activeQueue
+                        .mapNotNull {
+                            it.getLong(
+                                "position"
+                            )?.toInt()
+                        }
+                        .maxOrNull()
+                        ?.plus(1)
+                        ?: 1
 
                 val id =
                     FirestoreIds.queue(
                         driverId
                     )
 
-                val data =
+                val queueData =
                     mapOf<String, Any>(
 
-                        "id" to id,
+                        "id" to
+                                id,
 
                         "driverId" to
                                 driverId,
@@ -427,10 +497,14 @@ class QueueViewModel @Inject constructor(
                                 driverName,
 
                         "route" to
-                                route.trim(),
+                                route
+                                    .trim()
+                                    .ifBlank {
+                                        DEFAULT_ROUTE
+                                    },
 
                         "position" to
-                                currentActiveCount + 1,
+                                nextPosition,
 
                         "status" to
                                 "Nakapila",
@@ -439,10 +513,13 @@ class QueueViewModel @Inject constructor(
                                 SimpleDateFormat(
                                     "hh:mm a",
                                     Locale.getDefault()
-                                ).format(Date()),
+                                ).format(
+                                    Date()
+                                ),
 
                         "createdAt" to
-                                FieldValue.serverTimestamp()
+                                FieldValue
+                                    .serverTimestamp()
                     )
 
                 firestore
@@ -450,7 +527,7 @@ class QueueViewModel @Inject constructor(
                         FirestoreCollections.QUEUE
                     )
                     .document(id)
-                    .set(data)
+                    .set(queueData)
                     .await()
 
             } catch (e: Exception) {
@@ -464,40 +541,129 @@ class QueueViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Dispatches the selected driver.
+     *
+     * The dispatch creates the cooperative ledger transaction.
+     * KitaViewModel reads this queue_dispatch ledger record so
+     * the driver can see the earnings without a second duplicate
+     * financial record.
+     */
     fun dispatchVehicle(
         vehicleId: String,
         income: Double,
         otherFees: Double
     ) {
 
-        val currentState =
-            _uiState.value
-                    as? QueueUiState.Success
-                ?: return
+        if (income < 0.0) {
+            _uiState.value =
+                QueueUiState.Error(
+                    "Hindi maaaring negatibo ang kita"
+                )
 
-        val vehicle =
-            currentState.activeQueue
-                .firstOrNull {
-                    it.id == vehicleId
-                }
-                ?: return
+            return
+        }
+
+        if (otherFees < 0.0) {
+            _uiState.value =
+                QueueUiState.Error(
+                    "Hindi maaaring negatibo ang ibang bayad"
+                )
+
+            return
+        }
+
+        if (otherFees > income) {
+            _uiState.value =
+                QueueUiState.Error(
+                    "Hindi maaaring mas mataas ang ibang bayad kaysa sa kita"
+                )
+
+            return
+        }
 
         viewModelScope.launch {
 
             try {
 
-                val batch =
-                    firestore.batch()
-
-                val queueRef =
+                /*
+                 * Read the latest queue state instead of relying
+                 * entirely on the UI state.
+                 */
+                val queueSnapshot =
                     firestore
                         .collection(
                             FirestoreCollections.QUEUE
                         )
-                        .document(vehicleId)
+                        .get()
+                        .await()
 
+                val currentDocument =
+                    queueSnapshot
+                        .documents
+                        .firstOrNull {
+                            it.id == vehicleId
+                        }
+                        ?: throw IllegalStateException(
+                            "Hindi makita ang sasakyan sa pila."
+                        )
+
+                if (
+                    !isActiveStatus(
+                        currentDocument.getString(
+                            "status"
+                        )
+                    )
+                ) {
+                    throw IllegalStateException(
+                        "Ang sasakyang ito ay wala na sa aktibong pila."
+                    )
+                }
+
+                val driverId =
+                    currentDocument
+                        .getString(
+                            "driverId"
+                        )
+                        .orEmpty()
+                        .trim()
+
+                val driverName =
+                    currentDocument
+                        .getString(
+                            "driverName"
+                        )
+                        .orEmpty()
+
+                val plateNumber =
+                    currentDocument
+                        .getString(
+                            "plateNumber"
+                        )
+                        .orEmpty()
+                        .trim()
+                        .uppercase()
+
+                if (driverId.isBlank()) {
+                    throw IllegalStateException(
+                        "Walang User ID ang driver na ito."
+                    )
+                }
+
+                val netAmount =
+                    income - otherFees
+
+                val batch =
+                    firestore.batch()
+
+                val queueReference =
+                    currentDocument.reference
+
+                /*
+                 * Mark current queue entry as dispatched.
+                 */
                 batch.update(
-                    queueRef,
+                    queueReference,
                     mapOf(
                         "status" to
                                 "dispatched",
@@ -509,10 +675,7 @@ class QueueViewModel @Inject constructor(
                                 otherFees,
 
                         "netAmount" to
-                                (
-                                        income -
-                                                otherFees
-                                        ),
+                                netAmount,
 
                         "dispatchedAt" to
                                 FieldValue
@@ -527,10 +690,58 @@ class QueueViewModel @Inject constructor(
                     )
                 )
 
+                /*
+                 * Renumber the remaining active queue.
+                 */
+                val remainingActive =
+                    queueSnapshot
+                        .documents
+                        .filter {
+                            it.id != vehicleId &&
+                                    isActiveStatus(
+                                        it.getString(
+                                            "status"
+                                        )
+                                    )
+                        }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> {
+                                it.getLong(
+                                    "position"
+                                )
+                                    ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.getTimestamp(
+                                    "createdAt"
+                                )?.seconds
+                                    ?: Long.MAX_VALUE
+                            }
+                        )
+
+                remainingActive.forEachIndexed {
+                        index,
+                        document ->
+
+                    batch.update(
+                        document.reference,
+                        mapOf(
+                            "position" to
+                                    index + 1,
+
+                            "updatedAt" to
+                                    FieldValue
+                                        .serverTimestamp()
+                        )
+                    )
+                }
+
+                /*
+                 * Create exactly one ledger transaction for the dispatch.
+                 */
                 val ledgerId =
                     "${vehicleId}_dispatch_${System.currentTimeMillis()}"
 
-                val ledgerRef =
+                val ledgerReference =
                     firestore
                         .collection(
                             FirestoreCollections.LEDGER
@@ -540,28 +751,38 @@ class QueueViewModel @Inject constructor(
                         )
 
                 batch.set(
-                    ledgerRef,
-                    mapOf(
+                    ledgerReference,
+                    mapOf<String, Any>(
+
                         "id" to
                                 ledgerId,
 
                         "driverId" to
-                                vehicle.driverId,
+                                driverId,
 
                         "driverName" to
-                                vehicle.driverName,
+                                driverName,
 
                         "plateNumber" to
-                                vehicle.plateNumber,
+                                plateNumber,
+
+                        "queueId" to
+                                vehicleId,
 
                         "date" to
                                 SimpleDateFormat(
                                     "MMM dd, yyyy",
                                     Locale.getDefault()
-                                ).format(Date()),
+                                ).format(
+                                    Date()
+                                ),
 
+                        /*
+                         * The amount shown as driver earnings
+                         * is the NET dispatch amount.
+                         */
                         "amount" to
-                                income - otherFees,
+                                netAmount,
 
                         "grossAmount" to
                                 income,
@@ -570,7 +791,7 @@ class QueueViewModel @Inject constructor(
                                 otherFees,
 
                         "netAmount" to
-                                income - otherFees,
+                                netAmount,
 
                         "feeType" to
                                 "Dispatch",
@@ -624,18 +845,23 @@ class QueueViewModel @Inject constructor(
             return
         }
 
+        if (active.isEmpty()) {
+            return
+        }
+
+        val safePosition =
+            newPosition.coerceIn(
+                1,
+                active.size
+            )
+
         val vehicle =
             active.removeAt(
                 currentIndex
             )
 
         active.add(
-            (
-                    newPosition - 1
-                    ).coerceIn(
-                    0,
-                    active.size
-                ),
+            safePosition - 1,
             vehicle
         )
 
@@ -653,13 +879,11 @@ class QueueViewModel @Inject constructor(
                     batch.update(
                         firestore
                             .collection(
-                                FirestoreCollections
-                                    .QUEUE
+                                FirestoreCollections.QUEUE
                             )
                             .document(
                                 item.id
                             ),
-
                         mapOf(
                             "position" to
                                     index + 1,
@@ -718,7 +942,9 @@ class QueueViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+
         queueListener?.remove()
+
         super.onCleared()
     }
 }

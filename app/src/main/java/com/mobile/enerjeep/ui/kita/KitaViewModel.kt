@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.kita
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -25,7 +26,8 @@ data class KitaRecord(
     val date: String,
     val amount: Double,
     val type: String,
-    val isHistory: Boolean
+    val isHistory: Boolean,
+    val createdAtMillis: Long = 0L
 )
 
 enum class KitaTabType {
@@ -62,14 +64,25 @@ class KitaViewModel @Inject constructor(
             StateFlow<KitaUiState> =
         _uiState.asStateFlow()
 
-    private var listener:
+    private var kitaListener:
             ListenerRegistration? = null
 
+    private var ledgerListener:
+            ListenerRegistration? = null
+
+    private var kitaDocuments:
+            List<DocumentSnapshot> =
+        emptyList()
+
+    private var dispatchLedgerDocuments:
+            List<DocumentSnapshot> =
+        emptyList()
+
     init {
-        startListener()
+        startListeners()
     }
 
-    private fun startListener() {
+    private fun startListeners() {
 
         val userId =
             userSession.userProfile
@@ -83,7 +96,10 @@ class KitaViewModel @Inject constructor(
             return
         }
 
-        listener =
+        /*
+         * Manual Kita/Bayad/Multiya records.
+         */
+        kitaListener =
             firestore
                 .collection(
                     FirestoreCollections.KITA
@@ -97,81 +113,227 @@ class KitaViewModel @Inject constructor(
                         error ->
 
                     if (
-                        error != null ||
-                        snapshot == null
+                        error != null
                     ) {
                         return@addSnapshotListener
                     }
 
-                    val records =
-                        snapshot.documents
-                            .map { document ->
+                    kitaDocuments =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
 
-                                val isHistory =
-                                    document
-                                        .getBoolean(
-                                            "isHistory"
-                                        )
-                                        ?: !isToday(
-                                            document
-                                                .getTimestamp(
-                                                    "createdAt"
-                                                )
-                                        )
-
-                                KitaRecord(
-                                    id =
-                                        document.id,
-
-                                    title =
-                                        document
-                                            .getString(
-                                                "title"
-                                            )
-                                            ?: "Record",
-
-                                    date =
-                                        document
-                                            .getString(
-                                                "date"
-                                            )
-                                            ?: formatTimestamp(
-                                                document
-                                                    .getTimestamp(
-                                                        "createdAt"
-                                                    )
-                                            ),
-
-                                    amount =
-                                        document
-                                            .getDouble(
-                                                "amount"
-                                            )
-                                            ?: 0.0,
-
-                                    type =
-                                        document
-                                            .getString(
-                                                "type"
-                                            )
-                                            ?: "Kita",
-
-                                    isHistory =
-                                        isHistory
-                                )
-                            }
-                            .sortedByDescending {
-                                it.id
-                            }
-
-                    updateMetricsAndFilter(
-                        records,
-                        _uiState.value
-                            .selectedTab,
-                        _uiState.value
-                            .searchQuery
-                    )
+                    rebuild()
                 }
+
+        /*
+         * Dispatch earnings are stored in LEDGER with:
+         *
+         * source = queue_dispatch
+         *
+         * These are the actual earnings produced when
+         * the Admin dispatches the driver.
+         */
+        ledgerListener =
+            firestore
+                .collection(
+                    FirestoreCollections.LEDGER
+                )
+                .whereEqualTo(
+                    "driverId",
+                    userId
+                )
+                .addSnapshotListener {
+                        snapshot,
+                        error ->
+
+                    if (
+                        error != null
+                    ) {
+                        return@addSnapshotListener
+                    }
+
+                    dispatchLedgerDocuments =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+                            .filter {
+                                it.getString(
+                                    "source"
+                                )?.equals(
+                                    "queue_dispatch",
+                                    ignoreCase = true
+                                ) == true
+                            }
+
+                    rebuild()
+                }
+    }
+
+    private fun rebuild() {
+
+        val manualRecords =
+            kitaDocuments.map {
+                mapKitaDocument(it)
+            }
+
+        val dispatchRecords =
+            dispatchLedgerDocuments.map {
+                mapDispatchLedger(it)
+            }
+
+        val records =
+            (
+                    manualRecords +
+                            dispatchRecords
+                    )
+                .sortedByDescending {
+                    it.createdAtMillis
+                }
+
+        updateMetricsAndFilter(
+            allRecords = records,
+            tab = _uiState.value.selectedTab,
+            query = _uiState.value.searchQuery
+        )
+    }
+
+    private fun mapKitaDocument(
+        document: DocumentSnapshot
+    ): KitaRecord {
+
+        val createdAt =
+            document.getTimestamp(
+                "createdAt"
+            )
+
+        val millis =
+            createdAt
+                ?.toDate()
+                ?.time
+                ?: 0L
+
+        val isHistory =
+            !isCurrentMonth(
+                createdAt
+            )
+
+        return KitaRecord(
+            id =
+                document.id,
+
+            title =
+                document
+                    .getString(
+                        "title"
+                    )
+                    ?: "Record",
+
+            date =
+                document
+                    .getString(
+                        "date"
+                    )
+                    ?: formatTimestamp(
+                        createdAt
+                    ),
+
+            amount =
+                document
+                    .getDouble(
+                        "amount"
+                    )
+                    ?: 0.0,
+
+            type =
+                document
+                    .getString(
+                        "type"
+                    )
+                    ?: "Kita",
+
+            isHistory =
+                isHistory,
+
+            createdAtMillis =
+                millis
+        )
+    }
+
+    private fun mapDispatchLedger(
+        document: DocumentSnapshot
+    ): KitaRecord {
+
+        val createdAt =
+            document.getTimestamp(
+                "createdAt"
+            )
+
+        val millis =
+            createdAt
+                ?.toDate()
+                ?.time
+                ?: 0L
+
+        val plate =
+            document
+                .getString(
+                    "plateNumber"
+                )
+                .orEmpty()
+
+        val date =
+            document
+                .getString(
+                    "date"
+                )
+                ?: formatTimestamp(
+                    createdAt
+                )
+
+        /*
+         * NET amount is the amount the driver earned
+         * after other dispatch fees.
+         */
+        val amount =
+            document
+                .getDouble(
+                    "netAmount"
+                )
+                ?: document
+                    .getDouble(
+                        "amount"
+                    )
+                ?: 0.0
+
+        return KitaRecord(
+            id =
+                "ledger_${document.id}",
+
+            title =
+                if (plate.isBlank()) {
+                    "Dispatch"
+                } else {
+                    "Dispatch • $plate"
+                },
+
+            date =
+                date,
+
+            amount =
+                amount,
+
+            type =
+                "Kita",
+
+            isHistory =
+                !isCurrentMonth(
+                    createdAt
+                ),
+
+            createdAtMillis =
+                millis
+        )
     }
 
     fun addKita(
@@ -202,7 +364,8 @@ class KitaViewModel @Inject constructor(
                     FirestoreIds.kita()
 
                 val cleanType =
-                    type.trim()
+                    type
+                        .trim()
                         .ifBlank {
                             "Kita"
                         }
@@ -210,7 +373,8 @@ class KitaViewModel @Inject constructor(
                 val data =
                     mapOf<String, Any>(
 
-                        "id" to id,
+                        "id" to
+                                id,
 
                         "driverId" to
                                 driverId.trim(),
@@ -252,7 +416,10 @@ class KitaViewModel @Inject constructor(
                     .await()
 
             } catch (_: Exception) {
-                // Listener will continue providing existing data.
+                /*
+                 * Listener continues to provide
+                 * existing Firestore data.
+                 */
             }
         }
     }
@@ -262,9 +429,14 @@ class KitaViewModel @Inject constructor(
     ) {
 
         updateMetricsAndFilter(
-            _uiState.value.records,
-            tab,
-            _uiState.value.searchQuery
+            allRecords =
+                _uiState.value.records,
+
+            tab =
+                tab,
+
+            query =
+                _uiState.value.searchQuery
         )
     }
 
@@ -273,9 +445,14 @@ class KitaViewModel @Inject constructor(
     ) {
 
         updateMetricsAndFilter(
-            _uiState.value.records,
-            _uiState.value.selectedTab,
-            query
+            allRecords =
+                _uiState.value.records,
+
+            tab =
+                _uiState.value.selectedTab,
+
+            query =
+                query
         )
     }
 
@@ -285,12 +462,12 @@ class KitaViewModel @Inject constructor(
         query: String
     ) {
 
-        val history =
+        val showHistory =
             tab == KitaTabType.KASAYSAYAN
 
         val currentTabRecords =
             allRecords.filter {
-                it.isHistory == history
+                it.isHistory == showHistory
             }
 
         val kitaSum =
@@ -298,7 +475,7 @@ class KitaViewModel @Inject constructor(
                 .filter {
                     it.type.equals(
                         "Kita",
-                        true
+                        ignoreCase = true
                     )
                 }
                 .sumOf {
@@ -310,7 +487,7 @@ class KitaViewModel @Inject constructor(
                 .filter {
                     it.type.equals(
                         "Bayad",
-                        true
+                        ignoreCase = true
                     )
                 }
                 .sumOf {
@@ -322,7 +499,7 @@ class KitaViewModel @Inject constructor(
                 .filter {
                     it.type.equals(
                         "Multiya",
-                        true
+                        ignoreCase = true
                     )
                 }
                 .sumOf {
@@ -338,6 +515,7 @@ class KitaViewModel @Inject constructor(
 
         val filtered =
             currentTabRecords.filter {
+
                 it.title.contains(
                     query,
                     ignoreCase = true
@@ -377,7 +555,7 @@ class KitaViewModel @Inject constructor(
             )
     }
 
-    private fun isToday(
+    private fun isCurrentMonth(
         timestamp:
         com.google.firebase.Timestamp?
     ): Boolean {
@@ -386,20 +564,23 @@ class KitaViewModel @Inject constructor(
             return false
         }
 
-        val key =
+        val monthKey =
             SimpleDateFormat(
-                "yyyyMMdd",
+                "yyyyMM",
                 Locale.getDefault()
-            ).format(
+            )
+
+        val current =
+            monthKey.format(
                 Date()
             )
 
-        return SimpleDateFormat(
-            "yyyyMMdd",
-            Locale.getDefault()
-        ).format(
-            timestamp.toDate()
-        ) == key
+        val record =
+            monthKey.format(
+                timestamp.toDate()
+            )
+
+        return current == record
     }
 
     private fun formatTimestamp(
@@ -410,7 +591,6 @@ class KitaViewModel @Inject constructor(
         return timestamp
             ?.toDate()
             ?.let {
-
                 SimpleDateFormat(
                     "MMM dd, yyyy",
                     Locale.getDefault()
@@ -420,7 +600,11 @@ class KitaViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        listener?.remove()
+
+        kitaListener?.remove()
+
+        ledgerListener?.remove()
+
         super.onCleared()
     }
 }

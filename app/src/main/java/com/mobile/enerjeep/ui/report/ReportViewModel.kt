@@ -66,7 +66,10 @@ data class DonasyonItem(
 )
 
 sealed interface ReportUiState {
-    data object Loading : ReportUiState
+
+    data object Loading :
+        ReportUiState
+
     data class Success(
         val monthlyData: List<MonthlyIncome>,
         val yearlyData: List<YearlyIncome>,
@@ -83,7 +86,10 @@ sealed interface ReportUiState {
         val donasyonNgayon: Double,
         val kabuuangDonasyon: Double
     ) : ReportUiState
-    data class Error(val message: String) : ReportUiState
+
+    data class Error(
+        val message: String
+    ) : ReportUiState
 }
 
 @HiltViewModel
@@ -91,221 +97,890 @@ class ReportViewModel @Inject constructor(
     private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<ReportUiState>(ReportUiState.Loading)
-    val uiState = _uiState.asStateFlow()
+    private val _uiState =
+        MutableStateFlow<ReportUiState>(
+            ReportUiState.Loading
+        )
 
-    private var ledgerDocs = listOf<DocumentSnapshot>()
-    private var incidentDocs = listOf<DocumentSnapshot>()
-    private var kitaDocs = listOf<DocumentSnapshot>()
-    private var donationDocs = listOf<DocumentSnapshot>()
-    private val listeners = mutableListOf<ListenerRegistration>()
+    val uiState =
+        _uiState.asStateFlow()
+
+    private var ledgerDocs =
+        listOf<DocumentSnapshot>()
+
+    private var incidentDocs =
+        listOf<DocumentSnapshot>()
+
+    private var kitaDocs =
+        listOf<DocumentSnapshot>()
+
+    private var donationDocs =
+        listOf<DocumentSnapshot>()
+
+    private val listeners =
+        mutableListOf<ListenerRegistration>()
 
     init {
         attachListeners()
     }
 
     private fun attachListeners() {
-        listeners += firestore.collection(FirestoreCollections.LEDGER).addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                _uiState.value = ReportUiState.Error(error.message ?: "Hindi mabasa ang ledger report")
-                return@addSnapshotListener
-            }
-            ledgerDocs = snapshot?.documents.orEmpty()
-            rebuild()
-        }
-        listeners += firestore.collection(FirestoreCollections.INCIDENTS).addSnapshotListener { snapshot, _ ->
-            incidentDocs = snapshot?.documents.orEmpty()
-            rebuild()
-        }
-        listeners += firestore.collection(FirestoreCollections.KITA).addSnapshotListener { snapshot, _ ->
-            kitaDocs = snapshot?.documents.orEmpty()
-            rebuild()
-        }
-        listeners += firestore.collection(FirestoreCollections.DONATIONS).addSnapshotListener { snapshot, _ ->
-            donationDocs = snapshot?.documents.orEmpty()
-            rebuild()
-        }
+
+        listeners +=
+            firestore
+                .collection(
+                    FirestoreCollections.LEDGER
+                )
+                .addSnapshotListener {
+                        snapshot,
+                        error ->
+
+                    if (error != null) {
+
+                        _uiState.value =
+                            ReportUiState.Error(
+                                error.message
+                                    ?: "Hindi mabasa ang ledger report"
+                            )
+
+                        return@addSnapshotListener
+                    }
+
+                    ledgerDocs =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+
+                    rebuild()
+                }
+
+        listeners +=
+            firestore
+                .collection(
+                    FirestoreCollections.INCIDENTS
+                )
+                .addSnapshotListener {
+                        snapshot,
+                        _ ->
+
+                    incidentDocs =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+
+                    rebuild()
+                }
+
+        listeners +=
+            firestore
+                .collection(
+                    FirestoreCollections.KITA
+                )
+                .addSnapshotListener {
+                        snapshot,
+                        _ ->
+
+                    kitaDocs =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+
+                    rebuild()
+                }
+
+        listeners +=
+            firestore
+                .collection(
+                    FirestoreCollections.DONATIONS
+                )
+                .addSnapshotListener {
+                        snapshot,
+                        _ ->
+
+                    donationDocs =
+                        snapshot
+                            ?.documents
+                            .orEmpty()
+
+                    rebuild()
+                }
     }
 
     private fun rebuild() {
-        val monthly = ledgerDocs
-            .mapNotNull { document -> monthKey(document) to amountForLedger(document) }
-            .groupBy({ it.first }, { it.second })
-            .toSortedMap(compareByDescending { it })
-            .map { (key, amounts) ->
-                val current = amounts.sum()
-                val previousKey = try {
-                    YearMonth.parse(key).minusMonths(1).toString()
-                } catch (_: Exception) { null }
-                val previous = if (previousKey != null) {
-                    ledgerDocs.filter { monthKey(it) == previousKey }.sumOf(::amountForLedger)
-                } else 0.0
-                MonthlyIncome(
-                    period = formatMonth(key),
-                    trips = ledgerDocs.count { monthKey(it) == key },
-                    amount = current,
-                    growthPercentage = if (previous > 0.0) ((current - previous) / previous) * 100.0 else null
+
+        /*
+         * -----------------------------
+         * INCOME REPORT
+         * -----------------------------
+         */
+
+        val monthly =
+            ledgerDocs
+                .mapNotNull { document ->
+
+                    val key =
+                        monthKey(document)
+
+                    if (key.isBlank()) {
+                        null
+                    } else {
+                        key to
+                                amountForLedger(
+                                    document
+                                )
+                    }
+                }
+                .groupBy(
+                    {
+                        it.first
+                    },
+                    {
+                        it.second
+                    }
                 )
+                .toSortedMap(
+                    compareByDescending {
+                        it
+                    }
+                )
+                .map { (key, amounts) ->
+
+                    val current =
+                        amounts.sum()
+
+                    val previousKey =
+                        try {
+                            YearMonth
+                                .parse(key)
+                                .minusMonths(1)
+                                .toString()
+                        } catch (_: Exception) {
+                            null
+                        }
+
+                    val previous =
+                        if (
+                            previousKey != null
+                        ) {
+                            ledgerDocs
+                                .filter {
+                                    monthKey(
+                                        it
+                                    ) ==
+                                            previousKey
+                                }
+                                .sumOf(
+                                    ::amountForLedger
+                                )
+                        } else {
+                            0.0
+                        }
+
+                    MonthlyIncome(
+                        period =
+                            formatMonth(
+                                key
+                            ),
+
+                        trips =
+                            ledgerDocs.count {
+                                monthKey(
+                                    it
+                                ) == key
+                            },
+
+                        amount =
+                            current,
+
+                        growthPercentage =
+                            if (
+                                previous > 0.0
+                            ) {
+                                (
+                                        (
+                                                current -
+                                                        previous
+                                                ) /
+                                                previous
+                                        ) * 100.0
+                            } else {
+                                null
+                            }
+                    )
+                }
+
+        val yearly =
+            ledgerDocs
+                .mapNotNull {
+                    yearKey(it)
+                }
+                .distinct()
+                .sortedDescending()
+                .map { year ->
+
+                    val yearDocs =
+                        ledgerDocs.filter {
+                            yearKey(it) == year
+                        }
+
+                    YearlyIncome(
+                        year =
+                            year,
+
+                        activeMonths =
+                            yearDocs
+                                .mapNotNull(
+                                    ::monthKey
+                                )
+                                .distinct()
+                                .size,
+
+                        amount =
+                            yearDocs
+                                .sumOf(
+                                    ::amountForLedger
+                                )
+                    )
+                }
+
+        val incomeHistory =
+            ledgerDocs
+                .sortedByDescending {
+                    timestampSeconds(
+                        it
+                    )
+                }
+                .map {
+
+                    IncomeHistory(
+                        plateNumber =
+                            it.getString(
+                                "plateNumber"
+                            )
+                                .orEmpty(),
+
+                        driverName =
+                            it.getString(
+                                "driverName"
+                            )
+                                .orEmpty(),
+
+                        netAmount =
+                            it.getDouble(
+                                "netAmount"
+                            )
+                                ?: it.getDouble(
+                                    "amount"
+                                )
+                                ?: 0.0,
+
+                        grossAmount =
+                            it.getDouble(
+                                "grossAmount"
+                            )
+                                ?: it.getDouble(
+                                    "amount"
+                                )
+                                ?: 0.0,
+
+                        date =
+                            it.getString(
+                                "date"
+                            )
+                                ?: formatDate(it)
+                    )
+                }
+
+        /*
+         * -----------------------------
+         * INCIDENT REPORT
+         * -----------------------------
+         */
+
+        val currentIncidents =
+            incidentDocs
+                .filterNot(
+                    ::isResolved
+                )
+                .map(
+                    ::mapReportIncident
+                )
+
+        val historyIncidents =
+            incidentDocs
+                .filter(
+                    ::isResolved
+                )
+                .map(
+                    ::mapReportIncident
+                )
+
+        val totalIncidentPenalty =
+            incidentDocs.sumOf {
+                it.getDouble(
+                    "penalty"
+                ) ?: 0.0
             }
 
-        val yearly = ledgerDocs
-            .mapNotNull { yearKey(it) }
-            .distinct()
-            .sortedDescending()
-            .map { year ->
-                val yearDocs = ledgerDocs.filter { yearKey(it) == year }
-                YearlyIncome(
-                    year = year,
-                    activeMonths = yearDocs.mapNotNull(::monthKey).distinct().size,
-                    amount = yearDocs.sumOf(::amountForLedger)
-                )
+        /*
+         * -----------------------------
+         * MULTIYA REPORT
+         * -----------------------------
+         *
+         * "Ngayon" means today's records.
+         */
+        val multiyaAll =
+            kitaDocs.filter {
+                it.getString(
+                    "type"
+                )?.equals(
+                    "Multiya",
+                    ignoreCase = true
+                ) == true
             }
 
-        val incomeHistory = ledgerDocs
-            .sortedByDescending { timestampSeconds(it) }
-            .map {
-                IncomeHistory(
-                    plateNumber = it.getString("plateNumber").orEmpty(),
-                    driverName = it.getString("driverName").orEmpty(),
-                    netAmount = it.getDouble("netAmount") ?: it.getDouble("amount") ?: 0.0,
-                    grossAmount = it.getDouble("grossAmount") ?: it.getDouble("amount") ?: 0.0,
-                    date = it.getString("date") ?: formatDate(it)
+        val currentMultiya =
+            multiyaAll
+                .filter {
+                    isTodayDocument(it)
+                }
+                .map(
+                    ::mapReportMultiya
                 )
+
+        val historyMultiya =
+            multiyaAll
+                .filter {
+                    !isTodayDocument(it)
+                }
+                .map(
+                    ::mapReportMultiya
+                )
+
+        val multiyaNgayon =
+            currentMultiya.sumOf {
+                it.amount
             }
 
-        val currentIncidents = incidentDocs.filterNot(::isResolved).map(::mapReportIncident)
-        val historyIncidents = incidentDocs.filter(::isResolved).map(::mapReportIncident)
-        val totalIncidentPenalty = incidentDocs.sumOf { it.getDouble("penalty") ?: 0.0 }
+        val kabuuangMultiya =
+            multiyaAll.sumOf {
+                it.getDouble(
+                    "amount"
+                ) ?: 0.0
+            }
 
-        val multiyaAll = kitaDocs.filter { it.getString("type")?.equals("Multiya", true) == true }
-        val currentMultiya = multiyaAll.filter { !isKitaHistory(it) }.map(::mapReportMultiya)
-        val historyMultiya = multiyaAll.filter(::isKitaHistory).map(::mapReportMultiya)
-        val multiyaNgayon = currentMultiya.sumOf { it.amount }
-        val kabuuangMultiya = multiyaAll.sumOf { it.getDouble("amount") ?: 0.0 }
+        /*
+         * -----------------------------
+         * DONATION REPORT
+         * -----------------------------
+         */
 
-        val currentDonasyon = donationDocs.filterNot(::isDonationHistory).map(::mapDonation)
-        val historyDonasyon = donationDocs.filter(::isDonationHistory).map(::mapDonation)
-        val donasyonNgayon = currentDonasyon.sumOf { it.amount }
-        val kabuuangDonasyon = donationDocs.sumOf { it.getDouble("amount") ?: 0.0 }
+        val currentDonasyon =
+            donationDocs
+                .filter {
+                    isTodayDocument(it)
+                }
+                .map(
+                    ::mapDonation
+                )
 
-        _uiState.value = ReportUiState.Success(
-            monthlyData = monthly,
-            yearlyData = yearly,
-            historyData = incomeHistory,
-            currentIncidents = currentIncidents,
-            historyIncidents = historyIncidents,
-            totalIncidentPenalty = totalIncidentPenalty,
-            currentMultiya = currentMultiya,
-            historyMultiya = historyMultiya,
-            multiyaNgayon = multiyaNgayon,
-            kabuuangMultiya = kabuuangMultiya,
-            currentDonasyon = currentDonasyon,
-            historyDonasyon = historyDonasyon,
-            donasyonNgayon = donasyonNgayon,
-            kabuuangDonasyon = kabuuangDonasyon
-        )
+        val historyDonasyon =
+            donationDocs
+                .filter {
+                    !isTodayDocument(it)
+                }
+                .map(
+                    ::mapDonation
+                )
+
+        val donasyonNgayon =
+            currentDonasyon.sumOf {
+                it.amount
+            }
+
+        val kabuuangDonasyon =
+            donationDocs.sumOf {
+                it.getDouble(
+                    "amount"
+                ) ?: 0.0
+            }
+
+        _uiState.value =
+            ReportUiState.Success(
+
+                monthlyData =
+                    monthly,
+
+                yearlyData =
+                    yearly,
+
+                historyData =
+                    incomeHistory,
+
+                currentIncidents =
+                    currentIncidents,
+
+                historyIncidents =
+                    historyIncidents,
+
+                totalIncidentPenalty =
+                    totalIncidentPenalty,
+
+                currentMultiya =
+                    currentMultiya,
+
+                historyMultiya =
+                    historyMultiya,
+
+                multiyaNgayon =
+                    multiyaNgayon,
+
+                kabuuangMultiya =
+                    kabuuangMultiya,
+
+                currentDonasyon =
+                    currentDonasyon,
+
+                historyDonasyon =
+                    historyDonasyon,
+
+                donasyonNgayon =
+                    donasyonNgayon,
+
+                kabuuangDonasyon =
+                    kabuuangDonasyon
+            )
     }
 
-    fun addDonasyon(donasyon: DonasyonItem) {
-        val id = FirestoreIds.donation()
-        val data = mapOf(
-            "id" to id,
-            "donor" to donasyon.donor.trim(),
-            "amount" to donasyon.amount,
-            "date" to donasyon.date,
-            "source" to donasyon.source,
-            "note" to donasyon.note,
-            "isHistory" to false,
-            "createdAt" to FieldValue.serverTimestamp()
-        )
+    fun addDonasyon(
+        donasyon: DonasyonItem
+    ) {
+
+        val id =
+            FirestoreIds.donation()
+
+        val data =
+            mapOf(
+
+                "id" to
+                        id,
+
+                "donor" to
+                        donasyon
+                            .donor
+                            .trim(),
+
+                "amount" to
+                        donasyon.amount,
+
+                "date" to
+                        donasyon.date,
+
+                "source" to
+                        donasyon.source,
+
+                "note" to
+                        donasyon.note,
+
+                "isHistory" to
+                        false,
+
+                "createdAt" to
+                        FieldValue
+                            .serverTimestamp()
+            )
+
         viewModelScope.launch {
+
             try {
-                firestore.collection(FirestoreCollections.DONATIONS).document(id).set(data).await()
+
+                firestore
+                    .collection(
+                        FirestoreCollections
+                            .DONATIONS
+                    )
+                    .document(id)
+                    .set(data)
+                    .await()
+
             } catch (e: Exception) {
-                _uiState.value = ReportUiState.Error(e.message ?: "Hindi ma-save ang donasyon")
+
+                _uiState.value =
+                    ReportUiState.Error(
+                        e.message
+                            ?: "Hindi ma-save ang donasyon"
+                    )
             }
         }
     }
 
-    private fun mapReportIncident(document: DocumentSnapshot): ReportIncidentItem {
+    private fun mapReportIncident(
+        document: DocumentSnapshot
+    ): ReportIncidentItem {
+
         return ReportIncidentItem(
-            title = document.getString("title").orEmpty(),
-            plateNumber = document.getString("plateNumber").orEmpty(),
-            location = document.getString("location").orEmpty(),
-            date = document.getString("date") ?: formatDate(document),
-            penalty = document.getDouble("penalty") ?: 0.0
+
+            title =
+                document
+                    .getString(
+                        "title"
+                    )
+                    .orEmpty(),
+
+            plateNumber =
+                document
+                    .getString(
+                        "plateNumber"
+                    )
+                    .orEmpty(),
+
+            location =
+                document
+                    .getString(
+                        "location"
+                    )
+                    .orEmpty(),
+
+            date =
+                document
+                    .getString(
+                        "date"
+                    )
+                    ?: formatDate(
+                        document
+                    ),
+
+            penalty =
+                document
+                    .getDouble(
+                        "penalty"
+                    )
+                    ?: 0.0
         )
     }
 
-    private fun mapReportMultiya(document: DocumentSnapshot): ReportMultiyaItem {
+    private fun mapReportMultiya(
+        document: DocumentSnapshot
+    ): ReportMultiyaItem {
+
         return ReportMultiyaItem(
-            plateNumber = document.getString("plateNumber").orEmpty(),
-            driverName = document.getString("driverName").orEmpty(),
-            date = document.getString("date") ?: formatDate(document),
-            amount = document.getDouble("amount") ?: 0.0
+
+            plateNumber =
+                document
+                    .getString(
+                        "plateNumber"
+                    )
+                    .orEmpty(),
+
+            driverName =
+                document
+                    .getString(
+                        "driverName"
+                    )
+                    .orEmpty(),
+
+            date =
+                document
+                    .getString(
+                        "date"
+                    )
+                    ?: formatDate(
+                        document
+                    ),
+
+            amount =
+                document
+                    .getDouble(
+                        "amount"
+                    )
+                    ?: 0.0
         )
     }
 
-    private fun mapDonation(document: DocumentSnapshot): DonasyonItem {
+    private fun mapDonation(
+        document: DocumentSnapshot
+    ): DonasyonItem {
+
         return DonasyonItem(
-            donor = document.getString("donor").orEmpty(),
-            amount = document.getDouble("amount") ?: 0.0,
-            date = document.getString("date") ?: formatDate(document),
-            source = document.getString("source").orEmpty(),
-            note = document.getString("note").orEmpty()
+
+            donor =
+                document
+                    .getString(
+                        "donor"
+                    )
+                    .orEmpty(),
+
+            amount =
+                document
+                    .getDouble(
+                        "amount"
+                    )
+                    ?: 0.0,
+
+            date =
+                document
+                    .getString(
+                        "date"
+                    )
+                    ?: formatDate(
+                        document
+                    ),
+
+            source =
+                document
+                    .getString(
+                        "source"
+                    )
+                    .orEmpty(),
+
+            note =
+                document
+                    .getString(
+                        "note"
+                    )
+                    .orEmpty()
         )
     }
 
-    private fun isResolved(document: DocumentSnapshot): Boolean =
-        document.getBoolean("isResolved") == true || document.getString("status")?.equals("resolved", true) == true
+    private fun isResolved(
+        document: DocumentSnapshot
+    ): Boolean {
 
-    private fun isKitaHistory(document: DocumentSnapshot): Boolean =
-        document.getBoolean("isHistory") ?: !isToday(document.getTimestamp("createdAt"))
+        return document
+            .getBoolean(
+                "isResolved"
+            ) == true ||
 
-    private fun isDonationHistory(document: DocumentSnapshot): Boolean =
-        document.getBoolean("isHistory") ?: !isToday(document.getTimestamp("createdAt"))
-
-    private fun isToday(timestamp: com.google.firebase.Timestamp?): Boolean {
-        if (timestamp == null) return false
-        val key = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
-        return SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(timestamp.toDate()) == key
+                document
+                    .getString(
+                        "status"
+                    )
+                    ?.equals(
+                        "resolved",
+                        ignoreCase = true
+                    ) == true
     }
 
-    private fun amountForLedger(document: DocumentSnapshot): Double =
-        document.getDouble("netAmount") ?: document.getDouble("amount") ?: 0.0
+    private fun isTodayDocument(
+        document: DocumentSnapshot
+    ): Boolean {
 
-    private fun timestampSeconds(document: DocumentSnapshot): Long =
-        document.getTimestamp("createdAt")?.seconds ?: 0L
+        val timestamp =
+            document.getTimestamp(
+                "createdAt"
+            )
 
-    private fun monthKey(document: DocumentSnapshot): String {
-        val timestamp = document.getTimestamp("createdAt")
         if (timestamp != null) {
-            return LocalDateTime.ofInstant(timestamp.toDate().toInstant(), ZoneId.systemDefault()).toLocalDate().toString().substring(0, 7)
+            return isToday(
+                timestamp
+            )
         }
-        val date = document.getString("date") ?: return ""
+
+        val date =
+            document.getString(
+                "date"
+            )
+
+        if (date.isNullOrBlank()) {
+            return false
+        }
+
         return try {
-            val parsed = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).parse(date) ?: return ""
-            SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(parsed)
-        } catch (_: Exception) { "" }
+
+            val parsed =
+                SimpleDateFormat(
+                    "MMM dd, yyyy",
+                    Locale.getDefault()
+                ).parse(date)
+
+            if (parsed == null) {
+                false
+            } else {
+
+                val key =
+                    SimpleDateFormat(
+                        "yyyyMMdd",
+                        Locale.getDefault()
+                    )
+
+                key.format(
+                    parsed
+                ) ==
+                        key.format(
+                            Date()
+                        )
+            }
+
+        } catch (_: Exception) {
+            false
+        }
     }
 
-    private fun yearKey(document: DocumentSnapshot): String = monthKey(document).take(4).takeIf { it.length == 4 }.orEmpty()
+    private fun isToday(
+        timestamp:
+        com.google.firebase.Timestamp
+    ): Boolean {
 
-    private fun formatMonth(key: String): String {
-        return try {
-            val ym = YearMonth.parse(key)
-            ym.month.getDisplayName(java.time.format.TextStyle.FULL, Locale.getDefault()) + " " + ym.year
-        } catch (_: Exception) { key }
+        val key =
+            SimpleDateFormat(
+                "yyyyMMdd",
+                Locale.getDefault()
+            )
+
+        return key.format(
+            timestamp.toDate()
+        ) ==
+                key.format(
+                    Date()
+                )
     }
 
-    private fun formatDate(document: DocumentSnapshot): String {
-        return document.getTimestamp("createdAt")?.toDate()?.let {
-            SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(it)
-        }.orEmpty()
+    private fun amountForLedger(
+        document: DocumentSnapshot
+    ): Double {
+
+        return document
+            .getDouble(
+                "netAmount"
+            )
+            ?: document
+                .getDouble(
+                    "amount"
+                )
+            ?: 0.0
+    }
+
+    private fun timestampSeconds(
+        document: DocumentSnapshot
+    ): Long {
+
+        return document
+            .getTimestamp(
+                "createdAt"
+            )
+            ?.seconds
+            ?: 0L
+    }
+
+    private fun monthKey(
+        document: DocumentSnapshot
+    ): String {
+
+        val timestamp =
+            document.getTimestamp(
+                "createdAt"
+            )
+
+        if (timestamp != null) {
+
+            return LocalDateTime
+                .ofInstant(
+                    timestamp
+                        .toDate()
+                        .toInstant(),
+                    ZoneId
+                        .systemDefault()
+                )
+                .toLocalDate()
+                .toString()
+                .substring(
+                    0,
+                    7
+                )
+        }
+
+        val date =
+            document
+                .getString(
+                    "date"
+                )
+                ?: return ""
+
+        return try {
+
+            val parsed =
+                SimpleDateFormat(
+                    "MMM dd, yyyy",
+                    Locale.getDefault()
+                )
+                    .parse(date)
+                    ?: return ""
+
+            SimpleDateFormat(
+                "yyyy-MM",
+                Locale.getDefault()
+            ).format(
+                parsed
+            )
+
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun yearKey(
+        document: DocumentSnapshot
+    ): String {
+
+        return monthKey(
+            document
+        )
+            .take(4)
+            .takeIf {
+                it.length == 4
+            }
+            .orEmpty()
+    }
+
+    private fun formatMonth(
+        key: String
+    ): String {
+
+        return try {
+
+            val ym =
+                YearMonth.parse(
+                    key
+                )
+
+            ym.month.getDisplayName(
+                java.time.format.TextStyle.FULL,
+                Locale.getDefault()
+            ) +
+                    " " +
+                    ym.year
+
+        } catch (_: Exception) {
+            key
+        }
+    }
+
+    private fun formatDate(
+        document: DocumentSnapshot
+    ): String {
+
+        return document
+            .getTimestamp(
+                "createdAt"
+            )
+            ?.toDate()
+            ?.let {
+
+                SimpleDateFormat(
+                    "MMM dd, yyyy",
+                    Locale.getDefault()
+                ).format(it)
+
+            }
+            .orEmpty()
     }
 
     override fun onCleared() {
-        listeners.forEach { it.remove() }
+
+        listeners.forEach {
+            it.remove()
+        }
+
         super.onCleared()
     }
 }

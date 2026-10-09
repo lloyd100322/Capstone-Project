@@ -184,11 +184,7 @@ fun HomeScreen(
                         ReportScreen()
                     }
                     HomeTab.Profile -> {
-                        ProfileScreen(
-                            onSignOut = {
-                                appNavigator.navigateTo(Screen.Login)
-                            }
-                        )
+                        ProfileScreen()
                     }
                 }
 

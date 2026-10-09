@@ -30,11 +30,16 @@ class CreateAccountViewModel @Inject constructor(
             CreateAccountUiState.Idle
         )
 
-    val uiState = _uiState.asStateFlow()
+    val uiState =
+        _uiState.asStateFlow()
 
     companion object {
+
         private val PH_PHONE_REGEX =
             Regex("^\\+639\\d{9}$")
+
+        private const val DEFAULT_ROUTE =
+            "Monumento – Marilao"
     }
 
     fun createAccount(
@@ -47,15 +52,29 @@ class CreateAccountViewModel @Inject constructor(
         plateNumber: String = "",
         emergencyContact: String = ""
     ) {
-        val cleanFirstName = firstName.trim()
-        val cleanLastName = lastName.trim()
-        val cleanPhoneNumber = phoneNumber.trim()
-        val cleanPassword = password
-        val cleanLicenseNumber = licenseNumber.trim()
-        val cleanPlateNumber = plateNumber
-            .trim()
-            .uppercase()
-        val cleanEmergencyContact = emergencyContact.trim()
+
+        val cleanFirstName =
+            firstName.trim()
+
+        val cleanLastName =
+            lastName.trim()
+
+        val cleanPhoneNumber =
+            phoneNumber.trim()
+
+        val cleanPassword =
+            password
+
+        val cleanLicenseNumber =
+            licenseNumber.trim()
+
+        val cleanPlateNumber =
+            plateNumber
+                .trim()
+                .uppercase()
+
+        val cleanEmergencyContact =
+            emergencyContact.trim()
 
         if (
             cleanFirstName.isBlank() ||
@@ -67,62 +86,161 @@ class CreateAccountViewModel @Inject constructor(
                 CreateAccountUiState.Error(
                     "Pakilagay ang lahat ng kailangang impormasyon"
                 )
+
             return
         }
 
-        if (!PH_PHONE_REGEX.matches(cleanPhoneNumber)) {
+        if (
+            !PH_PHONE_REGEX.matches(
+                cleanPhoneNumber
+            )
+        ) {
             _uiState.value =
                 CreateAccountUiState.Error(
                     "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
                 )
+
             return
         }
 
-        val generatedUserId = UUID.randomUUID().toString()
+        if (
+            role == UserRole.Driver &&
+            cleanPlateNumber.isBlank()
+        ) {
+            _uiState.value =
+                CreateAccountUiState.Error(
+                    "Pakilagay ang plate number ng driver"
+                )
 
-        val userMap =
-            mutableMapOf<String, Any>(
-                "userId" to generatedUserId,
-                "firstName" to cleanFirstName,
-                "lastName" to cleanLastName,
-                "phoneNumber" to cleanPhoneNumber,
-                "password" to cleanPassword,
-                "role" to role.name.lowercase(),
-                "createdAt" to System.currentTimeMillis()
-            )
-
-        if (role == UserRole.Driver) {
-            userMap["licenseNumber"] = cleanLicenseNumber
-            userMap["plateNumber"] = cleanPlateNumber
-            userMap["emergencyContact"] = cleanEmergencyContact
+            return
         }
 
         viewModelScope.launch {
+
             _uiState.value =
                 CreateAccountUiState.Loading
 
             try {
-                val usersCollection =
+
+                val users =
                     firestore.collection(
                         FirestoreCollections.USERS
                     )
 
                 val userReference =
-                    usersCollection.document(
+                    users.document(
                         cleanPhoneNumber
                     )
+
+                /*
+                 * Prevent an existing account from being
+                 * overwritten accidentally.
+                 */
+                if (
+                    userReference
+                        .get()
+                        .await()
+                        .exists()
+                ) {
+                    _uiState.value =
+                        CreateAccountUiState.Error(
+                            "May existing account na para sa numerong ito"
+                        )
+
+                    return@launch
+                }
+
+                /*
+                 * A plate number identifies a real vehicle.
+                 * Prevent duplicate plate numbers among drivers.
+                 */
+                if (role == UserRole.Driver) {
+
+                    val duplicatePlate =
+                        users
+                            .whereEqualTo(
+                                "role",
+                                "driver"
+                            )
+                            .whereEqualTo(
+                                "plateNumber",
+                                cleanPlateNumber
+                            )
+                            .limit(1)
+                            .get()
+                            .await()
+
+                    if (
+                        duplicatePlate
+                            .documents
+                            .isNotEmpty()
+                    ) {
+                        _uiState.value =
+                            CreateAccountUiState.Error(
+                                "Ginagamit na ng ibang driver ang plate number na ito"
+                            )
+
+                        return@launch
+                    }
+                }
+
+                val generatedUserId =
+                    UUID.randomUUID().toString()
+
+                val userMap =
+                    mutableMapOf<String, Any>(
+
+                        "userId" to
+                                generatedUserId,
+
+                        "firstName" to
+                                cleanFirstName,
+
+                        "lastName" to
+                                cleanLastName,
+
+                        "phoneNumber" to
+                                cleanPhoneNumber,
+
+                        "password" to
+                                cleanPassword,
+
+                        "role" to
+                                role.name.lowercase(),
+
+                        "status" to
+                                "active",
+
+                        "createdAt" to
+                                FieldValue.serverTimestamp()
+                    )
+
+                if (role == UserRole.Driver) {
+
+                    userMap["licenseNumber"] =
+                        cleanLicenseNumber
+
+                    userMap["plateNumber"] =
+                        cleanPlateNumber
+
+                    userMap["emergencyContact"] =
+                        cleanEmergencyContact
+                }
 
                 val batch =
                     firestore.batch()
 
+                /*
+                 * Create the user document.
+                 */
                 batch.set(
                     userReference,
                     userMap
                 )
 
                 /*
-                 * Automatically place every newly-created Driver
-                 * into the dispatch queue.
+                 * Every newly-created Driver is automatically
+                 * placed into the dispatch rotation.
                  */
                 if (role == UserRole.Driver) {
 
@@ -135,11 +253,15 @@ class CreateAccountViewModel @Inject constructor(
                             .await()
 
                     val activeQueue =
-                        queueSnapshot.documents.filter {
-                            isActiveQueueStatus(
-                                it.getString("status")
-                            )
-                        }
+                        queueSnapshot
+                            .documents
+                            .filter {
+                                isActiveQueueStatus(
+                                    it.getString(
+                                        "status"
+                                    )
+                                )
+                            }
 
                     val nextPosition =
                         activeQueue
@@ -150,7 +272,7 @@ class CreateAccountViewModel @Inject constructor(
                             }
                             .maxOrNull()
                             ?.plus(1)
-                            ?: (activeQueue.size + 1)
+                            ?: 1
 
                     val queueId =
                         FirestoreIds.queue(
@@ -172,18 +294,39 @@ class CreateAccountViewModel @Inject constructor(
 
                     val queueData =
                         mapOf<String, Any>(
-                            "id" to queueId,
-                            "driverId" to generatedUserId,
-                            "plateNumber" to cleanPlateNumber,
-                            "driverName" to driverName,
-                            "route" to "",
-                            "position" to nextPosition,
-                            "status" to "Nakapila",
-                            "time" to SimpleDateFormat(
-                                "hh:mm a",
-                                Locale.getDefault()
-                            ).format(Date()),
-                            "createdAt" to FieldValue.serverTimestamp()
+
+                            "id" to
+                                    queueId,
+
+                            "driverId" to
+                                    generatedUserId,
+
+                            "plateNumber" to
+                                    cleanPlateNumber,
+
+                            "driverName" to
+                                    driverName,
+
+                            "route" to
+                                    DEFAULT_ROUTE,
+
+                            "position" to
+                                    nextPosition,
+
+                            "status" to
+                                    "Nakapila",
+
+                            "time" to
+                                    SimpleDateFormat(
+                                        "hh:mm a",
+                                        Locale.getDefault()
+                                    ).format(
+                                        Date()
+                                    ),
+
+                            "createdAt" to
+                                    FieldValue
+                                        .serverTimestamp()
                         )
 
                     val queueReference =
@@ -191,7 +334,9 @@ class CreateAccountViewModel @Inject constructor(
                             .collection(
                                 FirestoreCollections.QUEUE
                             )
-                            .document(queueId)
+                            .document(
+                                queueId
+                            )
 
                     batch.set(
                         queueReference,
@@ -199,7 +344,13 @@ class CreateAccountViewModel @Inject constructor(
                     )
                 }
 
-                batch.commit().await()
+                /*
+                 * The account and the queue entry are committed
+                 * together. If one fails, neither is created.
+                 */
+                batch
+                    .commit()
+                    .await()
 
                 _uiState.value =
                     CreateAccountUiState.Success
@@ -218,7 +369,11 @@ class CreateAccountViewModel @Inject constructor(
     private fun isActiveQueueStatus(
         status: String?
     ): Boolean {
-        return when (status?.lowercase()) {
+
+        return when (
+            status?.lowercase()
+        ) {
+
             "dispatched",
             "cancelled",
             "completed",
