@@ -650,6 +650,31 @@ class QueueViewModel @Inject constructor(
                     )
                 }
 
+                /*
+                 * Confirm this queue entry belongs to an app-created driver.
+                 * App-created users store createdAt as a Firestore Timestamp.
+                 */
+                val driverSnapshot =
+                    firestore
+                        .collection(FirestoreCollections.USERS)
+                        .whereEqualTo("userId", driverId)
+                        .whereEqualTo("role", "driver")
+                        .limit(1)
+                        .get()
+                        .await()
+
+                val driverDocument =
+                    driverSnapshot.documents.firstOrNull()
+                        ?: throw IllegalStateException(
+                            "Hindi makita ang aktuwal na driver account sa users collection."
+                        )
+
+                if (driverDocument.getTimestamp("createdAt") == null) {
+                    throw IllegalStateException(
+                        "Hindi ma-verify ang driver account. Gumamit ng account na ginawa sa app."
+                    )
+                }
+
                 val netAmount =
                     income - otherFees
 
@@ -734,6 +759,33 @@ class QueueViewModel @Inject constructor(
                         )
                     )
                 }
+
+                /*
+                 * Store one canonical dispatch document using the queue ID.
+                 * The stable ID prevents duplicate dispatch documents on retry.
+                 */
+                val dispatchReference =
+                    firestore
+                        .collection(FirestoreCollections.DISPATCHES)
+                        .document(vehicleId)
+
+                batch.set(
+                    dispatchReference,
+                    mapOf<String, Any>(
+                        "id" to vehicleId,
+                        "queueId" to vehicleId,
+                        "driverId" to driverId,
+                        "driverName" to driverName,
+                        "plateNumber" to plateNumber,
+                        "route" to (currentDocument.getString("route") ?: ""),
+                        "status" to "dispatched",
+                        "income" to income,
+                        "otherFees" to otherFees,
+                        "netAmount" to netAmount,
+                        "dispatchedAt" to FieldValue.serverTimestamp(),
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
 
                 /*
                  * Create exactly one ledger transaction for the dispatch.
