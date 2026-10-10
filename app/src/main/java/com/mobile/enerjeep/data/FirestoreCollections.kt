@@ -3,6 +3,7 @@ package com.mobile.enerjeep.data
 object FirestoreCollections {
     const val DISPATCHES = "dispatches"
     const val USERS = "users"
+    const val DISPATCHES = "dispatches"
     const val QUEUE = "queue"
     const val INCIDENTS = "incidents"
     const val LEDGER = "ledger"
