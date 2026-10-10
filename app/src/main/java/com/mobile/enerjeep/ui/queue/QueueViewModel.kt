@@ -18,6 +18,7 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
+
 data class QueueVehicle(
     val id: String,
     val driverId: String = "",
@@ -39,9 +40,7 @@ data class HistoryVehicle(
 )
 
 sealed interface QueueUiState {
-
-    data object Loading :
-        QueueUiState
+    data object Loading : QueueUiState
 
     data class Success(
         val activeQueue: List<QueueVehicle>,
@@ -61,19 +60,14 @@ class QueueViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState =
-        MutableStateFlow<QueueUiState>(
-            QueueUiState.Loading
-        )
+        MutableStateFlow<QueueUiState>(QueueUiState.Loading)
 
-    val uiState =
-        _uiState.asStateFlow()
+    val uiState = _uiState.asStateFlow()
 
-    private var queueListener:
-            ListenerRegistration? = null
+    private var queueListener: ListenerRegistration? = null
 
     companion object {
-        private const val DEFAULT_ROUTE =
-            "Monumento – Marilao"
+        private const val DEFAULT_ROUTE = "Monumento – Marilao"
     }
 
     init {
@@ -81,742 +75,360 @@ class QueueViewModel @Inject constructor(
     }
 
     private fun startQueueListener() {
-
         queueListener =
             firestore
-                .collection(
-                    FirestoreCollections.QUEUE
-                )
-                .addSnapshotListener {
-                        snapshot,
-                        error ->
-
+                .collection(FirestoreCollections.QUEUE)
+                .addSnapshotListener { snapshot, error ->
                     if (error != null) {
-
-                        _uiState.value =
-                            QueueUiState.Error(
-                                error.message
-                                    ?: "Hindi mabasa ang pila"
-                            )
-
+                        _uiState.value = QueueUiState.Error(
+                            error.message ?: "Hindi mabasa ang pila"
+                        )
                         return@addSnapshotListener
                     }
 
-                    if (snapshot == null) {
-                        return@addSnapshotListener
-                    }
+                    if (snapshot == null) return@addSnapshotListener
 
-                    val active =
-                        snapshot
-                            .documents
-                            .filter {
-                                isActiveStatus(
-                                    it.getString(
-                                        "status"
-                                    )
-                                )
+                    val active = snapshot.documents
+                        .filter { isActiveStatus(it.getString("status")) }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> {
+                                it.getLong("position") ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.getTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
                             }
-                            .sortedWith(
-                                compareBy<DocumentSnapshot> {
-                                    it.getLong(
-                                        "position"
-                                    )
-                                        ?: Long.MAX_VALUE
-                                }.thenBy {
-                                    it.getTimestamp(
-                                        "createdAt"
-                                    )?.seconds
-                                        ?: Long.MAX_VALUE
+                        )
+                        .mapIndexed { index, document ->
+                            QueueVehicle(
+                                id = document.id,
+                                driverId = document.getString("driverId").orEmpty(),
+                                position = document.getLong("position")
+                                    ?.toInt()
+                                    ?.takeIf { it > 0 }
+                                    ?: index + 1,
+                                plateNumber = document.getString("plateNumber").orEmpty(),
+                                driverName = document.getString("driverName").orEmpty(),
+                                route = document.getString("route").orEmpty(),
+                                time = formatTimestamp(document.getTimestamp("createdAt"))
+                                    .ifBlank { document.getString("time").orEmpty() },
+                                status = document.getString("status") ?: "Nakapila"
+                            )
+                        }
+
+                    val history = snapshot.documents
+                        .filter { !isActiveStatus(it.getString("status")) }
+                        .sortedByDescending {
+                            it.getTimestamp("dispatchedAt")?.seconds
+                                ?: it.getTimestamp("createdAt")?.seconds
+                                ?: 0L
+                        }
+                        .map { document ->
+                            val timestamp = document.getTimestamp("dispatchedAt")
+                                ?: document.getTimestamp("updatedAt")
+                                ?: document.getTimestamp("createdAt")
+
+                            HistoryVehicle(
+                                id = document.id,
+                                plateNumber = document.getString("plateNumber").orEmpty(),
+                                driverName = document.getString("driverName").orEmpty(),
+                                time = formatTimestamp(timestamp)
+                                    .ifBlank { document.getString("time").orEmpty() },
+                                status = when (document.getString("status")?.lowercase()) {
+                                    "cancelled" -> "Nakansela"
+                                    else -> "Na-Dispatch"
                                 }
                             )
-                            .mapIndexed {
-                                    index,
-                                    document ->
+                        }
 
-                                QueueVehicle(
-                                    id =
-                                        document.id,
+                    val today = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+                    val dispatchedToday = snapshot.documents.count { document ->
+                        if (document.getString("status")?.lowercase() != "dispatched") {
+                            return@count false
+                        }
 
-                                    driverId =
-                                        document
-                                            .getString(
-                                                "driverId"
-                                            )
-                                            .orEmpty(),
-
-                                    position =
-                                        document
-                                            .getLong(
-                                                "position"
-                                            )
-                                            ?.toInt()
-                                            ?.takeIf {
-                                                it > 0
-                                            }
-                                            ?: index + 1,
-
-                                    plateNumber =
-                                        document
-                                            .getString(
-                                                "plateNumber"
-                                            )
-                                            .orEmpty(),
-
-                                    driverName =
-                                        document
-                                            .getString(
-                                                "driverName"
-                                            )
-                                            .orEmpty(),
-
-                                    route =
-                                        document
-                                            .getString(
-                                                "route"
-                                            )
-                                            .orEmpty(),
-
-                                    time =
-                                        formatTimestamp(
-                                            document
-                                                .getTimestamp(
-                                                    "createdAt"
-                                                )
-                                        ).ifBlank {
-                                            document
-                                                .getString(
-                                                    "time"
-                                                )
-                                                .orEmpty()
-                                        },
-
-                                    status =
-                                        document
-                                            .getString(
-                                                "status"
-                                            )
-                                            ?: "Nakapila"
-                                )
-                            }
-
-                    val history =
-                        snapshot
-                            .documents
-                            .filter {
-                                !isActiveStatus(
-                                    it.getString(
-                                        "status"
-                                    )
-                                )
-                            }
-                            .sortedByDescending {
-                                it.getTimestamp(
-                                    "dispatchedAt"
-                                )?.seconds
-                                    ?: it.getTimestamp(
-                                        "createdAt"
-                                    )?.seconds
-                                    ?: 0L
-                            }
-                            .map { document ->
-
-                                val timestamp =
-                                    document
-                                        .getTimestamp(
-                                            "dispatchedAt"
-                                        )
-                                        ?: document
-                                            .getTimestamp(
-                                                "updatedAt"
-                                            )
-                                        ?: document
-                                            .getTimestamp(
-                                                "createdAt"
-                                            )
-
-                                HistoryVehicle(
-                                    id =
-                                        document.id,
-
-                                    plateNumber =
-                                        document
-                                            .getString(
-                                                "plateNumber"
-                                            )
-                                            .orEmpty(),
-
-                                    driverName =
-                                        document
-                                            .getString(
-                                                "driverName"
-                                            )
-                                            .orEmpty(),
-
-                                    time =
-                                        formatTimestamp(
-                                            timestamp
-                                        ).ifBlank {
-                                            document
-                                                .getString(
-                                                    "time"
-                                                )
-                                                .orEmpty()
-                                        },
-
-                                    status =
-                                        when (
-                                            document
-                                                .getString(
-                                                    "status"
-                                                )
-                                                ?.lowercase()
-                                        ) {
-                                            "cancelled" ->
-                                                "Nakansela"
-
-                                            else ->
-                                                "Na-Dispatch"
-                                        }
-                                )
-                            }
-
-                    val today =
-                        SimpleDateFormat(
+                        val timestamp = document.getTimestamp("dispatchedAt")
+                        timestamp != null && SimpleDateFormat(
                             "yyyyMMdd",
                             Locale.getDefault()
-                        ).format(
-                            Date()
-                        )
+                        ).format(timestamp.toDate()) == today
+                    }
 
-                    val dispatchedToday =
-                        snapshot
-                            .documents
-                            .count { document ->
-
-                                if (
-                                    document
-                                        .getString(
-                                            "status"
-                                        )
-                                        ?.lowercase()
-                                    != "dispatched"
-                                ) {
-                                    return@count false
-                                }
-
-                                val timestamp =
-                                    document
-                                        .getTimestamp(
-                                            "dispatchedAt"
-                                        )
-
-                                timestamp != null &&
-                                        SimpleDateFormat(
-                                            "yyyyMMdd",
-                                            Locale.getDefault()
-                                        ).format(
-                                            timestamp.toDate()
-                                        ) == today
-                            }
-
-                    _uiState.value =
-                        QueueUiState.Success(
-                            activeQueue =
-                                active,
-
-                            historyQueue =
-                                history,
-
-                            totalInQueue =
-                                active.size,
-
-                            totalDispatchedToday =
-                                dispatchedToday
-                        )
+                    _uiState.value = QueueUiState.Success(
+                        activeQueue = active,
+                        historyQueue = history,
+                        totalInQueue = active.size,
+                        totalDispatchedToday = dispatchedToday
+                    )
                 }
     }
 
-    /**
-     * Adds a real driver to the queue.
-     *
-     * A driver must not have more than one ACTIVE queue entry.
-     */
+    /** Adds a real driver to the queue if they do not already have an active entry. */
     fun addVehicleToQueue(
         driverId: String,
         route: String
     ) {
-
         viewModelScope.launch {
-
             try {
+                val driverSnapshot = firestore
+                    .collection(FirestoreCollections.USERS)
+                    .whereEqualTo("userId", driverId)
+                    .whereEqualTo("role", "driver")
+                    .limit(1)
+                    .get()
+                    .await()
 
-                val driverSnapshot =
-                    firestore
-                        .collection(
-                            FirestoreCollections.USERS
-                        )
-                        .whereEqualTo(
-                            "userId",
-                            driverId
-                        )
-                        .whereEqualTo(
-                            "role",
-                            "driver"
-                        )
-                        .limit(1)
-                        .get()
-                        .await()
+                val driver = driverSnapshot.documents.firstOrNull()
+                    ?: throw IllegalStateException("Hindi makita ang driver account.")
 
-                val driver =
-                    driverSnapshot
-                        .documents
-                        .firstOrNull()
-                        ?: throw IllegalStateException(
-                            "Hindi makita ang driver account."
-                        )
+                val existingQueue = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .whereEqualTo("driverId", driverId)
+                    .get()
+                    .await()
 
-                val existingQueue =
-                    firestore
-                        .collection(
-                            FirestoreCollections.QUEUE
-                        )
-                        .whereEqualTo(
-                            "driverId",
-                            driverId
-                        )
-                        .get()
-                        .await()
-
-                val alreadyQueued =
-                    existingQueue
-                        .documents
-                        .any {
-                            isActiveStatus(
-                                it.getString(
-                                    "status"
-                                )
-                            )
-                        }
-
-                if (alreadyQueued) {
-                    throw IllegalStateException(
-                        "Nasa pila na ang driver na ito."
-                    )
+                if (existingQueue.documents.any { isActiveStatus(it.getString("status")) }) {
+                    throw IllegalStateException("Nasa pila na ang driver na ito.")
                 }
 
-                val plate =
-                    driver
-                        .getString(
-                            "plateNumber"
-                        )
-                        .orEmpty()
-                        .trim()
-                        .uppercase()
-
+                val plate = driver.getString("plateNumber").orEmpty().trim().uppercase()
                 if (plate.isBlank()) {
-                    throw IllegalStateException(
-                        "Walang plaka ang driver."
-                    )
+                    throw IllegalStateException("Walang plaka ang driver.")
                 }
 
-                val first =
-                    driver
-                        .getString(
-                            "firstName"
-                        )
-                        .orEmpty()
+                val driverName = listOf(
+                    driver.getString("firstName").orEmpty(),
+                    driver.getString("lastName").orEmpty()
+                ).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Driver" }
 
-                val last =
-                    driver
-                        .getString(
-                            "lastName"
-                        )
-                        .orEmpty()
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
 
-                val driverName =
-                    listOf(
-                        first,
-                        last
-                    )
-                        .filter {
-                            it.isNotBlank()
-                        }
-                        .joinToString(" ")
-                        .ifBlank {
-                            "Driver"
-                        }
+                val activeQueue = queueSnapshot.documents
+                    .filter { isActiveStatus(it.getString("status")) }
 
-                val queueSnapshot =
-                    firestore
-                        .collection(
-                            FirestoreCollections.QUEUE
-                        )
-                        .get()
-                        .await()
+                val nextPosition = activeQueue
+                    .mapNotNull { it.getLong("position")?.toInt() }
+                    .maxOrNull()
+                    ?.plus(1)
+                    ?: 1
 
-                val activeQueue =
-                    queueSnapshot
-                        .documents
-                        .filter {
-                            isActiveStatus(
-                                it.getString(
-                                    "status"
-                                )
-                            )
-                        }
-
-                val nextPosition =
-                    activeQueue
-                        .mapNotNull {
-                            it.getLong(
-                                "position"
-                            )?.toInt()
-                        }
-                        .maxOrNull()
-                        ?.plus(1)
-                        ?: 1
-
-                val id =
-                    FirestoreIds.queue(
-                        driverId
-                    )
-
-                val queueData =
-                    mapOf<String, Any>(
-
-                        "id" to
-                                id,
-
-                        "driverId" to
-                                driverId,
-
-                        "plateNumber" to
-                                plate,
-
-                        "driverName" to
-                                driverName,
-
-                        "route" to
-                                route
-                                    .trim()
-                                    .ifBlank {
-                                        DEFAULT_ROUTE
-                                    },
-
-                        "position" to
-                                nextPosition,
-
-                        "status" to
-                                "Nakapila",
-
-                        "time" to
-                                SimpleDateFormat(
-                                    "hh:mm a",
-                                    Locale.getDefault()
-                                ).format(
-                                    Date()
-                                ),
-
-                        "createdAt" to
-                                FieldValue
-                                    .serverTimestamp()
-                    )
+                val id = FirestoreIds.queue(driverId)
+                val queueData = mapOf<String, Any>(
+                    "id" to id,
+                    "driverId" to driverId,
+                    "plateNumber" to plate,
+                    "driverName" to driverName,
+                    "route" to route.trim().ifBlank { DEFAULT_ROUTE },
+                    "position" to nextPosition,
+                    "status" to "Nakapila",
+                    "time" to SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()),
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
 
                 firestore
-                    .collection(
-                        FirestoreCollections.QUEUE
-                    )
+                    .collection(FirestoreCollections.QUEUE)
                     .document(id)
                     .set(queueData)
                     .await()
-
             } catch (e: Exception) {
-
-                _uiState.value =
-                    QueueUiState.Error(
-                        e.message
-                            ?: "Hindi maidagdag sa pila"
-                    )
+                _uiState.value = QueueUiState.Error(
+                    e.message ?: "Hindi maidagdag sa pila"
+                )
             }
         }
     }
 
     /**
-     * Dispatches the selected driver.
-     *
-     * The dispatch creates the cooperative ledger transaction.
-     * KitaViewModel reads this queue_dispatch ledger record so
-     * the driver can see the earnings without a second duplicate
-     * financial record.
+     * Dispatches the selected queue turn, records the transaction, and places
+     * the same driver at the end of the active queue for their next turn.
+     * The previous queue document remains in history as "dispatched".
      */
     fun dispatchVehicle(
         vehicleId: String,
         income: Double,
         otherFees: Double
     ) {
-
         if (income < 0.0) {
-            _uiState.value =
-                QueueUiState.Error(
-                    "Hindi maaaring negatibo ang kita"
-                )
-
+            _uiState.value = QueueUiState.Error("Hindi maaaring negatibo ang kita")
             return
         }
 
         if (otherFees < 0.0) {
-            _uiState.value =
-                QueueUiState.Error(
-                    "Hindi maaaring negatibo ang ibang bayad"
-                )
-
+            _uiState.value = QueueUiState.Error("Hindi maaaring negatibo ang ibang bayad")
             return
         }
 
         if (otherFees > income) {
-            _uiState.value =
-                QueueUiState.Error(
-                    "Hindi maaaring mas mataas ang ibang bayad kaysa sa kita"
-                )
-
+            _uiState.value = QueueUiState.Error(
+                "Hindi maaaring mas mataas ang ibang bayad kaysa sa kita"
+            )
             return
         }
 
         viewModelScope.launch {
-
             try {
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
 
-                /*
-                 * Read the latest queue state instead of relying
-                 * entirely on the UI state.
-                 */
-                val queueSnapshot =
-                    firestore
-                        .collection(
-                            FirestoreCollections.QUEUE
-                        )
-                        .get()
-                        .await()
+                val currentDocument = queueSnapshot.documents
+                    .firstOrNull { it.id == vehicleId }
+                    ?: throw IllegalStateException("Hindi makita ang sasakyan sa pila.")
 
-                val currentDocument =
-                    queueSnapshot
-                        .documents
-                        .firstOrNull {
-                            it.id == vehicleId
-                        }
-                        ?: throw IllegalStateException(
-                            "Hindi makita ang sasakyan sa pila."
-                        )
-
-                if (
-                    !isActiveStatus(
-                        currentDocument.getString(
-                            "status"
-                        )
-                    )
-                ) {
-                    throw IllegalStateException(
-                        "Ang sasakyang ito ay wala na sa aktibong pila."
-                    )
+                if (!isActiveStatus(currentDocument.getString("status"))) {
+                    throw IllegalStateException("Ang sasakyang ito ay wala na sa aktibong pila.")
                 }
 
-                val driverId =
-                    currentDocument
-                        .getString(
-                            "driverId"
-                        )
-                        .orEmpty()
-                        .trim()
-
-                val driverName =
-                    currentDocument
-                        .getString(
-                            "driverName"
-                        )
-                        .orEmpty()
-
-                val plateNumber =
-                    currentDocument
-                        .getString(
-                            "plateNumber"
-                        )
-                        .orEmpty()
-                        .trim()
-                        .uppercase()
+                val driverId = currentDocument.getString("driverId").orEmpty().trim()
+                val driverName = currentDocument.getString("driverName").orEmpty()
+                val plateNumber = currentDocument.getString("plateNumber").orEmpty()
+                    .trim()
+                    .uppercase()
+                val route = currentDocument.getString("route")
+                    ?.trim()
+                    .orEmpty()
+                    .ifBlank { DEFAULT_ROUTE }
 
                 if (driverId.isBlank()) {
+                    throw IllegalStateException("Walang User ID ang driver na ito.")
+                }
+
+                // Confirm the queue entry references a driver in users.
+                val driverSnapshot = firestore
+                    .collection(FirestoreCollections.USERS)
+                    .whereEqualTo("userId", driverId)
+                    .whereEqualTo("role", "driver")
+                    .limit(1)
+                    .get()
+                    .await()
+
+                if (driverSnapshot.documents.isEmpty()) {
                     throw IllegalStateException(
-                        "Walang User ID ang driver na ito."
+                        "Hindi makita ang driver account sa users collection."
                     )
                 }
 
-                val netAmount =
-                    income - otherFees
+                val netAmount = income - otherFees
+                val batch = firestore.batch()
+                val queueReference = currentDocument.reference
 
-                val batch =
-                    firestore.batch()
-
-                val queueReference =
-                    currentDocument.reference
-
-                /*
-                 * Mark current queue entry as dispatched.
-                 */
+                // Keep this turn as dispatched so it remains available in history.
                 batch.update(
                     queueReference,
                     mapOf(
-                        "status" to
-                                "dispatched",
-
-                        "income" to
-                                income,
-
-                        "otherFees" to
-                                otherFees,
-
-                        "netAmount" to
-                                netAmount,
-
-                        "dispatchedAt" to
-                                FieldValue
-                                    .serverTimestamp(),
-
-                        "updatedAt" to
-                                FieldValue
-                                    .serverTimestamp(),
-
-                        "position" to
-                                0
+                        "status" to "dispatched",
+                        "income" to income,
+                        "otherFees" to otherFees,
+                        "netAmount" to netAmount,
+                        "dispatchedAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp(),
+                        "position" to 0
                     )
                 )
 
-                /*
-                 * Renumber the remaining active queue.
-                 */
-                val remainingActive =
-                    queueSnapshot
-                        .documents
-                        .filter {
-                            it.id != vehicleId &&
-                                    isActiveStatus(
-                                        it.getString(
-                                            "status"
-                                        )
-                                    )
+                // Keep the currently waiting drivers in their existing order.
+                val remainingActive = queueSnapshot.documents
+                    .filter {
+                        it.id != vehicleId && isActiveStatus(it.getString("status"))
+                    }
+                    .sortedWith(
+                        compareBy<DocumentSnapshot> {
+                            it.getLong("position") ?: Long.MAX_VALUE
+                        }.thenBy {
+                            it.getTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
                         }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                it.getLong(
-                                    "position"
-                                )
-                                    ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.getTimestamp(
-                                    "createdAt"
-                                )?.seconds
-                                    ?: Long.MAX_VALUE
-                            }
-                        )
+                    )
 
-                remainingActive.forEachIndexed {
-                        index,
-                        document ->
-
+                remainingActive.forEachIndexed { index, document ->
                     batch.update(
                         document.reference,
                         mapOf(
-                            "position" to
-                                    index + 1,
-
-                            "updatedAt" to
-                                    FieldValue
-                                        .serverTimestamp()
+                            "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
                 }
 
-                /*
-                 * Create exactly one ledger transaction for the dispatch.
-                 */
-                val ledgerId =
-                    "${vehicleId}_dispatch_${System.currentTimeMillis()}"
+                // Add the just-dispatched driver behind everyone already waiting.
+                // This is a new queue turn; the dispatched turn above is kept as history.
+                val nextQueueId = FirestoreIds.queue(driverId)
+                val nextQueuePosition = remainingActive.size + 1
+                val newQueueData = mapOf<String, Any>(
+                    "id" to nextQueueId,
+                    "driverId" to driverId,
+                    "plateNumber" to plateNumber,
+                    "driverName" to driverName,
+                    "route" to route,
+                    "position" to nextQueuePosition,
+                    "status" to "Nakapila",
+                    "time" to SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()),
+                    "previousQueueId" to vehicleId,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
 
-                val ledgerReference =
+                batch.set(
                     firestore
-                        .collection(
-                            FirestoreCollections.LEDGER
-                        )
-                        .document(
-                            ledgerId
-                        )
+                        .collection(FirestoreCollections.QUEUE)
+                        .document(nextQueueId),
+                    newQueueData
+                )
+
+                // Keep one dispatch document linked to the completed queue turn.
+                val dispatchReference = firestore
+                    .collection(FirestoreCollections.DISPATCHES)
+                    .document(vehicleId)
+
+                batch.set(
+                    dispatchReference,
+                    mapOf<String, Any>(
+                        "id" to vehicleId,
+                        "queueId" to vehicleId,
+                        "driverId" to driverId,
+                        "driverName" to driverName,
+                        "plateNumber" to plateNumber,
+                        "route" to route,
+                        "status" to "dispatched",
+                        "income" to income,
+                        "otherFees" to otherFees,
+                        "netAmount" to netAmount,
+                        "dispatchedAt" to FieldValue.serverTimestamp(),
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+
+                // Save the financial transaction for the driver's Kita screen.
+                val ledgerId = "${vehicleId}_dispatch_${System.currentTimeMillis()}"
+                val ledgerReference = firestore
+                    .collection(FirestoreCollections.LEDGER)
+                    .document(ledgerId)
 
                 batch.set(
                     ledgerReference,
                     mapOf<String, Any>(
-
-                        "id" to
-                                ledgerId,
-
-                        "driverId" to
-                                driverId,
-
-                        "driverName" to
-                                driverName,
-
-                        "plateNumber" to
-                                plateNumber,
-
-                        "queueId" to
-                                vehicleId,
-
-                        "date" to
-                                SimpleDateFormat(
-                                    "MMM dd, yyyy",
-                                    Locale.getDefault()
-                                ).format(
-                                    Date()
-                                ),
-
-                        /*
-                         * The amount shown as driver earnings
-                         * is the NET dispatch amount.
-                         */
-                        "amount" to
-                                netAmount,
-
-                        "grossAmount" to
-                                income,
-
-                        "otherFees" to
-                                otherFees,
-
-                        "netAmount" to
-                                netAmount,
-
-                        "feeType" to
-                                "Dispatch",
-
-                        "status" to
-                                "Bayad",
-
-                        "source" to
-                                "queue_dispatch",
-
-                        "createdAt" to
-                                FieldValue
-                                    .serverTimestamp()
+                        "id" to ledgerId,
+                        "driverId" to driverId,
+                        "driverName" to driverName,
+                        "plateNumber" to plateNumber,
+                        "queueId" to vehicleId,
+                        "date" to SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date()),
+                        "amount" to netAmount,
+                        "grossAmount" to income,
+                        "otherFees" to otherFees,
+                        "netAmount" to netAmount,
+                        "feeType" to "Dispatch",
+                        "status" to "Bayad",
+                        "source" to "queue_dispatch",
+                        "createdAt" to FieldValue.serverTimestamp()
                     )
                 )
 
                 batch.commit().await()
-
             } catch (e: Exception) {
-
-                _uiState.value =
-                    QueueUiState.Error(
-                        e.message
-                            ?: "Hindi ma-dispatch ang sasakyan"
-                    )
+                _uiState.value = QueueUiState.Error(
+                    e.message ?: "Hindi ma-dispatch ang sasakyan"
+                )
             }
         }
     }
@@ -825,111 +437,49 @@ class QueueViewModel @Inject constructor(
         vehicleId: String,
         newPosition: Int
     ) {
+        val currentState = _uiState.value as? QueueUiState.Success ?: return
+        val active = currentState.activeQueue.toMutableList()
+        val currentIndex = active.indexOfFirst { it.id == vehicleId }
 
-        val currentState =
-            _uiState.value
-                    as? QueueUiState.Success
-                ?: return
+        if (currentIndex == -1 || active.isEmpty()) return
 
-        val active =
-            currentState
-                .activeQueue
-                .toMutableList()
-
-        val currentIndex =
-            active.indexOfFirst {
-                it.id == vehicleId
-            }
-
-        if (currentIndex == -1) {
-            return
-        }
-
-        if (active.isEmpty()) {
-            return
-        }
-
-        val safePosition =
-            newPosition.coerceIn(
-                1,
-                active.size
-            )
-
-        val vehicle =
-            active.removeAt(
-                currentIndex
-            )
-
-        active.add(
-            safePosition - 1,
-            vehicle
-        )
+        val safePosition = newPosition.coerceIn(1, active.size)
+        val vehicle = active.removeAt(currentIndex)
+        active.add(safePosition - 1, vehicle)
 
         viewModelScope.launch {
-
             try {
-
-                val batch =
-                    firestore.batch()
-
-                active.forEachIndexed {
-                        index,
-                        item ->
-
+                val batch = firestore.batch()
+                active.forEachIndexed { index, item ->
                     batch.update(
                         firestore
-                            .collection(
-                                FirestoreCollections.QUEUE
-                            )
-                            .document(
-                                item.id
-                            ),
+                            .collection(FirestoreCollections.QUEUE)
+                            .document(item.id),
                         mapOf(
-                            "position" to
-                                    index + 1,
-
-                            "updatedAt" to
-                                    FieldValue
-                                        .serverTimestamp()
+                            "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
                 }
-
                 batch.commit().await()
-
             } catch (e: Exception) {
-
-                _uiState.value =
-                    QueueUiState.Error(
-                        e.message
-                            ?: "Hindi ma-update ang posisyon"
-                    )
+                _uiState.value = QueueUiState.Error(
+                    e.message ?: "Hindi ma-update ang posisyon"
+                )
             }
         }
     }
 
-    private fun isActiveStatus(
-        status: String?
-    ): Boolean {
-
-        return when (
-            status?.lowercase()
-        ) {
-
-            "dispatched",
-            "cancelled",
-            "completed",
-            "resolved" -> false
-
+    private fun isActiveStatus(status: String?): Boolean {
+        return when (status?.lowercase()) {
+            "dispatched", "cancelled", "completed", "resolved" -> false
             else -> true
         }
     }
 
     private fun formatTimestamp(
-        timestamp:
-        com.google.firebase.Timestamp?
+        timestamp: com.google.firebase.Timestamp?
     ): String {
-
         return timestamp
             ?.toDate()
             ?.let {
@@ -942,9 +492,7 @@ class QueueViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-
         queueListener?.remove()
-
         super.onCleared()
     }
 }

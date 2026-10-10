@@ -1,0 +1,199 @@
+package com.mobile.enerjeep.ui.home
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mobile.enerjeep.navigation.AppNavigator
+import com.mobile.enerjeep.navigation.Screen
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AccountManagementScreen(
+    appNavigator: AppNavigator, // Passed in from NavGraph to handle navigation
+    viewModel: AccountManagementViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { appNavigator.navigateBack() }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Pamamahala ng Account",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = { appNavigator.navigateTo(Screen.CreateAccount) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B49B5)),
+                    shape = RoundedCornerShape(24.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    Text("+ Bago", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        containerColor = Color(0xFFF9FAFB)
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Search Bar connected to ViewModel
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.updateSearchQuery(it) },
+                placeholder = { Text("Hanapin ayon sa pangalan o numero", color = Color.Gray) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color.LightGray,
+                    focusedBorderColor = Color(0xFF1B49B5),
+                    unfocusedContainerColor = Color.White,
+                    focusedContainerColor = Color.White
+                ),
+                singleLine = true
+            )
+
+            // Dynamic List of Accounts connected to ViewModel
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                items(uiState.filteredAccounts) { account ->
+                    AccountCard(
+                        account = account,
+                        onToggleStatus = { viewModel.toggleAccountStatus(account.id) },
+                        onDelete = { viewModel.deleteAccount(account.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AccountCard(
+    account: AccountItem,
+    onToggleStatus: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = account.name,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+
+                val roleBgColor = if (account.role == "Admin") Color(0xFF1B49B5) else Color(0xFFFEF3C7)
+                val roleTextColor = if (account.role == "Admin") Color.White else Color(0xFFD97706)
+
+                Surface(
+                    color = roleBgColor,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.height(24.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
+                        Text(text = account.role, color = roleTextColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = account.phone, fontSize = 14.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = "Ginawa noong ${account.dateCreated}", fontSize = 12.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val statusBgColor = if (account.isActive) Color(0xFFDCFCE7) else Color(0xFFF3F4F6)
+            val statusTextColor = if (account.isActive) Color(0xFF166534) else Color.Gray
+            val statusText = if (account.isActive) "Aktibo" else "Hindi Aktibo"
+
+            Surface(
+                color = statusBgColor,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.height(24.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
+                    Text(text = statusText, color = statusTextColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = onToggleStatus,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.LightGray)
+                ) {
+                    Text(
+                        text = if (account.isActive) "I-deactivate" else "I-activate",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(48.dp).border(1.dp, Color(0xFFFEE2E2), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.Red
+                    )
+                }
+            }
+        }
+    }
+}
