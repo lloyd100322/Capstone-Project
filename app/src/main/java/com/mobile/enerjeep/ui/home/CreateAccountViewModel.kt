@@ -30,11 +30,9 @@ class CreateAccountViewModel @Inject constructor(
             CreateAccountUiState.Idle
         )
 
-    val uiState =
-        _uiState.asStateFlow()
+    val uiState = _uiState.asStateFlow()
 
     companion object {
-
         private val PH_PHONE_REGEX =
             Regex("^\\+639\\d{9}$")
 
@@ -52,29 +50,17 @@ class CreateAccountViewModel @Inject constructor(
         plateNumber: String = "",
         emergencyContact: String = ""
     ) {
+        val cleanFirstName = firstName.trim()
+        val cleanLastName = lastName.trim()
+        val cleanPhoneNumber = phoneNumber.trim()
+        val cleanPassword = password
+        val cleanLicenseNumber = licenseNumber.trim()
 
-        val cleanFirstName =
-            firstName.trim()
+        val cleanPlateNumber = plateNumber
+            .trim()
+            .uppercase(Locale.ROOT)
 
-        val cleanLastName =
-            lastName.trim()
-
-        val cleanPhoneNumber =
-            phoneNumber.trim()
-
-        val cleanPassword =
-            password
-
-        val cleanLicenseNumber =
-            licenseNumber.trim()
-
-        val cleanPlateNumber =
-            plateNumber
-                .trim()
-                .uppercase()
-
-        val cleanEmergencyContact =
-            emergencyContact.trim()
+        val cleanEmergencyContact = emergencyContact.trim()
 
         if (
             cleanFirstName.isBlank() ||
@@ -82,24 +68,16 @@ class CreateAccountViewModel @Inject constructor(
             cleanPhoneNumber.isBlank() ||
             cleanPassword.isBlank()
         ) {
-            _uiState.value =
-                CreateAccountUiState.Error(
-                    "Pakilagay ang lahat ng kailangang impormasyon"
-                )
-
+            _uiState.value = CreateAccountUiState.Error(
+                "Pakilagay ang lahat ng kailangang impormasyon"
+            )
             return
         }
 
-        if (
-            !PH_PHONE_REGEX.matches(
-                cleanPhoneNumber
+        if (!PH_PHONE_REGEX.matches(cleanPhoneNumber)) {
+            _uiState.value = CreateAccountUiState.Error(
+                "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
             )
-        ) {
-            _uiState.value =
-                CreateAccountUiState.Error(
-                    "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
-                )
-
             return
         }
 
@@ -107,79 +85,47 @@ class CreateAccountViewModel @Inject constructor(
             role == UserRole.Driver &&
             cleanPlateNumber.isBlank()
         ) {
-            _uiState.value =
-                CreateAccountUiState.Error(
-                    "Pakilagay ang plate number ng driver"
-                )
-
+            _uiState.value = CreateAccountUiState.Error(
+                "Pakilagay ang plate number ng driver"
+            )
             return
         }
 
         viewModelScope.launch {
-
-            _uiState.value =
-                CreateAccountUiState.Loading
+            _uiState.value = CreateAccountUiState.Loading
 
             try {
+                val users = firestore.collection(
+                    FirestoreCollections.USERS
+                )
 
-                val users =
-                    firestore.collection(
-                        FirestoreCollections.USERS
+                // Current schema uses the phone number as the document ID.
+                val userReference = users.document(
+                    cleanPhoneNumber
+                )
+
+                if (userReference.get().await().exists()) {
+                    _uiState.value = CreateAccountUiState.Error(
+                        "May existing account na para sa numerong ito"
                     )
-
-                val userReference =
-                    users.document(
-                        cleanPhoneNumber
-                    )
-
-                /*
-                 * Prevent an existing account from being
-                 * overwritten accidentally.
-                 */
-                if (
-                    userReference
-                        .get()
-                        .await()
-                        .exists()
-                ) {
-                    _uiState.value =
-                        CreateAccountUiState.Error(
-                            "May existing account na para sa numerong ito"
-                        )
-
                     return@launch
                 }
 
-                /*
-                 * A plate number identifies a real vehicle.
-                 * Prevent duplicate plate numbers among drivers.
-                 */
                 if (role == UserRole.Driver) {
+                    val duplicatePlate = users
+                        .whereEqualTo("role", "driver")
+                        .whereEqualTo(
+                            "plateNumber",
+                            cleanPlateNumber
+                        )
+                        .limit(1)
+                        .get()
+                        .await()
 
-                    val duplicatePlate =
-                        users
-                            .whereEqualTo(
-                                "role",
-                                "driver"
-                            )
-                            .whereEqualTo(
-                                "plateNumber",
-                                cleanPlateNumber
-                            )
-                            .limit(1)
-                            .get()
-                            .await()
-
-                    if (
-                        duplicatePlate
-                            .documents
-                            .isNotEmpty()
-                    ) {
-                        _uiState.value =
-                            CreateAccountUiState.Error(
-                                "Ginagamit na ng ibang driver ang plate number na ito"
-                            )
-
+                    if (duplicatePlate.documents.isNotEmpty()) {
+                        _uiState.value = CreateAccountUiState.Error(
+                            "Ginagamit na ng ibang driver ang plate number na ito"
+                        )
                         return@launch
                     }
                 }
@@ -187,36 +133,18 @@ class CreateAccountViewModel @Inject constructor(
                 val generatedUserId =
                     UUID.randomUUID().toString()
 
-                val userMap =
-                    mutableMapOf<String, Any>(
-
-                        "userId" to
-                                generatedUserId,
-
-                        "firstName" to
-                                cleanFirstName,
-
-                        "lastName" to
-                                cleanLastName,
-
-                        "phoneNumber" to
-                                cleanPhoneNumber,
-
-                        "password" to
-                                cleanPassword,
-
-                        "role" to
-                                role.name.lowercase(),
-
-                        "status" to
-                                "active",
-
-                        "createdAt" to
-                                FieldValue.serverTimestamp()
-                    )
+                val userMap = mutableMapOf<String, Any>(
+                    "userId" to generatedUserId,
+                    "firstName" to cleanFirstName,
+                    "lastName" to cleanLastName,
+                    "phoneNumber" to cleanPhoneNumber,
+                    "password" to cleanPassword,
+                    "role" to role.name.lowercase(Locale.ROOT),
+                    "status" to "active",
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
 
                 if (role == UserRole.Driver) {
-
                     userMap["licenseNumber"] =
                         cleanLicenseNumber
 
@@ -225,143 +153,78 @@ class CreateAccountViewModel @Inject constructor(
 
                     userMap["emergencyContact"] =
                         cleanEmergencyContact
+
+                    // New drivers are active unless an admin deactivates them.
+                    userMap["isVehicleActive"] = true
                 }
 
-                val batch =
-                    firestore.batch()
+                val batch = firestore.batch()
 
-                /*
-                 * Create the user document.
-                 */
-                batch.set(
-                    userReference,
-                    userMap
-                )
+                batch.set(userReference, userMap)
 
-                /*
-                 * Every newly-created Driver is automatically
-                 * placed into the dispatch rotation.
-                 */
                 if (role == UserRole.Driver) {
+                    val queueSnapshot = firestore
+                        .collection(FirestoreCollections.QUEUE)
+                        .get()
+                        .await()
 
-                    val queueSnapshot =
-                        firestore
-                            .collection(
-                                FirestoreCollections.QUEUE
-                            )
-                            .get()
-                            .await()
-
-                    val activeQueue =
-                        queueSnapshot
-                            .documents
-                            .filter {
-                                isActiveQueueStatus(
-                                    it.getString(
-                                        "status"
-                                    )
-                                )
-                            }
-
-                    val nextPosition =
-                        activeQueue
-                            .mapNotNull {
-                                it.getLong(
-                                    "position"
-                                )?.toInt()
-                            }
-                            .maxOrNull()
-                            ?.plus(1)
-                            ?: 1
-
-                    val queueId =
-                        FirestoreIds.queue(
-                            generatedUserId
+                    val activeQueue = queueSnapshot.documents.filter {
+                        isActiveQueueStatus(
+                            it.getString("status")
                         )
+                    }
 
-                    val driverName =
-                        listOf(
-                            cleanFirstName,
-                            cleanLastName
-                        )
-                            .filter {
-                                it.isNotBlank()
-                            }
-                            .joinToString(" ")
-                            .ifBlank {
-                                "Driver"
-                            }
+                    val nextPosition = activeQueue
+                        .mapNotNull {
+                            it.getLong("position")?.toInt()
+                        }
+                        .maxOrNull()
+                        ?.plus(1)
+                        ?: 1
 
-                    val queueData =
-                        mapOf<String, Any>(
-
-                            "id" to
-                                    queueId,
-
-                            "driverId" to
-                                    generatedUserId,
-
-                            "plateNumber" to
-                                    cleanPlateNumber,
-
-                            "driverName" to
-                                    driverName,
-
-                            "route" to
-                                    DEFAULT_ROUTE,
-
-                            "position" to
-                                    nextPosition,
-
-                            "status" to
-                                    "Nakapila",
-
-                            "time" to
-                                    SimpleDateFormat(
-                                        "hh:mm a",
-                                        Locale.getDefault()
-                                    ).format(
-                                        Date()
-                                    ),
-
-                            "createdAt" to
-                                    FieldValue
-                                        .serverTimestamp()
-                        )
-
-                    val queueReference =
-                        firestore
-                            .collection(
-                                FirestoreCollections.QUEUE
-                            )
-                            .document(
-                                queueId
-                            )
-
-                    batch.set(
-                        queueReference,
-                        queueData
+                    val queueId = FirestoreIds.queue(
+                        generatedUserId
                     )
+
+                    val driverName = listOf(
+                        cleanFirstName,
+                        cleanLastName
+                    )
+                        .filter { it.isNotBlank() }
+                        .joinToString(" ")
+                        .ifBlank { "Driver" }
+
+                    val queueData = mapOf<String, Any>(
+                        "id" to queueId,
+                        "driverId" to generatedUserId,
+                        "plateNumber" to cleanPlateNumber,
+                        "driverName" to driverName,
+                        "route" to DEFAULT_ROUTE,
+                        "position" to nextPosition,
+                        "status" to "Nakapila",
+                        "time" to SimpleDateFormat(
+                            "hh:mm a",
+                            Locale.getDefault()
+                        ).format(Date()),
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+
+                    val queueReference = firestore
+                        .collection(FirestoreCollections.QUEUE)
+                        .document(queueId)
+
+                    batch.set(queueReference, queueData)
                 }
 
-                /*
-                 * The account and the queue entry are committed
-                 * together. If one fails, neither is created.
-                 */
-                batch
-                    .commit()
-                    .await()
+                // Create the user and initial queue entry together.
+                batch.commit().await()
 
-                _uiState.value =
-                    CreateAccountUiState.Success
+                _uiState.value = CreateAccountUiState.Success
 
             } catch (e: Exception) {
-
-                _uiState.value =
-                    CreateAccountUiState.Error(
-                        e.message
-                            ?: "Hindi nagawa ang account"
-                    )
+                _uiState.value = CreateAccountUiState.Error(
+                    e.message ?: "Hindi nagawa ang account"
+                )
             }
         }
     }
@@ -369,11 +232,7 @@ class CreateAccountViewModel @Inject constructor(
     private fun isActiveQueueStatus(
         status: String?
     ): Boolean {
-
-        return when (
-            status?.lowercase()
-        ) {
-
+        return when (status?.lowercase(Locale.ROOT)) {
             "dispatched",
             "cancelled",
             "completed",
@@ -388,21 +247,17 @@ class CreateAccountViewModel @Inject constructor(
     }
 
     fun resetState() {
-        _uiState.value =
-            CreateAccountUiState.Idle
+        _uiState.value = CreateAccountUiState.Idle
     }
 }
 
 sealed interface CreateAccountUiState {
 
-    data object Idle :
-        CreateAccountUiState
+    data object Idle : CreateAccountUiState
 
-    data object Loading :
-        CreateAccountUiState
+    data object Loading : CreateAccountUiState
 
-    data object Success :
-        CreateAccountUiState
+    data object Success : CreateAccountUiState
 
     data class Error(
         val message: String

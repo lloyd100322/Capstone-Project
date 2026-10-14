@@ -33,8 +33,7 @@ class LoginViewModel @Inject constructor(
             LoginUiState.Idle
         )
 
-    val uiState =
-        _uiState.asStateFlow()
+    val uiState = _uiState.asStateFlow()
 
     private var verificationId: String? = null
     private var pendingProfile: UserProfile? = null
@@ -49,134 +48,124 @@ class LoginViewModel @Inject constructor(
         password: String,
         activity: Activity
     ) {
-        val cleanPhoneNumber =
-            phoneNumber.trim()
+        val cleanPhoneNumber = phoneNumber.trim()
 
         if (!PH_PHONE_REGEX.matches(cleanPhoneNumber)) {
-            _uiState.value =
-                LoginUiState.Error(
-                    "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
-                )
+            _uiState.value = LoginUiState.Error(
+                "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
+            )
             return
         }
 
         if (password.isBlank()) {
-            _uiState.value =
-                LoginUiState.Error(
-                    "Pakilagay ang iyong password"
-                )
+            _uiState.value = LoginUiState.Error(
+                "Pakilagay ang iyong password"
+            )
             return
         }
 
-        _uiState.value =
-            LoginUiState.Loading
+        _uiState.value = LoginUiState.Loading
 
         viewModelScope.launch {
             try {
-
-                val userQuery =
-                    firestore
-                        .collection("users")
-                        .whereEqualTo(
-                            "phoneNumber",
-                            cleanPhoneNumber
-                        )
-                        .whereEqualTo(
-                            "password",
-                            password
-                        )
-                        .get()
-                        .await()
+                val userQuery = firestore
+                    .collection("users")
+                    .whereEqualTo(
+                        "phoneNumber",
+                        cleanPhoneNumber
+                    )
+                    .whereEqualTo(
+                        "password",
+                        password
+                    )
+                    .get()
+                    .await()
 
                 if (userQuery.isEmpty) {
-                    _uiState.value =
-                        LoginUiState.Error(
-                            "Maling numero o password"
-                        )
+                    _uiState.value = LoginUiState.Error(
+                        "Maling numero o password"
+                    )
                     return@launch
                 }
 
-                val doc =
-                    userQuery.documents.first()
+                val doc = userQuery.documents.first()
+                val data = doc.data
 
-                val data =
-                    doc.data
+                val roleString = data?.get("role") as? String
+                    ?: UserRole.Driver.name
 
-                val roleString =
-                    data?.get(
-                        "role"
-                    ) as? String
-                        ?: UserRole.Driver.name
+                /*
+                 * IMPORTANT:
+                 * An inactive vehicle must not prevent a driver
+                 * from accessing their account.
+                 *
+                 * Only apply the account-status restriction to
+                 * non-driver accounts.
+                 */
+                val isDriver = roleString.equals(
+                    "driver",
+                    ignoreCase = true
+                )
 
-                val matchedRole =
-                    UserRole.entries.find {
-                        it.name.lowercase() ==
-                                roleString.lowercase()
-                    }
-                        ?: UserRole.Driver
+                val accountStatus =
+                    data?.get("status") as? String
 
-                pendingProfile =
-                    UserProfile(
-                        userId =
-                            data?.get(
-                                "userId"
-                            ) as? String
-                                ?: "",
-
-                        firstName =
-                            data?.get(
-                                "firstName"
-                            ) as? String
-                                ?: "",
-
-                        lastName =
-                            data?.get(
-                                "lastName"
-                            ) as? String
-                                ?: "",
-
-                        phoneNumber =
-                            data?.get(
-                                "phoneNumber"
-                            ) as? String
-                                ?: "",
-
-                        password =
-                            data?.get(
-                                "password"
-                            ) as? String
-                                ?: "",
-
-                        role =
-                            matchedRole,
-
-                        licenseNumber =
-                            data?.get(
-                                "licenseNumber"
-                            ) as? String,
-
-                        plateNumber =
-                            data?.get(
-                                "plateNumber"
-                            ) as? String,
-
-                        emergencyContact =
-                            data?.get(
-                                "emergencyContact"
-                            ) as? String
+                if (
+                    !isDriver &&
+                    accountStatus.equals(
+                        "inactive",
+                        ignoreCase = true
                     )
+                ) {
+                    _uiState.value = LoginUiState.Error(
+                        "Hindi aktibo ang account na ito."
+                    )
+                    return@launch
+                }
 
+                val matchedRole = UserRole.entries.find {
+                    it.name.equals(
+                        roleString,
+                        ignoreCase = true
+                    )
+                } ?: UserRole.Driver
+
+                pendingProfile = UserProfile(
+                    userId = data?.get("userId") as? String
+                        ?: "",
+
+                    firstName = data?.get("firstName") as? String
+                        ?: "",
+
+                    lastName = data?.get("lastName") as? String
+                        ?: "",
+
+                    phoneNumber = data?.get("phoneNumber") as? String
+                        ?: "",
+
+                    password = data?.get("password") as? String
+                        ?: "",
+
+                    role = matchedRole,
+
+                    licenseNumber = data?.get("licenseNumber") as? String,
+
+                    plateNumber = data?.get("plateNumber") as? String,
+
+                    emergencyContact =
+                        data?.get("emergencyContact") as? String
+                )
+
+                // Preserve the existing Firebase Phone Authentication flow.
                 triggerSmsVerification(
                     cleanPhoneNumber,
                     activity
                 )
 
             } catch (e: Exception) {
-
-                _uiState.value =
-                    LoginUiState.Error(
-                        "Hindi ma-verify ang account: ${e.message}"
-                    )
+                _uiState.value = LoginUiState.Error(
+                    "Hindi ma-verify ang account: ${e.message}"
+                )
             }
         }
     }
@@ -185,148 +174,112 @@ class LoginViewModel @Inject constructor(
         phoneNumber: String,
         activity: Activity
     ) {
-        /*
-         * This disables reCAPTCHA/Play Integrity for testing
-         * with fictional phone numbers.
-         *
-         * auth.firebaseAuthSettings
-         *     .setAppVerificationDisabledForTesting(true)
-         */
+        val options = PhoneAuthOptions
+            .newBuilder(auth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(
+                60L,
+                TimeUnit.SECONDS
+            )
+            .setActivity(activity)
+            .setCallbacks(
+                object : PhoneAuthProvider
+                .OnVerificationStateChangedCallbacks() {
 
-        val options =
-            PhoneAuthOptions
-                .newBuilder(auth)
-                .setPhoneNumber(phoneNumber)
-                .setTimeout(
-                    60L,
-                    TimeUnit.SECONDS
-                )
-                .setActivity(activity)
-                .setCallbacks(
-                    object :
-                        PhoneAuthProvider
-                        .OnVerificationStateChangedCallbacks() {
-
-                        override fun onVerificationCompleted(
-                            credential: PhoneAuthCredential
-                        ) {
-                            signInWithPhoneAuthCredential(
-                                credential
-                            )
-                        }
-
-                        override fun onVerificationFailed(
-                            e: FirebaseException
-                        ) {
-                            Log.e(
-                                "PhoneAuth",
-                                "Phone verification failed",
-                                e
-                            )
-
-                            _uiState.value =
-                                LoginUiState.Error(
-                                    e.message
-                                        ?: "Hindi maipadala ang code"
-                                )
-                        }
-
-                        override fun onCodeSent(
-                            verificationId: String,
-                            token: PhoneAuthProvider
-                            .ForceResendingToken
-                        ) {
-                            this@LoginViewModel
-                                .verificationId =
-                                verificationId
-
-                            _uiState.value =
-                                LoginUiState.CodeSent
-                        }
+                    override fun onVerificationCompleted(
+                        credential: PhoneAuthCredential
+                    ) {
+                        signInWithPhoneAuthCredential(
+                            credential
+                        )
                     }
-                )
-                .build()
 
-        PhoneAuthProvider.verifyPhoneNumber(
-            options
-        )
+                    override fun onVerificationFailed(
+                        e: FirebaseException
+                    ) {
+                        Log.e(
+                            "PhoneAuth",
+                            "Phone verification failed",
+                            e
+                        )
+
+                        _uiState.value = LoginUiState.Error(
+                            e.message
+                                ?: "Hindi maipadala ang code"
+                        )
+                    }
+
+                    override fun onCodeSent(
+                        verificationId: String,
+                        token: PhoneAuthProvider.ForceResendingToken
+                    ) {
+                        this@LoginViewModel.verificationId =
+                            verificationId
+
+                        _uiState.value = LoginUiState.CodeSent
+                    }
+                }
+            )
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
-    fun verifyOtp(
-        otp: String
-    ) {
-        val cleanOtp =
-            otp.filter {
-                it.isDigit()
-            }
+    fun verifyOtp(otp: String) {
+        val cleanOtp = otp.filter {
+            it.isDigit()
+        }
 
         if (cleanOtp.length != 6) {
-            _uiState.value =
-                LoginUiState.Error(
-                    "Dapat ay 6 na digit ang code"
-                )
+            _uiState.value = LoginUiState.Error(
+                "Dapat ay 6 na digit ang code"
+            )
             return
         }
 
-        val id =
-            verificationId
-                ?: run {
-                    _uiState.value =
-                        LoginUiState.Error(
-                            "Nawala ang session, pakisubukan ulit"
-                        )
-
-                    return
-                }
-
-        val credential =
-            PhoneAuthProvider.getCredential(
-                id,
-                cleanOtp
+        val id = verificationId ?: run {
+            _uiState.value = LoginUiState.Error(
+                "Nawala ang session, pakisubukan ulit"
             )
+            return
+        }
 
-        signInWithPhoneAuthCredential(
-            credential
+        val credential = PhoneAuthProvider.getCredential(
+            id,
+            cleanOtp
         )
+
+        signInWithPhoneAuthCredential(credential)
     }
 
     private fun signInWithPhoneAuthCredential(
         credential: PhoneAuthCredential
     ) {
         viewModelScope.launch {
-            _uiState.value =
-                LoginUiState.Loading
+            _uiState.value = LoginUiState.Loading
 
             try {
-
                 auth
-                    .signInWithCredential(
-                        credential
-                    )
+                    .signInWithCredential(credential)
                     .await()
 
                 pendingProfile?.let {
                     userSession.setUser(it)
                 }
 
-                _uiState.value =
-                    LoginUiState.Success
+                _uiState.value = LoginUiState.Success
 
             } catch (e: Exception) {
-
-                _uiState.value =
-                    LoginUiState.Error(
-                        e.message
-                            ?: "Maling code, pakisubukan ulit"
-                    )
+                _uiState.value = LoginUiState.Error(
+                    e.message
+                        ?: "Maling code, pakisubukan ulit"
+                )
             }
         }
     }
 
     fun resetState() {
-        _uiState.value =
-            LoginUiState.Idle
-
+        _uiState.value = LoginUiState.Idle
         verificationId = null
         pendingProfile = null
     }
@@ -334,17 +287,13 @@ class LoginViewModel @Inject constructor(
 
 sealed interface LoginUiState {
 
-    data object Idle :
-        LoginUiState
+    data object Idle : LoginUiState
 
-    data object Loading :
-        LoginUiState
+    data object Loading : LoginUiState
 
-    data object CodeSent :
-        LoginUiState
+    data object CodeSent : LoginUiState
 
-    data object Success :
-        LoginUiState
+    data object Success : LoginUiState
 
     data class Error(
         val message: String

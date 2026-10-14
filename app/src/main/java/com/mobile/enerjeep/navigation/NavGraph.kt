@@ -6,12 +6,11 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.mobile.enerjeep.MainActivity
+import com.mobile.enerjeep.ui.home.AccountManagementScreen
 import com.mobile.enerjeep.ui.home.CreateAccountScreen
 import com.mobile.enerjeep.ui.home.HomeScreen
 import com.mobile.enerjeep.ui.login.LoginScreen
 import com.mobile.enerjeep.ui.login.ResetPasswordScreen
-
-
 
 @Composable
 fun NavGraph(
@@ -26,6 +25,7 @@ fun NavGraph(
                 is NavigationEvent.NavigateTo -> {
                     navController.navigate(event.route, event.builder)
                 }
+
                 NavigationEvent.NavigateBack -> {
                     navController.popBackStack()
                 }
@@ -43,19 +43,32 @@ fun NavGraph(
                 activity = activity,
                 onLoginSuccess = {
                     appNavigator.navigateTo(Screen.Home) {
-                        popUpTo(Screen.Login) { inclusive = true }
+                        popUpTo(Screen.Login) {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
+
         composable<Screen.Home> {
             HomeScreen(appNavigator = appNavigator)
         }
+
+        composable<Screen.AccountManagement> {
+            AccountManagementScreen(
+                appNavigator = appNavigator
+            )
+        }
+
         composable<Screen.CreateAccount> {
             CreateAccountScreen()
         }
+
         composable<Screen.ResetPassword> {
-            ResetPasswordScreen(appNavigator = appNavigator)
+            ResetPasswordScreen(
+                appNavigator = appNavigator
+            )
         }
     }
 }

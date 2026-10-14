@@ -26,10 +26,14 @@ import com.mobile.enerjeep.navigation.Screen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountManagementScreen(
-    appNavigator: AppNavigator, // Passed in from NavGraph to handle navigation
+    appNavigator: AppNavigator,
     viewModel: AccountManagementViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    var accountPendingDeletion by remember {
+        mutableStateOf<AccountItem?>(null)
+    }
 
     Scaffold(
         topBar = {
@@ -39,10 +43,20 @@ fun AccountManagementScreen(
                     .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { appNavigator.navigateBack() }) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                IconButton(
+                    onClick = {
+                        appNavigator.navigateBack()
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.Black
+                    )
                 }
+
                 Spacer(modifier = Modifier.width(8.dp))
+
                 Text(
                     text = "Pamamahala ng Account",
                     fontSize = 20.sp,
@@ -50,30 +64,54 @@ fun AccountManagementScreen(
                     color = Color.Black,
                     modifier = Modifier.weight(1f)
                 )
+
                 Button(
-                    onClick = { appNavigator.navigateTo(Screen.CreateAccount) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B49B5)),
+                    onClick = {
+                        appNavigator.navigateTo(Screen.CreateAccount)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1B49B5)
+                    ),
                     shape = RoundedCornerShape(24.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp)
+                    contentPadding = PaddingValues(
+                        horizontal = 16.dp
+                    )
                 ) {
-                    Text("+ Bago", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        "+ Bago",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         },
         containerColor = Color(0xFFF9FAFB)
     ) { innerPadding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Search Bar connected to ViewModel
             OutlinedTextField(
                 value = uiState.searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                placeholder = { Text("Hanapin ayon sa pangalan o numero", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
+                onValueChange = {
+                    viewModel.updateSearchQuery(it)
+                },
+                placeholder = {
+                    Text(
+                        "Hanapin ayon sa pangalan o numero",
+                        color = Color.Gray
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = Color.Gray
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
@@ -87,20 +125,100 @@ fun AccountManagementScreen(
                 singleLine = true
             )
 
-            // Dynamic List of Accounts connected to ViewModel
+            uiState.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = Color.Red,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            if (uiState.isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                )
+            }
+
+            if (
+                !uiState.isLoading &&
+                uiState.filteredAccounts.isEmpty()
+            ) {
+                Text(
+                    text = if (uiState.searchQuery.isBlank()) {
+                        "Wala pang account."
+                    } else {
+                        "Walang nahanap na account."
+                    },
+                    color = Color.Gray,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp)
+                )
+            }
+
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(uiState.filteredAccounts) { account ->
+                items(
+                    items = uiState.filteredAccounts,
+                    key = { it.id }
+                ) { account ->
                     AccountCard(
                         account = account,
-                        onToggleStatus = { viewModel.toggleAccountStatus(account.id) },
-                        onDelete = { viewModel.deleteAccount(account.id) }
+                        onToggleStatus = {
+                            viewModel.toggleAccountStatus(account.id)
+                        },
+                        onDelete = {
+                            accountPendingDeletion = account
+                        },
+                        isBusy = account.id in uiState.busyAccountIds
                     )
                 }
             }
         }
+    }
+
+    accountPendingDeletion?.let { account ->
+        AlertDialog(
+            onDismissRequest = {
+                accountPendingDeletion = null
+            },
+            title = {
+                Text("Burahin ang account?")
+            },
+            text = {
+                Text(
+                    "Aalisin si ${account.name} sa mga account. " +
+                            "Pananatilihin ang mga nakaraang tala ng dispatch at kita."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteAccount(account.id)
+                        accountPendingDeletion = null
+                    }
+                ) {
+                    Text(
+                        "Burahin",
+                        color = Color.Red
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        accountPendingDeletion = null
+                    }
+                ) {
+                    Text("Kanselahin")
+                }
+            }
+        )
     }
 }
 
@@ -108,57 +226,125 @@ fun AccountManagementScreen(
 fun AccountCard(
     account: AccountItem,
     onToggleStatus: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isBusy: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 2.dp
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = account.name,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
+
                 Spacer(modifier = Modifier.width(8.dp))
 
-                val roleBgColor = if (account.role == "Admin") Color(0xFF1B49B5) else Color(0xFFFEF3C7)
-                val roleTextColor = if (account.role == "Admin") Color.White else Color(0xFFD97706)
+                val roleBgColor =
+                    if (account.role == "Admin") {
+                        Color(0xFF1B49B5)
+                    } else {
+                        Color(0xFFFEF3C7)
+                    }
+
+                val roleTextColor =
+                    if (account.role == "Admin") {
+                        Color.White
+                    } else {
+                        Color(0xFFD97706)
+                    }
 
                 Surface(
                     color = roleBgColor,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(24.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
-                        Text(text = account.role, color = roleTextColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(
+                            horizontal = 10.dp
+                        )
+                    ) {
+                        Text(
+                            text = account.role,
+                            color = roleTextColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = account.phone, fontSize = 14.sp, color = Color.Gray)
+
+            Text(
+                text = account.phone,
+                fontSize = 14.sp,
+                color = Color.Gray
+            )
+
             Spacer(modifier = Modifier.height(2.dp))
-            Text(text = "Ginawa noong ${account.dateCreated}", fontSize = 12.sp, color = Color.Gray)
+
+            Text(
+                text = "Ginawa noong ${account.dateCreated}",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            val statusBgColor = if (account.isActive) Color(0xFFDCFCE7) else Color(0xFFF3F4F6)
-            val statusTextColor = if (account.isActive) Color(0xFF166534) else Color.Gray
-            val statusText = if (account.isActive) "Aktibo" else "Hindi Aktibo"
+            val statusBgColor =
+                if (account.isActive) {
+                    Color(0xFFDCFCE7)
+                } else {
+                    Color(0xFFF3F4F6)
+                }
+
+            val statusTextColor =
+                if (account.isActive) {
+                    Color(0xFF166534)
+                } else {
+                    Color.Gray
+                }
+
+            val statusText =
+                if (account.isActive) {
+                    "Aktibo"
+                } else {
+                    "Hindi Aktibo"
+                }
 
             Surface(
                 color = statusBgColor,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.height(24.dp)
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
-                    Text(text = statusText, color = statusTextColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.padding(
+                        horizontal = 10.dp
+                    )
+                ) {
+                    Text(
+                        text = statusText,
+                        color = statusTextColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
@@ -170,12 +356,22 @@ fun AccountCard(
             ) {
                 OutlinedButton(
                     onClick = onToggleStatus,
-                    modifier = Modifier.weight(1f).height(48.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    enabled = !isBusy,
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color.LightGray)
+                    border = BorderStroke(
+                        1.dp,
+                        Color.LightGray
+                    )
                 ) {
                     Text(
-                        text = if (account.isActive) "I-deactivate" else "I-activate",
+                        text = if (account.isActive) {
+                            "I-deactivate"
+                        } else {
+                            "I-activate"
+                        },
                         color = Color.Black,
                         fontWeight = FontWeight.Medium
                     )
@@ -185,7 +381,14 @@ fun AccountCard(
 
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(48.dp).border(1.dp, Color(0xFFFEE2E2), RoundedCornerShape(12.dp))
+                    enabled = !isBusy,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .border(
+                            1.dp,
+                            Color(0xFFFEE2E2),
+                            RoundedCornerShape(12.dp)
+                        )
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,

@@ -107,7 +107,7 @@ fun KitaScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = "Bayad", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                    Text(text = "-₱${String.format("%,.0f", uiState.totalBayad)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "₱${String.format("%,.0f", uiState.totalBayad)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
@@ -115,7 +115,7 @@ fun KitaScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = "Multiya", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                    Text(text = "-₱${String.format("%,.0f", uiState.totalMultiya)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "₱${String.format("%,.0f", uiState.totalMultiya)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
