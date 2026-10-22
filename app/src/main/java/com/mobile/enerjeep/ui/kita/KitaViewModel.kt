@@ -299,8 +299,12 @@ class KitaViewModel @Inject constructor(
                     .document(id)
                     .set(data)
                     .await()
-            } catch (_: Exception) {
-                // The Firestore listeners keep displaying any records already loaded.
+            } catch (e: Exception) {
+                // Never swallow a failed save: the user must know the
+                // record was not written so they can try again.
+                ToastFeedback.show(
+                    e.message ?: "Hindi na-save ang kita. Subukan muli."
+                )
             }
         }
     }

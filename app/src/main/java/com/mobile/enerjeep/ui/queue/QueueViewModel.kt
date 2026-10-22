@@ -6,6 +6,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Precondition
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.safeTimestamp
@@ -493,6 +494,15 @@ class QueueViewModel @Inject constructor(
                 val batch = firestore.batch()
                 val queueReference = currentDocument.reference
 
+                /*
+                 * The update only succeeds if the entry was not changed
+                 * since it was read (for example another admin dispatching
+                 * at the same time), so two dispatches can never both win.
+                 */
+                val updatePrecondition = currentDocument.updateTime
+                    ?.let { Precondition.updateTime(it) }
+                    ?: Precondition.exists()
+
                 // Mark the dispatched queue entry as historical.
                 batch.update(
                     queueReference,
@@ -504,7 +514,8 @@ class QueueViewModel @Inject constructor(
                         "dispatchedAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp(),
                         "position" to 0
-                    )
+                    ),
+                    updatePrecondition
                 )
 
                 // Renumber the existing active queue after dispatch.
@@ -651,6 +662,11 @@ class QueueViewModel @Inject constructor(
 
                 val batch = firestore.batch()
 
+                // Only cancel if the entry was not changed since it was read.
+                val cancelPrecondition = target.updateTime
+                    ?.let { Precondition.updateTime(it) }
+                    ?: Precondition.exists()
+
                 batch.update(
                     target.reference,
                     mapOf(
@@ -658,7 +674,8 @@ class QueueViewModel @Inject constructor(
                         "position" to 0,
                         "cancelledAt" to FieldValue.serverTimestamp(),
                         "updatedAt" to FieldValue.serverTimestamp()
-                    )
+                    ),
+                    cancelPrecondition
                 )
 
                 remaining.forEachIndexed { index, document ->

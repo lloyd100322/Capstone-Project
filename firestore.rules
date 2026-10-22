@@ -1,0 +1,152 @@
+rules_version = '2';
+
+// ============================================================================
+// EnerJeep Firestore security rules
+//
+// The security model:
+//   - Every request must come from a signed-in Firebase Auth user whose
+//     phone number belongs to a real account in /users (isMember).
+//   - "admins" manage accounts, the queue, ledger, incidents and reports.
+//   - "drivers" read the shared operational data (queue, incidents) and
+//     their own earnings (kita, ledger), and edit only their own profile.
+//   - Credentials live in /userSecrets and are ONLY readable by their
+//     owner. No rule ever exposes a password hash to anyone else, and no
+//     rule accepts a plaintext `password` field.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function authPhone() {
+      return request.auth.token.phone_number;
+    }
+
+    // The role of the signed-in user, read directly from their own
+    // document. `get()` inside rules is not limited by the target
+    // document's own rules, so this works even for private documents.
+    function ownRole() {
+      return signedIn() && authPhone() != null
+        ? get(/databases/$(database)/documents/users/$(authPhone())).data.role
+        : null;
+    }
+
+    function isMember() {
+      return ownRole() in ['admin', 'driver'];
+    }
+
+    function isAdmin() {
+      return ownRole() == 'admin';
+    }
+
+    function isOwner(phone) {
+      return signedIn() && authPhone() == phone;
+    }
+
+    // Passwords are never stored on the profile document.
+    function hasNoPasswordField() {
+      return !request.resource.data.keys().hasAny(['password']);
+    }
+
+    // ------------------------------------------------------------------
+    // /users - profiles (no credentials ever live here)
+    // ------------------------------------------------------------------
+    match /users/{phone} {
+      allow get: if isAdmin() || (isMember() && isOwner(phone));
+
+      // Account management lists every account (admin) or looks up
+      // drivers (admin screens). Drivers never list this collection.
+      allow list: if isAdmin();
+
+      // An admin creates accounts; a signed-in user may create their own
+      // document during first-login migration.
+      allow create: if (isAdmin() || (isMember() && isOwner(phone)))
+                    && hasNoPasswordField();
+
+      // A user edits their own profile; an admin edits any profile
+      // (activate/deactivate). Never accept a plaintext password.
+      allow update: if ((isAdmin() || (isMember() && isOwner(phone)))
+                        && hasNoPasswordField());
+
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /userSecrets - salted password hashes, owner-only reads
+    // ------------------------------------------------------------------
+    match /userSecrets/{phone} {
+      // Only the owner can read their own secret. Never listable.
+      allow get: if isOwner(phone);
+      allow list: if false;
+
+      // The owner sets their own secret (register / change / reset) and
+      // an admin sets it once when creating the account.
+      allow create, update: if isOwner(phone) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /queue - dispatch queue (drivers read, admins manage)
+    // ------------------------------------------------------------------
+    match /queue/{entryId} {
+      allow read: if isMember();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /incidents - everyone reads, admins record and resolve
+    // ------------------------------------------------------------------
+    match /incidents/{incidentId} {
+      allow read: if isMember();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /ledger - earnings and fees (drivers read their data, admins write)
+    //
+    // Drivers query with whereEqualTo("driverId", <own userId>) or
+    // whereEqualTo("plateNumber", <own plate>), which satisfies the
+    // `resource.data` conditions below.
+    // ------------------------------------------------------------------
+    match /ledger/{entryId} {
+      allow read: if isAdmin()
+                  || (isMember() && (
+                       resource.data.driverId ==
+                         get(/databases/$(database)/documents/users/$(authPhone())).data.userId
+                       || resource.data.plateNumber ==
+                         get(/databases/$(database)/documents/users/$(authPhone())).data.plateNumber
+                     ));
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /kita - manual earnings of a driver
+    // ------------------------------------------------------------------
+    match /kita/{entryId} {
+      allow read: if isAdmin()
+                  || (isMember() && resource.data.driverId ==
+                       get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
+      allow create, update, delete: if isAdmin()
+                  || (isMember() && request.resource.data.driverId ==
+                       get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
+    }
+
+    // ------------------------------------------------------------------
+    // /donations - donations report
+    // ------------------------------------------------------------------
+    match /donations/{donationId} {
+      allow read: if isMember();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Everything else is closed by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
