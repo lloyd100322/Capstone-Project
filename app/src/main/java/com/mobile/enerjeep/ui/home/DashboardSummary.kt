@@ -61,7 +61,7 @@ object DashboardSummary {
     fun formatPeso(amount: Double): String {
         val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
             maximumFractionDigits = 2
-            minimumFractionDigits = if (amount % 1.0 == 0.0) 0 else 2
+            minimumFractionDigits = if ((amount % 1.0) == 0.0) 0 else 2
         }
         return "₱" + formatter.format(amount)
     }
