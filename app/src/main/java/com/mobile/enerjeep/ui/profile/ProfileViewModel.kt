@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -257,20 +258,37 @@ class ProfileViewModel @Inject constructor(
 
             try {
 
-                val document =
+                val userReference =
                     firestore
                         .collection(
                             FirestoreCollections.USERS
                         )
                         .document(phone)
-                        .get()
-                        .await()
 
-                val savedPassword =
-                    document
-                        .getString("password")
+                val secretsReference =
+                    firestore
+                        .collection(
+                            FirestoreCollections.USER_SECRETS
+                        )
+                        .document(phone)
 
-                if (savedPassword != oldPass) {
+                val document = userReference.get().await()
+                val secrets = secretsReference.get().await()
+
+                val salt = secrets.getString("passwordSalt")
+                val savedHash = secrets.getString("passwordHash")
+
+                val passwordMatches = if (
+                    !salt.isNullOrBlank() &&
+                    !savedHash.isNullOrBlank()
+                ) {
+                    PasswordHasher.verify(oldPass, salt, savedHash)
+                } else {
+                    // Legacy account that still has the old plaintext field.
+                    document.getString("password") == oldPass
+                }
+
+                if (!passwordMatches) {
 
                     ToastFeedback.show(
                         "Mali ang kasalukuyang password."
@@ -279,29 +297,35 @@ class ProfileViewModel @Inject constructor(
                     return@launch
                 }
 
-                firestore
-                    .collection(
-                        FirestoreCollections.USERS
+                // Save only a salted hash; never a readable password.
+                val salted = PasswordHasher.hash(newPass)
+                val batch = firestore.batch()
+
+                batch.set(
+                    secretsReference,
+                    mapOf(
+                        "passwordHash" to salted.hash,
+                        "passwordSalt" to salted.salt,
+                        "updatedAt" to
+                                FieldValue.serverTimestamp()
                     )
-                    .document(phone)
-                    .update(
-                        mapOf(
-                            "password" to newPass,
-                            "updatedAt" to
-                                    FieldValue.serverTimestamp()
-                        )
+                )
+
+                // Remove the old plaintext field if it still exists.
+                batch.update(
+                    userReference,
+                    mapOf(
+                        "password" to FieldValue.delete(),
+                        "updatedAt" to
+                                FieldValue.serverTimestamp()
                     )
-                    .await()
+                )
+
+                batch.commit().await()
 
                 val oldProfile =
                     userSession.userProfile
                         ?: return@launch
-
-                userSession.setUser(
-                    oldProfile.copy(
-                        password = newPass
-                    )
-                )
 
                 pushFromValues(
                     oldProfile.firstName,

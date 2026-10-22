@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.home
 
 import androidx.lifecycle.ViewModel
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserSession
@@ -53,6 +54,14 @@ class HomeViewModel @Inject constructor(
     val openIncidentCount =
         _openIncidentCount.asStateFlow()
 
+    /*
+     * Every listener is registered here and removed in onCleared().
+     * Without this the app leaked four full-collection listeners on
+     * every visit to the Home screen.
+     */
+    private val listeners =
+        mutableListOf<ListenerRegistration>()
+
     init {
         startListeners()
     }
@@ -62,7 +71,7 @@ class HomeViewModel @Inject constructor(
         /*
          * Total registered drivers.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.USERS
             )
@@ -85,7 +94,7 @@ class HomeViewModel @Inject constructor(
          * dispatch queue, not simply the number of
          * registered driver accounts.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.QUEUE
             )
@@ -129,7 +138,7 @@ class HomeViewModel @Inject constructor(
          * The total money of the cooperative. Every collection that was
          * recorded in the ledger is added up.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.LEDGER
             )
@@ -175,7 +184,7 @@ class HomeViewModel @Inject constructor(
          * as the Insidente screen: an incident is closed when it is
          * marked as resolved.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.INCIDENTS
             )
@@ -231,4 +240,10 @@ class HomeViewModel @Inject constructor(
 
     fun isDriver(): Boolean =
         userSession.isDriver()
+
+    override fun onCleared() {
+        listeners.forEach { it.remove() }
+        listeners.clear()
+        super.onCleared()
+    }
 }

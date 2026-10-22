@@ -58,9 +58,11 @@ object DashboardSummary {
      * The peso sign and the amount, written the same way the rest of the
      * app writes money.
      */
-    fun formatPeso(amount: Double): String =
-        "₱" + NumberFormat
-            .getNumberInstance(Locale.US)
-            .format(amount)
-            .replace(".00", "")
+    fun formatPeso(amount: Double): String {
+        val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+            maximumFractionDigits = 2
+            minimumFractionDigits = if ((amount % 1.0) == 0.0) 0 else 2
+        }
+        return "₱" + formatter.format(amount)
+    }
 }

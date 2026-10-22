@@ -151,4 +151,39 @@ class MultiyaReportTest {
         assertEquals(2, summary.all.size)
         assertEquals(300.0, summary.total, 0.001)
     }
+
+    @Test
+    fun theHistoryIsSortedNewestFirstByRealDateNotByText() {
+        /*
+         * String order of "MMM dd, yyyy" is not chronological ("Sep"
+         * sorts after "May" even when May is later). The list must be
+         * ordered by the saved time of each fine.
+         */
+        val now = System.currentTimeMillis()
+        val day = 24L * 60L * 60L * 1000L
+
+        val summary = MultiyaReport.build(
+            kitaMultiya = listOf(
+                ReportMultiyaItem(
+                    plateNumber = "ABC1234",
+                    driverName = "Juan Dela Cruz",
+                    date = "Sep 15, 2025",
+                    amount = 100.0,
+                    createdAtMillis = now - 30L * day
+                ),
+                ReportMultiyaItem(
+                    plateNumber = "ABC1234",
+                    driverName = "Juan Dela Cruz",
+                    date = "May 01, 2026",
+                    amount = 200.0,
+                    createdAtMillis = now - 2L * day
+                )
+            ),
+            ledgerMultiya = emptyList()
+        )
+
+        assertEquals(2, summary.history.size)
+        assertEquals(200.0, summary.history[0].amount, 0.001)
+        assertEquals(100.0, summary.history[1].amount, 0.001)
+    }
 }

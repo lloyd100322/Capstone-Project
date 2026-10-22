@@ -1,6 +1,7 @@
 package com.mobile.enerjeep.ui.login
 
 import android.app.Activity
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseException
@@ -10,9 +11,9 @@ import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,8 +60,14 @@ class ResetPasswordViewModel @Inject constructor(
     private var verificationId: String? = null
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
 
-    // Set only after the OTP was verified for this phone number.
+    // Set only AFTER the OTP was verified for this phone number.
     private var verifiedUserRef: DocumentReference? = null
+
+    private var resendAllowedAtMillis: Long = 0L
+
+    companion object {
+        private const val RESEND_COOLDOWN_MILLIS = 30_000L
+    }
 
     private fun fullPhone() = "+63" + _uiState.value.phoneNumber
 
@@ -101,7 +108,14 @@ class ResetPasswordViewModel @Inject constructor(
         )
     }
 
-    /** Step 1: make sure the account exists, then send the OTP. */
+    /**
+     * Step 1: send the OTP.
+     *
+     * Nothing is read from Firestore before the OTP is verified, so the
+     * reset screen can no longer be used to probe which phone numbers
+     * have accounts. The account itself is checked after Firebase Auth
+     * has proven the caller owns the number.
+     */
     fun sendOtp(activity: Activity, isResend: Boolean = false) {
         val phone = _uiState.value.phoneNumber
 
@@ -112,91 +126,80 @@ class ResetPasswordViewModel @Inject constructor(
 
         if (_uiState.value.isLoading) return
 
+        if (isResend) {
+            val millisRemaining =
+                resendAllowedAtMillis - System.currentTimeMillis()
+
+            if (millisRemaining > 0L) {
+                val secondsRemaining =
+                    (millisRemaining + 999L) / 1000L
+
+                ToastFeedback.show(
+                    "Maghintay ng $secondsRemaining segundo bago muling magpadala ng OTP."
+                )
+                return
+            }
+        }
+
         _uiState.value = _uiState.value.copy(
             isLoading = true,
             errorMessage = null
         )
 
-        viewModelScope.launch {
-            try {
-                /*
-                 * The account document id is the phone number, so the
-                 * account can be opened directly by its id. This keeps
-                 * the reset working even when the Firestore rules only
-                 * allow one account to be read before signing in.
-                 */
-                val userDoc = firestore
-                    .collection(FirestoreCollections.USERS)
-                    .document(fullPhone())
-                    .get()
-                    .await()
+        val callbacks =
+            object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
 
-                if (!userDoc.exists()) {
-                    fail("Walang account na naka-rehistro sa numerong ito.")
-                    return@launch
+                override fun onVerificationCompleted(
+                    credential: PhoneAuthCredential
+                ) {
+                    // Instant verification / SMS auto-retrieval.
+                    confirmCredential(credential)
                 }
 
-                if (userDoc.getBoolean("isActive") == false) {
-                    fail("Hindi aktibo ang account na ito.")
-                    return@launch
+                override fun onVerificationFailed(e: FirebaseException) {
+                    Log.e("ResetPassword", "OTP send failed", e)
+                    fail(
+                        "Hindi maipadala ang OTP. Subukan muli."
+                    )
                 }
 
-                val callbacks =
-                    object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onCodeSent(
+                    id: String,
+                    token: PhoneAuthProvider.ForceResendingToken
+                ) {
+                    verificationId = id
+                    resendToken = token
 
-                        override fun onVerificationCompleted(
-                            credential: PhoneAuthCredential
-                        ) {
-                            // Instant verification / SMS auto-retrieval.
-                            confirmCredential(credential, userDoc.reference)
-                        }
+                    resendAllowedAtMillis =
+                        System.currentTimeMillis() +
+                                RESEND_COOLDOWN_MILLIS
 
-                        override fun onVerificationFailed(e: FirebaseException) {
-                            fail(
-                                e.localizedMessage
-                                    ?: "Hindi maipadala ang OTP. Subukan muli."
-                            )
-                        }
+                    _uiState.value = _uiState.value.copy(
+                        step = ResetStep.OTP_INPUT,
+                        otp = "",
+                        isLoading = false,
+                        errorMessage = null
+                    )
 
-                        override fun onCodeSent(
-                            id: String,
-                            token: PhoneAuthProvider.ForceResendingToken
-                        ) {
-                            verificationId = id
-                            resendToken = token
-                            verifiedUserRef = userDoc.reference
-
-                            _uiState.value = _uiState.value.copy(
-                                step = ResetStep.OTP_INPUT,
-                                otp = "",
-                                isLoading = false,
-                                errorMessage = null
-                            )
-
-                            ToastFeedback.show(
-                                if (isResend) "Naipadala muli ang OTP."
-                                else "Naipadala ang OTP."
-                            )
-                        }
-                    }
-
-                val builder = PhoneAuthOptions
-                    .newBuilder(auth)
-                    .setPhoneNumber(fullPhone())
-                    .setTimeout(60L, TimeUnit.SECONDS)
-                    .setActivity(activity)
-                    .setCallbacks(callbacks)
-
-                if (isResend) {
-                    resendToken?.let { builder.setForceResendingToken(it) }
+                    ToastFeedback.show(
+                        if (isResend) "Naipadala muli ang OTP."
+                        else "Naipadala ang OTP."
+                    )
                 }
-
-                PhoneAuthProvider.verifyPhoneNumber(builder.build())
-
-            } catch (e: Exception) {
-                fail(e.message ?: "Hindi ma-check ang account. Subukan muli.")
             }
+
+        val builder = PhoneAuthOptions
+            .newBuilder(auth)
+            .setPhoneNumber(fullPhone())
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+
+        if (isResend) {
+            resendToken?.let { builder.setForceResendingToken(it) }
         }
+
+        PhoneAuthProvider.verifyPhoneNumber(builder.build())
     }
 
     fun resendOtp(activity: Activity) = sendOtp(activity, isResend = true)
@@ -217,18 +220,15 @@ class ResetPasswordViewModel @Inject constructor(
             return
         }
 
-        val ref = verifiedUserRef ?: run {
-            fail("Bumalik at ilagay muli ang numero.")
-            return
-        }
-
-        confirmCredential(PhoneAuthProvider.getCredential(id, code), ref)
+        confirmCredential(PhoneAuthProvider.getCredential(id, code))
     }
 
-    private fun confirmCredential(
-        credential: PhoneAuthCredential,
-        userRef: DocumentReference
-    ) {
+    /**
+     * Verifies the OTP with Firebase Auth. Only after that succeeds is
+     * the account loaded (as an authenticated user) and may the password
+     * be changed.
+     */
+    private fun confirmCredential(credential: PhoneAuthCredential) {
         _uiState.value = _uiState.value.copy(
             isLoading = true,
             errorMessage = null
@@ -246,11 +246,38 @@ class ResetPasswordViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Firestore only accepts the password write from a signed-in
-                // user (this is exactly what the Profile tab does). Stay signed
-                // in with the OTP-verified phone until the password is saved,
-                // then endVerifiedSession() signs out again.
-                verifiedUserRef = userRef
+                val phone = fullPhone()
+
+                // Now signed in: load the account document.
+                val userDoc = firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(phone)
+                    .get()
+                    .await()
+
+                if (!userDoc.exists()) {
+                    endVerifiedSession()
+                    fail("Walang account na naka-rehistro sa numerong ito.")
+                    return@launch
+                }
+
+                val role = userDoc.getString("role").orEmpty()
+                    .lowercase()
+                val accountStatus = userDoc.getString("status").orEmpty()
+
+                // Same rule as login: inactive ADMIN accounts cannot be
+                // recovered through the reset flow.
+                if (
+                    role != "driver" &&
+                    accountStatus.equals("inactive", ignoreCase = true)
+                ) {
+                    endVerifiedSession()
+                    fail("Hindi aktibo ang account na ito.")
+                    return@launch
+                }
+
+                // Verified: from here the password can be saved.
+                verifiedUserRef = userDoc.reference
 
                 _uiState.value = _uiState.value.copy(
                     step = ResetStep.NEW_PASSWORD,
@@ -258,13 +285,14 @@ class ResetPasswordViewModel @Inject constructor(
                     errorMessage = null
                 )
             } catch (e: Exception) {
+                Log.e("ResetPassword", "OTP confirmation failed", e)
                 endVerifiedSession()
                 fail("Maling o expired na OTP. Subukan muli.")
             }
         }
     }
 
-    /** Step 3: save the new password. */
+    /** Step 3: save the new password as a salted hash. */
     fun completeReset() {
         val state = _uiState.value
 
@@ -289,12 +317,31 @@ class ResetPasswordViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                ref.update(
+                val salted = PasswordHasher.hash(state.newPassword)
+
+                val batch = firestore.batch()
+
+                batch.set(
+                    firestore
+                        .collection(FirestoreCollections.USER_SECRETS)
+                        .document(fullPhone()),
                     mapOf(
-                        "password" to state.newPassword,
+                        "passwordHash" to salted.hash,
+                        "passwordSalt" to salted.salt,
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
-                ).await()
+                )
+
+                // Remove the old plaintext field if it still exists.
+                batch.update(
+                    ref,
+                    mapOf(
+                        "password" to FieldValue.delete(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+
+                batch.commit().await()
 
                 // Password saved: end the temporary OTP session so the app
                 // never keeps this phone logged in without the password.
@@ -308,17 +355,8 @@ class ResetPasswordViewModel @Inject constructor(
                     otp = ""
                 )
             } catch (e: Exception) {
-                val denied = e is FirebaseFirestoreException &&
-                        e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED
-
-                fail(
-                    if (denied) {
-                        "Hindi pinayagan ng Firestore rules ang pagpalit ng " +
-                                "password. Ipaalam sa developer."
-                    } else {
-                        e.message ?: "Hindi ma-save ang bagong password."
-                    }
-                )
+                Log.e("ResetPassword", "Password save failed", e)
+                fail("Hindi ma-save ang bagong password. Subukan muli.")
             }
         }
     }

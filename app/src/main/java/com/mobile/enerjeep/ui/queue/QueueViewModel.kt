@@ -490,26 +490,42 @@ class QueueViewModel @Inject constructor(
                     driverAccount.getBoolean("isVehicleActive") != false &&
                             !alreadyQueuedAfterDispatch
 
-                val batch = firestore.batch()
                 val queueReference = currentDocument.reference
 
-                // Mark the dispatched queue entry as historical.
-                batch.update(
-                    queueReference,
-                    mapOf(
-                        "status" to "dispatched",
-                        "income" to income,
-                        "otherFees" to otherFees,
-                        "netAmount" to netAmount,
-                        "dispatchedAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp(),
-                        "position" to 0
+                /*
+                 * A Firestore transaction is used so the dispatch is only
+                 * written when this queue entry was not changed by another
+                 * admin in the meantime. If it changed, the transaction
+                 * fails instead of corrupting the queue.
+                 */
+                firestore.runTransaction { transaction ->
+                    val freshEntry = transaction.get(queueReference)
+
+                    if (!freshEntry.exists() ||
+                        !isActiveStatus(freshEntry.getString("status"))
+                    ) {
+                        throw IllegalStateException(
+                            "Ang sasakyang ito ay wala na sa aktibong pila."
+                        )
+                    }
+
+                    // Mark the dispatched queue entry as historical.
+                    transaction.update(
+                        queueReference,
+                        mapOf(
+                            "status" to "dispatched",
+                            "income" to income,
+                            "otherFees" to otherFees,
+                            "netAmount" to netAmount,
+                            "dispatchedAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp(),
+                            "position" to 0
+                        )
                     )
-                )
 
                 // Renumber the existing active queue after dispatch.
                 remainingActive.forEachIndexed { index, document ->
-                    batch.update(
+                    transaction.update(
                         document.reference,
                         mapOf(
                             "position" to index + 1,
@@ -552,7 +568,7 @@ class QueueViewModel @Inject constructor(
                         "createdAt" to FieldValue.serverTimestamp()
                     )
 
-                    batch.set(requeueReference, requeueData)
+                    transaction.set(requeueReference, requeueData)
                 }
 
                 /*
@@ -568,7 +584,7 @@ class QueueViewModel @Inject constructor(
                     .collection(FirestoreCollections.LEDGER)
                     .document(ledgerId)
 
-                batch.set(
+                transaction.set(
                     ledgerReference,
                     mapOf<String, Any>(
                         "id" to ledgerId,
@@ -591,7 +607,8 @@ class QueueViewModel @Inject constructor(
                     )
                 )
 
-                batch.commit().await()
+                    true
+                }.await()
 
                 val dispatchedLabel = listOf(plateNumber, driverName)
                     .filter { it.isNotBlank() }
@@ -649,29 +666,43 @@ class QueueViewModel @Inject constructor(
                         }
                     )
 
-                val batch = firestore.batch()
+                /*
+                 * Transaction: only cancel if the entry is still active
+                 * and was not changed by someone else in the meantime.
+                 */
+                firestore.runTransaction { transaction ->
+                    val freshEntry = transaction.get(target.reference)
 
-                batch.update(
-                    target.reference,
-                    mapOf(
-                        "status" to "cancelled",
-                        "position" to 0,
-                        "cancelledAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
+                    if (!freshEntry.exists() ||
+                        !isActiveStatus(freshEntry.getString("status"))
+                    ) {
+                        throw IllegalStateException(
+                            "Ang sasakyang ito ay wala na sa aktibong pila."
+                        )
+                    }
 
-                remaining.forEachIndexed { index, document ->
-                    batch.update(
-                        document.reference,
+                    transaction.update(
+                        target.reference,
                         mapOf(
-                            "position" to index + 1,
+                            "status" to "cancelled",
+                            "position" to 0,
+                            "cancelledAt" to FieldValue.serverTimestamp(),
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
-                }
 
-                batch.commit().await()
+                    remaining.forEachIndexed { index, document ->
+                        transaction.update(
+                            document.reference,
+                            mapOf(
+                                "position" to index + 1,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        )
+                    }
+
+                    true
+                }.await()
 
                 ToastFeedback.show(
                     "Nakansela ang " +

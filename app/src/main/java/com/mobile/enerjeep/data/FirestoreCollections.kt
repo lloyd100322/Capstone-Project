@@ -1,8 +1,17 @@
 package com.mobile.enerjeep.data
 
+import java.util.UUID
+
 object FirestoreCollections {
     const val DISPATCHES = "dispatches"
     const val USERS = "users"
+
+    /**
+     * Salted password hashes. Readable only by their owner (see
+     * firestore.rules). Never put anything here that a screen needs.
+     */
+    const val USER_SECRETS = "userSecrets"
+
     const val QUEUE = "queue"
     const val INCIDENTS = "incidents"
     const val LEDGER = "ledger"
@@ -11,18 +20,23 @@ object FirestoreCollections {
 }
 
 object FirestoreIds {
+    /*
+     * IDs use random UUIDs, never the wall clock. Two devices writing in
+     * the same millisecond used to produce the same id, and `set()` then
+     * silently overwrote the other record (a lost incident or earning).
+     */
     fun queue(driverId: String): String =
-        "queue_${driverId}_${System.currentTimeMillis()}"
+        "queue_${driverId}_${UUID.randomUUID()}"
 
     fun incident(): String =
-        "incident_${System.currentTimeMillis()}"
+        "incident_${UUID.randomUUID()}"
 
     fun ledger(): String =
-        "ledger_${System.currentTimeMillis()}"
+        "ledger_${UUID.randomUUID()}"
 
     fun kita(): String =
-        "kita_${System.currentTimeMillis()}"
+        "kita_${UUID.randomUUID()}"
 
     fun donation(): String =
-        "donation_${System.currentTimeMillis()}"
+        "donation_${UUID.randomUUID()}"
 }
