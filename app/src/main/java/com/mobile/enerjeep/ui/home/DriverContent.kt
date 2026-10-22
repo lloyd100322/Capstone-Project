@@ -41,13 +41,10 @@ enum class DriverTab {
 @Composable
 fun DriverContent(
     appNavigator: AppNavigator,
-    emergencyContactName: String? = null,
-    emergencyContactNumber: String? = null,
     viewModel: DriverViewModel = hiltViewModel()
 ) {
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
     var showIncidentForm by remember { mutableStateOf(false) }
-    var showEmergencyDialog by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -137,10 +134,7 @@ fun DriverContent(
                         activeIncidentTitle = uiState.activeIncidentTitle,
                         activeIncidentDate = uiState.activeIncidentDate,
                         activeIncidentPlate = uiState.activeIncidentPlate,
-                        openIncidentCount = uiState.openIncidentCount,
-                        onEmergencyClick = {
-                            showEmergencyDialog = true
-                        }
+                        openIncidentCount = uiState.openIncidentCount
                     )
                 }
                 DriverTab.Iskedyul -> {
@@ -155,16 +149,6 @@ fun DriverContent(
                 DriverTab.Profile -> {
                     DriverProfileScreen(appNavigator = appNavigator)
                 }
-            }
-
-            if (showEmergencyDialog) {
-                EmergencyDialog(
-                    onDismiss = {
-                        showEmergencyDialog = false
-                    },
-                    emergencyContactName = emergencyContactName,
-                    emergencyContactNumber = emergencyContactNumber
-                )
             }
         }
     }
@@ -182,8 +166,7 @@ fun DriverDashboardContent(
     activeIncidentTitle: String?,
     activeIncidentDate: String?,
     activeIncidentPlate: String?,
-    openIncidentCount: Int,
-    onEmergencyClick: () -> Unit = {}
+    openIncidentCount: Int
 ) {
     Column(
         modifier = Modifier
@@ -403,36 +386,6 @@ fun DriverDashboardContent(
                     )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        /*
-         * Emergency button: opens the dialog with 911 and the emergency
-         * contact saved on the driver's own profile. Drivers used to
-         * have no way to reach these numbers at all.
-         */
-        Button(
-            onClick = onEmergencyClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ErrorRed
-            )
-        ) {
-            SirenIcon(
-                modifier = Modifier.size(20.dp),
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Emergency",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }

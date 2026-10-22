@@ -22,17 +22,12 @@ class UserSession @Inject constructor() {
     fun isDriver(): Boolean = userProfile?.role == UserRole.Driver
 }
 
-/**
- * The signed-in user's profile.
- *
- * NOTE: this class must NEVER carry the password (or its hash). The
- * password is verified against /userSecrets and forgotten immediately.
- */
 data class UserProfile(
     val userId: String = "",
     val firstName: String = "",
     val lastName: String = "",
     val phoneNumber: String = "",
+    val password: String = "",
     val role: UserRole = UserRole.Driver,
     val licenseNumber: String? = null,
     val plateNumber: String? = null,

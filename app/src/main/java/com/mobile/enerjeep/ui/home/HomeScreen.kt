@@ -56,13 +56,14 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val isAdmin = viewModel.isAdmin()
-    val userProfile = viewModel.userProfile
 
     if (isAdmin) {
         var selectedTab by remember { mutableStateOf(HomeTab.Home) }
         var showIncidentForm by remember { mutableStateOf(false) }
         var showEmergencyDialog by remember { mutableStateOf(false) }
         var openLedgerForm by remember { mutableStateOf(false) }
+
+        val userProfile = viewModel.userProfile
 
         val activeJeeps by viewModel.activeJeepsCount
             .collectAsStateWithLifecycle()
@@ -273,23 +274,13 @@ fun HomeScreen(
                     EmergencyDialog(
                         onDismiss = {
                             showEmergencyDialog = false
-                        },
-                        emergencyContactName =
-                            userProfile?.emergencyContactName,
-                        emergencyContactNumber =
-                            userProfile?.emergencyContactNumber
+                        }
                     )
                 }
             }
         }
     } else {
-        DriverContent(
-            appNavigator = appNavigator,
-            emergencyContactName =
-                userProfile?.emergencyContactName,
-            emergencyContactNumber =
-                userProfile?.emergencyContactNumber
-        )
+        DriverContent(appNavigator = appNavigator)
     }
 }
 
@@ -551,11 +542,7 @@ fun HomeContent(
 }
 
 @Composable
-fun EmergencyDialog(
-    onDismiss: () -> Unit,
-    emergencyContactName: String? = null,
-    emergencyContactNumber: String? = null
-) {
+fun EmergencyDialog(onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -608,26 +595,6 @@ fun EmergencyDialog(
                     bgColor = ErrorRed,
                     textColor = Color.White
                 )
-
-                /*
-                 * The emergency contact saved on the profile of the
-                 * account (the person to call when the driver is in an
-                 * accident). This used to be missing entirely from the
-                 * dialog even though every account stores it.
-                 */
-                if (!emergencyContactNumber.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    EmergencyContactButton(
-                        title = emergencyContactName
-                            ?.takeIf { it.isNotBlank() }
-                            ?: "Emergency Contact",
-                        number = emergencyContactNumber,
-                        icon = Icons.Default.Person,
-                        bgColor = EnerjeepBlue,
-                        textColor = Color.White
-                    )
-                }
 
                 Spacer(modifier = Modifier.height(12.dp))
 

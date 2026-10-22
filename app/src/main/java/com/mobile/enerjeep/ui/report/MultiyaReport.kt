@@ -140,19 +140,7 @@ object MultiyaReport {
             }
         }
 
-        /*
-         * Newest first. The display text ("MMM dd, yyyy") must NOT be
-         * used for sorting: string order is not chronological
-         * ("Sep" > "May" alphabetically but not by date). Sort by the
-         * saved time, falling back to the parsed date for old records.
-         */
-        val sorted = all.sortedByDescending {
-            if (it.createdAtMillis > 0L) {
-                it.createdAtMillis
-            } else {
-                parseDate(it.date)?.time ?: 0L
-            }
-        }
+        val sorted = all.sortedByDescending { it.date }
 
         return Summary(
             current = sorted.filter { isToday(it) },

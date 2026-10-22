@@ -7,7 +7,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
-import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
@@ -306,29 +305,11 @@ class DriverProfileViewModel @Inject constructor(
                 cleanPhoneDigits
             )
         ) {
-            ToastFeedback.show(
-                "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
-            )
             return
         }
 
         val newPhone =
             "+63$cleanPhoneDigits"
-
-        /*
-         * Changing the phone number is NOT allowed here. The phone
-         * number is the id of the account document AND the Firebase Auth
-         * identity, so changing it on one side only would sign the user
-         * out and orphan their session. It has to go through a phone
-         * verification flow first (same rule as the admin Profile tab).
-         */
-        if (newPhone != currentPhone) {
-            ToastFeedback.show(
-                "Hindi muna maaaring palitan ang phone number dito. " +
-                        "Kailangan itong dumaan sa phone verification."
-            )
-            return
-        }
 
         val cleanPlate =
             state.plateNumber
@@ -385,6 +366,11 @@ class DriverProfileViewModel @Inject constructor(
                         currentPhone
                     )
 
+                val newRef =
+                    users.document(
+                        newPhone
+                    )
+
                 val cleanFirstName =
                     state.firstName.trim()
 
@@ -400,39 +386,41 @@ class DriverProfileViewModel @Inject constructor(
                         cleanEmergencyNumber
                     )
 
-                /*
-                 * A plate number must stay unique, the same rule the
-                 * Create Account screen uses. Otherwise reports would
-                 * attach earnings and incidents to the wrong driver.
-                 */
-                val driversSnapshot = users
-                    .whereEqualTo("role", "driver")
-                    .get()
-                    .await()
+                if (newPhone != currentPhone) {
 
-                val alreadyUsed = driversSnapshot.documents.any {
-                    it.id != currentPhone &&
-                            PhilippineIdentifiers.platesMatch(
-                                it.getString("plateNumber"),
-                                cleanPlate
-                            )
-                }
+                    if (
+                        newRef
+                            .get()
+                            .await()
+                            .exists()
+                    ) {
+                        return@launch
+                    }
 
-                if (alreadyUsed) {
-                    ToastFeedback.show(
-                        "Ginagamit na ng ibang driver ang plate number na ito"
-                    )
-                    return@launch
-                }
+                    val newData =
+                        mutableMapOf<String, Any>(
+                            "userId" to
+                                    oldProfile.userId,
 
-                oldRef
-                    .update(
-                        mapOf<String, Any>(
                             "firstName" to
                                     cleanFirstName,
 
                             "lastName" to
                                     cleanLastName,
+
+                            "phoneNumber" to
+                                    newPhone,
+
+                            "password" to
+                                    oldProfile.password,
+
+                            "role" to
+                                    oldProfile.role
+                                        .name
+                                        .lowercase(),
+
+                            "status" to
+                                    "active",
 
                             "licenseNumber" to
                                     cleanLicense,
@@ -453,8 +441,144 @@ class DriverProfileViewModel @Inject constructor(
                                     FieldValue
                                         .serverTimestamp()
                         )
+
+                    val batch =
+                        firestore.batch()
+
+                    batch.set(
+                        newRef,
+                        newData
                     )
-                    .await()
+
+                    batch.delete(
+                        oldRef
+                    )
+
+                    batch.commit().await()
+
+                    listener?.remove()
+
+                    listener =
+                        newRef
+                            .addSnapshotListener {
+                                    document,
+                                    _ ->
+
+                                if (
+                                    document != null &&
+                                    document.exists()
+                                ) {
+
+                                    _uiState.value =
+                                        _uiState.value.copy(
+                                            firstName =
+                                                document
+                                                    .getString(
+                                                        "firstName"
+                                                    )
+                                                    .orEmpty(),
+
+                                            lastName =
+                                                document
+                                                    .getString(
+                                                        "lastName"
+                                                    )
+                                                    .orEmpty(),
+
+                                            phone =
+                                                document
+                                                    .getString(
+                                                        "phoneNumber"
+                                                    )
+                                                    .orEmpty()
+                                                    .removePrefix(
+                                                        "+63"
+                                                    ),
+
+                                            licenseNumber =
+                                                document
+                                                    .getString(
+                                                        "licenseNumber"
+                                                    )
+                                                    .orEmpty(),
+
+                                            plateNumber =
+                                                document
+                                                    .getString(
+                                                        "plateNumber"
+                                                    )
+                                                    .orEmpty()
+                                                    .uppercase(),
+
+                                            emergencyContactName =
+                                                readEmergencyContact(
+                                                    document,
+                                                    "emergencyContactName"
+                                                )
+                                                    .ifBlank {
+                                                        EmergencyContact
+                                                            .splitLegacy(
+                                                                document.getString(
+                                                                    "emergencyContact"
+                                                                )
+                                                            )
+                                                            .name
+                                                    },
+
+                                            emergencyContactNumber =
+                                                readEmergencyContact(
+                                                    document,
+                                                    "emergencyContactNumber"
+                                                )
+                                                    .ifBlank {
+                                                        EmergencyContact
+                                                            .splitLegacy(
+                                                                document.getString(
+                                                                    "emergencyContact"
+                                                                )
+                                                            )
+                                                            .number
+                                                    }
+                                        )
+                                }
+                            }
+
+                } else {
+
+                    oldRef
+                        .update(
+                            mapOf<String, Any>(
+                                "firstName" to
+                                        cleanFirstName,
+
+                                "lastName" to
+                                        cleanLastName,
+
+                                "phoneNumber" to
+                                        newPhone,
+
+                                "licenseNumber" to
+                                        cleanLicense,
+
+                                "plateNumber" to
+                                        cleanPlate,
+
+                                "emergencyContact" to
+                                        cleanEmergency,
+
+                                "emergencyContactName" to
+                                        cleanEmergencyName,
+
+                                "emergencyContactNumber" to
+                                        cleanEmergencyNumber,
+
+                                "updatedAt" to
+                                        FieldValue
+                                            .serverTimestamp()
+                            )
+                        )
+                        .await()
+                }
 
                 /*
                  * Keep active queue records synchronized
@@ -483,12 +607,13 @@ class DriverProfileViewModel @Inject constructor(
                             .getString("status")
                             ?.lowercase()
 
-                    val isActive = status !in setOf(
-                        "dispatched",
-                        "cancelled",
-                        "completed",
-                        "resolved"
-                    )
+                    val isActive =
+                        status !in setOf(
+                            "dispatched",
+                            "cancelled",
+                            "completed",
+                            "resolved"
+                        )
 
                     if (isActive) {
                         batch.update(
@@ -528,6 +653,9 @@ class DriverProfileViewModel @Inject constructor(
                         lastName =
                             cleanLastName,
 
+                        phoneNumber =
+                            newPhone,
+
                         licenseNumber =
                             cleanLicense,
 
@@ -535,13 +663,7 @@ class DriverProfileViewModel @Inject constructor(
                             cleanPlate,
 
                         emergencyContact =
-                            cleanEmergency,
-
-                        emergencyContactName =
-                            cleanEmergencyName,
-
-                        emergencyContactNumber =
-                            cleanEmergencyNumber
+                            cleanEmergency
                     )
                 )
 
@@ -551,15 +673,8 @@ class DriverProfileViewModel @Inject constructor(
                             ProfileSubView.MAIN
                     )
 
-                ToastFeedback.show(
-                    "Na-update ang profile."
-                )
-
-            } catch (e: Exception) {
-                ToastFeedback.show(
-                    e.message
-                        ?: "Hindi ma-update ang profile. Subukan muli."
-                )
+            } catch (_: Exception) {
+                // Keep existing silent-error behavior.
             }
         }
     }
@@ -599,80 +714,47 @@ class DriverProfileViewModel @Inject constructor(
 
             try {
 
-                val userReference =
+                val document =
                     firestore
                         .collection(
                             FirestoreCollections.USERS
                         )
                         .document(phone)
+                        .get()
+                        .await()
 
-                val secretsReference =
-                    firestore
-                        .collection(
-                            FirestoreCollections.USER_SECRETS
-                        )
-                        .document(phone)
-
-                val document =
-                    userReference.get().await()
-
-                val secrets =
-                    secretsReference.get().await()
-
-                val salt =
-                    secrets.getString("passwordSalt")
-
-                val savedHash =
-                    secrets.getString("passwordHash")
-
-                val passwordMatches = if (
-                    !salt.isNullOrBlank() &&
-                    !savedHash.isNullOrBlank()
+                if (
+                    document.getString(
+                        "password"
+                    ) != state.oldPassword
                 ) {
-                    PasswordHasher.verify(
-                        state.oldPassword,
-                        salt,
-                        savedHash
-                    )
-                } else {
-                    // Legacy account that still has the plaintext field.
-                    document.getString("password") == state.oldPassword
-                }
-
-                if (!passwordMatches) {
                     ToastFeedback.show(
                         "Mali ang kasalukuyang password."
                     )
                     return@launch
                 }
 
-                // Save only a salted hash; never a readable password.
-                val salted =
-                    PasswordHasher.hash(state.newPassword)
+                firestore
+                    .collection(
+                        FirestoreCollections.USERS
+                    )
+                    .document(phone)
+                    .update(
+                        "password",
+                        state.newPassword
+                    )
+                    .await()
 
-                val batch = firestore.batch()
+                val old =
+                    userSession.userProfile
+                        ?: return@launch
 
-                batch.set(
-                    secretsReference,
-                    mapOf(
-                        "passwordHash" to salted.hash,
-                        "passwordSalt" to salted.salt,
-                        "updatedAt" to
-                                FieldValue.serverTimestamp()
+                userSession.setUser(
+                    old.copy(
+                        password =
+                            state.newPassword
                     )
                 )
-
-                // Remove the old plaintext field if it still exists.
-                batch.update(
-                    userReference,
-                    mapOf(
-                        "password" to FieldValue.delete(),
-                        "updatedAt" to
-                                FieldValue.serverTimestamp()
-                    )
-                )
-
-                batch.commit().await()
 
                 _uiState.value =
                     _uiState.value.copy(
@@ -689,8 +771,7 @@ class DriverProfileViewModel @Inject constructor(
 
             } catch (e: Exception) {
                 ToastFeedback.show(
-                    e.message
-                        ?: "Hindi ma-update ang password. Subukan muli."
+                    e.message ?: "Hindi ma-update ang password."
                 )
             }
         }

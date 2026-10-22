@@ -411,7 +411,8 @@ class AccountManagementViewModel @Inject constructor(
                 document.getString("driverId") != driverId &&
                         isOpenQueueStatus(
                             document.getString("status")
-                        )
+                        ) &&
+                        document.getBoolean("isActive") != false
             }
             .sortedWith(
                 compareBy<DocumentSnapshot> {
@@ -602,7 +603,8 @@ class AccountManagementViewModel @Inject constructor(
                             it.id !in deletedIds &&
                                     isOpenQueueStatus(
                                         it.getString("status")
-                                    )
+                                    ) &&
+                                    it.getBoolean("isActive") != false
                         }
                         .sortedWith(
                             compareBy<DocumentSnapshot> {
@@ -628,14 +630,6 @@ class AccountManagementViewModel @Inject constructor(
 
                 // Preserve previous dispatch and ledger records.
                 batch.delete(userReference)
-
-                // Remove the stored password hash with the account.
-                batch.delete(
-                    firestore
-                        .collection(FirestoreCollections.USER_SECRETS)
-                        .document(account.id)
-                )
-
                 batch.commit().await()
 
             } catch (e: Exception) {
