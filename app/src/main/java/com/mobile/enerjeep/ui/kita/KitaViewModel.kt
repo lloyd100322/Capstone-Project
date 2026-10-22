@@ -7,8 +7,10 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +29,10 @@ data class KitaRecord(
     val amount: Double,
     val type: String,
     val isHistory: Boolean,
-    val createdAtMillis: Long = 0L
+    val createdAtMillis: Long = 0L,
+    // The ledger document this record was derived from, when there is one.
+    // Used so the same earning is never counted twice.
+    val sourceId: String? = null
 )
 
 enum class KitaTabType {
@@ -64,13 +69,54 @@ class KitaViewModel @Inject constructor(
     private val plateLedgerSnapshots = mutableMapOf<String, List<DocumentSnapshot>>()
     private var dispatchLedgerDocuments: List<DocumentSnapshot> = emptyList()
 
+    // users.userId the listeners are currently attached for.
+    private var listeningUserId: String = ""
+    private var listenerErrorShown = false
+
     init {
         startListeners()
     }
 
+    /**
+     * The ViewModel can outlive a login (or be created before the profile is
+     * set). Re-attach the listeners whenever the signed-in driver changed so a
+     * driver never sees another driver's earnings, or an empty list.
+     */
+    fun refreshIdentity() {
+        val currentUserId = userSession.userProfile?.userId?.trim().orEmpty()
+        if (currentUserId != listeningUserId) {
+            startListeners()
+        }
+    }
+
+    private fun stopListeners() {
+        kitaListener?.remove()
+        ledgerListener?.remove()
+        ledgerPlateListeners.forEach { it.remove() }
+        ledgerPlateListeners.clear()
+        kitaListener = null
+        ledgerListener = null
+        kitaDocuments = emptyList()
+        driverLedgerDocuments = emptyList()
+        plateLedgerSnapshots.clear()
+        dispatchLedgerDocuments = emptyList()
+    }
+
+    private fun reportListenerError(error: Exception?) {
+        if (error == null || listenerErrorShown) return
+        listenerErrorShown = true
+        ToastFeedback.show(
+            "Hindi ma-load ang kita: ${error.message ?: "may problema sa Firestore"}"
+        )
+    }
+
     private fun startListeners() {
+        stopListeners()
+        listenerErrorShown = false
+
         val profile = userSession.userProfile
         val userId = profile?.userId?.trim().orEmpty()
+        listeningUserId = userId
 
         if (userId.isBlank()) {
             _uiState.value = KitaUiState()
@@ -83,6 +129,7 @@ class KitaViewModel @Inject constructor(
             .whereEqualTo("driverId", userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
+                    reportListenerError(error)
                     return@addSnapshotListener
                 }
 
@@ -96,6 +143,7 @@ class KitaViewModel @Inject constructor(
             .whereEqualTo("driverId", userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
+                    reportListenerError(error)
                     return@addSnapshotListener
                 }
 
@@ -116,6 +164,7 @@ class KitaViewModel @Inject constructor(
                 .whereEqualTo("plateNumber", plateValue)
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
+                        reportListenerError(error)
                         return@addSnapshotListener
                     }
 
@@ -132,11 +181,24 @@ class KitaViewModel @Inject constructor(
         dispatchLedgerDocuments = (driverLedgerDocuments + plateLedgerSnapshots.values.flatten())
             .distinctBy { it.id }
             .filter { document ->
+                // The plate fallback may match a record of another driver who
+                // used the same jeepney. Only keep records that belong to this
+                // driver (users.userId) or have no driver recorded at all.
+                val owner = document.getString("driverId").orEmpty().trim()
+                owner.isBlank() || owner == listeningUserId
+            }
+            .filter { document ->
                 val source = document.getString("source").orEmpty().trim()
                 val feeType = document.getString("feeType").orEmpty().trim()
 
                 source.equals("queue_dispatch", ignoreCase = true) ||
                         feeType.equals("Dispatch", ignoreCase = true)
+            }
+            // One earning per dispatched queue entry, even if older retries
+            // already created several ledger documents for the same dispatch.
+            .distinctBy { document ->
+                document.getString("queueId")?.trim()?.takeIf { it.isNotBlank() }
+                    ?: document.id
             }
 
         rebuild()
@@ -146,8 +208,15 @@ class KitaViewModel @Inject constructor(
         val manualRecords = kitaDocuments.map { mapKitaDocument(it) }
         val dispatchRecords = dispatchLedgerDocuments.map { mapDispatchLedger(it) }
 
-        val records = (manualRecords + dispatchRecords)
-            .sortedByDescending { it.createdAtMillis }
+        // The same earning can be described by more than one document. The
+        // sourceId of a record is the identity of the transaction, so the
+        // merge keeps one row per earning. A retry, a reopened screen or a
+        // listener that fires again therefore never adds the same earning
+        // twice and never changes a valid balance.
+        val records = KitaHistory.merge(
+            dispatchRecords = dispatchRecords,
+            manualRecords = manualRecords
+        )
 
         updateMetricsAndFilter(
             allRecords = records,
@@ -164,9 +233,12 @@ class KitaViewModel @Inject constructor(
             date = document.getString("date")?.takeIf { it.isNotBlank() }
                 ?: formatMillis(millis),
             amount = getNumericValue(document, "amount") ?: 0.0,
-            type = document.getString("type") ?: "Kita",
+            type = document.getString("type")
+                ?.let { if (it.equals("Multiya", ignoreCase = true)) "Multa" else it }
+                ?: "Kita",
             isHistory = !isCurrentMonth(millis),
-            createdAtMillis = millis
+            createdAtMillis = millis,
+            sourceId = "kita:${document.id}"
         )
     }
 
@@ -188,7 +260,8 @@ class KitaViewModel @Inject constructor(
             amount = amount,
             type = "Kita",
             isHistory = !isCurrentMonth(millis),
-            createdAtMillis = millis
+            createdAtMillis = millis,
+            sourceId = "ledger:${document.id}"
         )
     }
 
@@ -254,21 +327,19 @@ class KitaViewModel @Inject constructor(
         query: String
     ) {
         val showHistory = tab == KitaTabType.KASAYSAYAN
-        val currentTabRecords = allRecords.filter { it.isHistory == showHistory }
 
-        val kitaSum = currentTabRecords
-            .filter { it.type.equals("Kita", ignoreCase = true) }
-            .sumOf { it.amount }
+        /*
+         * "Kasalukuyan" keeps showing the earnings of the current month.
+         * "Kasaysayan" is the complete history: every earning that was
+         * saved, including the ones of the current month, so a driver
+         * who just earned money sees it in both views.
+         */
+        val currentTabRecords = KitaHistory.visible(
+            records = allRecords,
+            showHistory = showHistory
+        )
 
-        val bayadSum = currentTabRecords
-            .filter { it.type.equals("Bayad", ignoreCase = true) }
-            .sumOf { it.amount }
-
-        val multiyaSum = currentTabRecords
-            .filter { it.type.equals("Multiya", ignoreCase = true) }
-            .sumOf { it.amount }
-
-        val net = kitaSum - (bayadSum + multiyaSum)
+        val totals = KitaHistory.totals(currentTabRecords)
 
         val filtered = currentTabRecords.filter {
             it.title.contains(query, ignoreCase = true) ||
@@ -276,10 +347,10 @@ class KitaViewModel @Inject constructor(
         }
 
         _uiState.value = _uiState.value.copy(
-            netEarnings = net,
-            totalKita = kitaSum,
-            totalBayad = bayadSum,
-            totalMultiya = multiyaSum,
+            netEarnings = totals.net,
+            totalKita = totals.kita,
+            totalBayad = totals.bayad,
+            totalMultiya = totals.multa,
             selectedTab = tab,
             searchQuery = query,
             records = allRecords,
@@ -292,7 +363,7 @@ class KitaViewModel @Inject constructor(
      * (seconds or milliseconds), plus date strings used by older records.
      */
     private fun getCreatedAtMillis(document: DocumentSnapshot): Long {
-        document.getTimestamp("createdAt")?.let {
+        document.safeTimestamp("createdAt")?.let {
             return it.toDate().time
         }
 

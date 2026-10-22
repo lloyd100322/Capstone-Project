@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.ui.theme.*
 
@@ -44,7 +45,8 @@ fun CreateAccountScreen(
     // Driver Details
     var licenseNumber by remember { mutableStateOf("") }
     var plateNumber by remember { mutableStateOf("") }
-    var emergencyContact by remember { mutableStateOf("") }
+    var emergencyContactName by remember { mutableStateOf("") }
+    var emergencyContactNumber by remember { mutableStateOf("") }
 
     var expanded by remember { mutableStateOf(false) }
     val roles = UserRole.entries
@@ -339,18 +341,37 @@ fun CreateAccountScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 Text(
-                                    "Emergency Contact",
+                                    "Emergency Contact Name",
                                     fontSize = 14.sp
                                 )
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 CustomInputField(
-                                    value = emergencyContact,
+                                    value = emergencyContactName,
                                     onValueChange = {
-                                        emergencyContact = it
+                                        emergencyContactName =
+                                            EmergencyContact.sanitizeName(it)
                                     },
-                                    placeholder = "Numero o pangalan"
+                                    placeholder = "Pangalan ng contact"
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
+                                    "Emergency Contact Number",
+                                    fontSize = 14.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                CustomInputField(
+                                    value = emergencyContactNumber,
+                                    onValueChange = {
+                                        emergencyContactNumber =
+                                            EmergencyContact.sanitizeNumber(it)
+                                    },
+                                    placeholder = "09XXXXXXXXX"
                                 )
                             }
                         }
@@ -402,7 +423,8 @@ fun CreateAccountScreen(
                                     role,
                                     licenseNumber,
                                     plateNumber,
-                                    emergencyContact
+                                    emergencyContactName,
+                                    emergencyContactNumber
                                 )
                             },
                             modifier = Modifier

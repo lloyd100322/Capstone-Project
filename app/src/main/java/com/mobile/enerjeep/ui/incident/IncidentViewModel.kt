@@ -8,6 +8,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.PhilippineIdentifiers
+import com.mobile.enerjeep.data.safeTimestamp
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +46,10 @@ sealed interface IncidentUiState {
     data class Success(
         val activeIncidents: List<IncidentItem>,
         val historyIncidents: List<IncidentItem>,
+        // Every incident, open and already resolved. The "Kasaysayan" tab
+        // shows this list, so an incident that was made today is written
+        // in the history as well.
+        val allIncidents: List<IncidentItem>,
         val openCount: Int,
         val resolvedCount: Int
     ) : IncidentUiState
@@ -106,9 +113,15 @@ class IncidentViewModel @Inject constructor(
                     val history =
                         mutableListOf<IncidentItem>()
 
+                    val all =
+                        mutableListOf<IncidentItem>()
+
                     snapshot.documents
                         .sortedByDescending {
-                            it.getTimestamp("createdAt")
+                            (
+                                    it.safeTimestamp("resolvedAt")
+                                        ?: it.safeTimestamp("createdAt")
+                                    )
                                 ?.seconds
                                 ?: 0L
                         }
@@ -132,6 +145,8 @@ class IncidentViewModel @Inject constructor(
                                                 true
                                             ) == true
 
+                            all += item
+
                             if (resolved) {
                                 history += item
                             } else {
@@ -143,6 +158,7 @@ class IncidentViewModel @Inject constructor(
                         IncidentUiState.Success(
                             activeIncidents = active,
                             historyIncidents = history,
+                            allIncidents = all,
                             openCount = active.size,
                             resolvedCount = history.size
                         )
@@ -350,13 +366,16 @@ class IncidentViewModel @Inject constructor(
                     .set(data)
                     .await()
 
+                ToastFeedback.show(
+                    "Naitala ang insidente para sa ${plateNumber.trim()}."
+                )
+
             } catch (e: Exception) {
 
-                _uiState.value =
-                    IncidentUiState.Error(
-                        e.message
-                            ?: "Hindi ma-save ang insidente"
-                    )
+                ToastFeedback.show(
+                    e.message
+                        ?: "Hindi ma-save ang insidente"
+                )
             }
         }
     }
@@ -386,13 +405,16 @@ class IncidentViewModel @Inject constructor(
                     )
                     .await()
 
+                ToastFeedback.show(
+                    "Naayos na ang insidente. Nasa Kasaysayan na ito."
+                )
+
             } catch (e: Exception) {
 
-                _uiState.value =
-                    IncidentUiState.Error(
-                        e.message
-                            ?: "Hindi ma-resolve ang insidente"
-                    )
+                ToastFeedback.show(
+                    e.message
+                        ?: "Hindi ma-resolve ang insidente"
+                )
             }
         }
     }
@@ -401,6 +423,11 @@ class IncidentViewModel @Inject constructor(
         plateNumber: String
     ): DocumentSnapshot? {
 
+        /*
+         * The plate is compared the same way everywhere in the app, so
+         * "abc 1234" and "ABC-1234" still find the same driver. The
+         * stored value is never rewritten.
+         */
         return firestore
             .collection(
                 FirestoreCollections.USERS
@@ -409,15 +436,15 @@ class IncidentViewModel @Inject constructor(
                 "role",
                 "driver"
             )
-            .whereEqualTo(
-                "plateNumber",
-                plateNumber.trim()
-            )
-            .limit(1)
             .get()
             .await()
             .documents
-            .firstOrNull()
+            .firstOrNull {
+                PhilippineIdentifiers.platesMatch(
+                    it.getString("plateNumber"),
+                    plateNumber
+                )
+            }
     }
 
     private fun mapIncident(

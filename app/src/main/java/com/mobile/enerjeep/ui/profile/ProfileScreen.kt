@@ -206,18 +206,15 @@ fun ProfileScreen(
                                         new,
                                         confirm ->
 
-                                    val success =
-                                        viewModel
-                                            .updatePassword(
-                                                old,
-                                                new,
-                                                confirm
-                                            )
-
-                                    if (success) {
-                                        currentView =
-                                            "Main"
-                                    }
+                                    viewModel
+                                        .updatePassword(
+                                            old,
+                                            new,
+                                            confirm
+                                        ) {
+                                            currentView =
+                                                "Main"
+                                        }
                                 }
                             )
                         }

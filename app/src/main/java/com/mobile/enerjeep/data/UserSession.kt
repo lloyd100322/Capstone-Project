@@ -31,5 +31,7 @@ data class UserProfile(
     val role: UserRole = UserRole.Driver,
     val licenseNumber: String? = null,
     val plateNumber: String? = null,
-    val emergencyContact: String? = null
+    val emergencyContact: String? = null,
+    val emergencyContactName: String? = null,
+    val emergencyContactNumber: String? = null
 )

@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
 
 
@@ -45,6 +48,7 @@ fun QueueScreen(
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableStateOf(0) } // 0: Kasalukuyan, 1: Kasaysayan
+    var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
 
     // Instead of just a boolean, hold the actual vehicle being dispatched so the modal knows what to show
     var vehicleToDispatch by remember { mutableStateOf<QueueVehicle?>(null) }
@@ -135,7 +139,8 @@ fun QueueScreen(
 
                     // Tabs
                     Row(modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                        TabButton(modifier = Modifier.weight(1f), text = "Kasalukuyan", isSelected = selectedTab == 0, onClick = { selectedTab = 0 })
+                        TabButton(modifier = Modifier.weight(1f), text = "Ngayon" +
+                                "", isSelected = selectedTab == 0, onClick = { selectedTab = 0 })
                         TabButton(modifier = Modifier.weight(1f), text = "Kasaysayan", isSelected = selectedTab == 1, onClick = { selectedTab = 1 })
                     }
 
@@ -152,18 +157,24 @@ fun QueueScreen(
                                 QueueItem(
                                     vehicle = vehicle,
                                     onDispatchClick = { vehicleToDispatch = vehicle },
-                                    onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) }
+                                    onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
+                                    onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) }
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
                     } else {
-                        if (state.historyQueue.isEmpty()) {
+                        HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val filteredHistory = filterHistoryRecords(state.historyQueue, { it.time }, historyFilter)
+
+                        if (filteredHistory.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                                 Text("Walang kasaysayan.", color = Color.Gray)
                             }
                         } else {
-                            state.historyQueue.forEach { history ->
+                            filteredHistory.forEach { history ->
                                 HistoryItem(history)
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
@@ -238,10 +249,29 @@ fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, 
 fun QueueItem(
     vehicle: QueueVehicle,
     onDispatchClick: () -> Unit,
-    onPositionUpdate: (Int) -> Unit
+    onPositionUpdate: (Int) -> Unit,
+    onCancelClick: () -> Unit
 ) {
     var isEditingPosition by remember { mutableStateOf(false) }
     var newPositionInput by remember { mutableStateOf("0") }
+    var showCancelConfirm by remember { mutableStateOf(false) }
+
+    if (showCancelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCancelConfirm = false },
+            title = { Text("Kanselahin ang pila?") },
+            text = { Text("Aalisin ang ${vehicle.plateNumber} sa pila at ililipat sa kasaysayan bilang Nakansela.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCancelConfirm = false
+                    onCancelClick()
+                }) { Text("Oo, kanselahin", color = ErrorRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelConfirm = false }) { Text("Hindi") }
+            }
+        )
+    }
 
     // Resolve UI colors based on ViewModel status string
     val (statusBg, statusColor) = when (vehicle.status.lowercase()) {
@@ -279,6 +309,14 @@ fun QueueItem(
 
             if (isEditingPosition) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    /*
+                     * The two arrow buttons used to be 24.dp each and were
+                     * stacked inside a 48.dp tall field, so they took the
+                     * whole height of the field and the number the driver
+                     * typed was cut off. The field is now taller and the
+                     * arrows are smaller, so the number is always fully
+                     * visible while typing and after saving.
+                     */
                     OutlinedTextField(
                         value = newPositionInput,
                         onValueChange = {
@@ -286,12 +324,13 @@ fun QueueItem(
                                 newPositionInput = it
                             }
                         },
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier.weight(1f).height(56.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             unfocusedBorderColor = FieldBorderColor,
                             focusedBorderColor = EnerjeepBlue
                         ),
+                        textStyle = MaterialTheme.typography.bodyLarge,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         trailingIcon = {
@@ -305,7 +344,7 @@ fun QueueItem(
                                     contentDescription = "Up",
                                     tint = Color.Gray,
                                     modifier = Modifier
-                                        .size(24.dp)
+                                        .size(20.dp)
                                         .clickable {
                                             val current = newPositionInput.toIntOrNull() ?: 0
                                             newPositionInput = (current + 1).toString()
@@ -316,7 +355,7 @@ fun QueueItem(
                                     contentDescription = "Down",
                                     tint = Color.Gray,
                                     modifier = Modifier
-                                        .size(24.dp)
+                                        .size(20.dp)
                                         .clickable {
                                             val current = newPositionInput.toIntOrNull() ?: 0
                                             if (current > 0) newPositionInput = (current - 1).toString()
@@ -334,7 +373,7 @@ fun QueueItem(
                                 newPositionInput = "0"
                             }
                         },
-                        modifier = Modifier.height(48.dp),
+                        modifier = Modifier.height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Set", fontSize = 14.sp) }
@@ -344,7 +383,7 @@ fun QueueItem(
                             isEditingPosition = false
                             newPositionInput = "0"
                         },
-                        modifier = Modifier.height(48.dp),
+                        modifier = Modifier.height(56.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Bawi", fontSize = 14.sp, color = Color.Black) }
@@ -394,7 +433,7 @@ fun QueueItem(
                         text = "Kanselahin",
                         icon = { CancelIcon(modifier = Modifier.size(16.dp), color = ErrorRed) },
                         textColor = ErrorRed,
-                        onClick = {}
+                        onClick = { showCancelConfirm = true }
                     )
                 }
             }

@@ -132,7 +132,9 @@ fun DriverContent(
                         totalInQueue = uiState.totalInQueue,
                         queueStatus = uiState.queueStatus,
                         activeIncidentTitle = uiState.activeIncidentTitle,
-                        activeIncidentDate = uiState.activeIncidentDate
+                        activeIncidentDate = uiState.activeIncidentDate,
+                        activeIncidentPlate = uiState.activeIncidentPlate,
+                        openIncidentCount = uiState.openIncidentCount
                     )
                 }
                 DriverTab.Iskedyul -> {
@@ -162,7 +164,9 @@ fun DriverDashboardContent(
     totalInQueue: Int,
     queueStatus: String,
     activeIncidentTitle: String?,
-    activeIncidentDate: String?
+    activeIncidentDate: String?,
+    activeIncidentPlate: String?,
+    openIncidentCount: Int
 ) {
     Column(
         modifier = Modifier
@@ -280,7 +284,7 @@ fun DriverDashboardContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Incident/Warning Card
-        if (activeIncidentTitle != null && activeIncidentDate != null) {
+        if (openIncidentCount > 0) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -310,14 +314,18 @@ fun DriverDashboardContent(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(
-                                text = activeIncidentTitle,
+                                text = activeIncidentTitle ?: "Insidente",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = Color.Black
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Plaka $plateNumber",
+                                // The incident can belong to another driver,
+                                // so the plate of the incident is shown.
+                                // The plate of the signed-in driver is used
+                                // when the record has no plate.
+                                text = "Plaka ${activeIncidentPlate?.takeIf { it.isNotBlank() } ?: plateNumber}",
                                 fontSize = 14.sp,
                                 color = Color.Gray
                             )
@@ -331,7 +339,7 @@ fun DriverDashboardContent(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = activeIncidentDate,
+                                    text = activeIncidentDate ?: "",
                                     fontSize = 12.sp,
                                     color = Color.Gray
                                 )
@@ -343,13 +351,39 @@ fun DriverDashboardContent(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            text = "Babala",
+                            text = "$openIncidentCount ka open na incident.",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             color = WarningOrange,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
+                }
+            }
+        } else if (openIncidentCount == 0 && activeIncidentTitle == null) {
+            // No open incidents: show the count and invite to report one.
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = WarningOrangeLight),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = WarningOrange,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Text(
+                        text = "Wala sa crash.",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 15.sp,
+                        color = WarningOrange
+                    )
                 }
             }
         }

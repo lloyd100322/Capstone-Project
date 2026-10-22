@@ -6,6 +6,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.data.safeTimestamp
+import com.mobile.enerjeep.ui.components.HistoryTabs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,11 +18,14 @@ data class DriverIncident(
     val id: String,
     val title: String,
     val plateNumber: String,
+    val location: String,
     val description: String,
     val date: String,
     val isResolved: Boolean,
     val multiya: Double = 0.0,
-    val isSentToDriver: Boolean = true
+    val isSentToDriver: Boolean = true,
+    // Newest activity (resolved time, else created time) used for ordering.
+    val sortMillis: Long = 0L
 )
 
 enum class IncidentTabType {
@@ -34,7 +39,9 @@ data class DriverIncidentUiState(
     val selectedTab: IncidentTabType = IncidentTabType.KASALUKUYAN,
     val allIncidents: List<DriverIncident> = emptyList(),
     val filteredIncidents: List<DriverIncident> = emptyList(),
-    val selectedIncident: DriverIncident? = null
+    val selectedIncident: DriverIncident? = null,
+    val isLoading: Boolean = true,
+    val errorMessage: String? = null
 )
 
 @HiltViewModel
@@ -48,18 +55,35 @@ class DriverIncidentViewModel @Inject constructor(
     private var listener: ListenerRegistration? = null
 
     init {
+        startListener()
+    }
+
+    /**
+     * Drivers need to see the incidents of every driver so they can tell
+     * which areas keep having accidents. The listener therefore reads the
+     * whole collection instead of only the records of the signed-in
+     * driver. Only the fields the app already stores are shown, so no
+     * personal data of the other drivers is exposed.
+     */
+    private fun startListener() {
+        listener?.remove()
+
         listener = firestore.collection(FirestoreCollections.INCIDENTS)
             .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
+                if (error != null) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message
+                            ?: "Hindi ma-load ang mga insidente."
+                    )
+                    return@addSnapshotListener
+                }
 
-                val profile = userSession.userProfile ?: return@addSnapshotListener
+                if (snapshot == null) return@addSnapshotListener
+
                 val incidents = snapshot.documents
-                    .filter { document ->
-                        document.getString("driverId") == profile.userId ||
-                                document.getString("plateNumber") == profile.plateNumber
-                    }
                     .map { mapIncident(it) }
-                    .sortedByDescending { it.date }
+                    .sortedByDescending { it.sortMillis }
 
                 val open = incidents.count { !it.isResolved }
                 val resolved = incidents.count { it.isResolved }
@@ -67,7 +91,9 @@ class DriverIncidentViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     openCount = open,
                     resolvedCount = resolved,
-                    allIncidents = incidents
+                    allIncidents = incidents,
+                    isLoading = false,
+                    errorMessage = null
                 )
                 applyFilters()
             }
@@ -93,28 +119,48 @@ class DriverIncidentViewModel @Inject constructor(
 
     private fun applyFilters() {
         val currentState = _uiState.value
-        val isResolvedTab = currentState.selectedTab == IncidentTabType.KASAYSAYAN
+        val showHistory = currentState.selectedTab == IncidentTabType.KASAYSAYAN
 
-        val filtered = currentState.allIncidents.filter { incident ->
-            incident.isResolved == isResolvedTab &&
-                    (incident.title.contains(currentState.searchQuery, ignoreCase = true) ||
-                            incident.plateNumber.contains(currentState.searchQuery, ignoreCase = true) ||
-                            incident.description.contains(currentState.searchQuery, ignoreCase = true))
+        /*
+         * "Kasalukuyan" keeps showing the incidents that are still open.
+         * "Kasaysayan" is the complete list, so an incident that was made
+         * today is written in the history as well, the same way the Kita
+         * screen does it.
+         */
+        val tabIncidents = HistoryTabs.visible(
+            items = currentState.allIncidents,
+            isCurrent = { incident -> !incident.isResolved },
+            showHistory = showHistory
+        )
+
+        val filtered = tabIncidents.filter { incident ->
+            incident.title.contains(currentState.searchQuery, ignoreCase = true) ||
+                    incident.plateNumber.contains(currentState.searchQuery, ignoreCase = true) ||
+                    incident.location.contains(currentState.searchQuery, ignoreCase = true) ||
+                    incident.description.contains(currentState.searchQuery, ignoreCase = true)
         }
 
         _uiState.value = currentState.copy(filteredIncidents = filtered)
     }
 
     private fun mapIncident(document: DocumentSnapshot): DriverIncident {
+        val profile = userSession.userProfile
+
         return DriverIncident(
             id = document.id,
             title = document.getString("title") ?: "Insidente",
-            plateNumber = document.getString("plateNumber") ?: userSession.userProfile?.plateNumber.orEmpty(),
+            plateNumber = document.getString("plateNumber")
+                ?: profile?.plateNumber.orEmpty(),
+            location = document.getString("location").orEmpty(),
             description = document.getString("description").orEmpty(),
             date = document.getString("date").orEmpty(),
             isResolved = document.getBoolean("isResolved") == true || document.getString("status")?.lowercase() == "resolved",
-            multiya = document.getDouble("penalty") ?: 0.0,
-            isSentToDriver = document.getBoolean("sentToDriver") ?: true
+            multiya = (document.get("penalty") as? Number)?.toDouble() ?: 0.0,
+            isSentToDriver = document.getBoolean("sentToDriver") ?: true,
+            sortMillis = (
+                    document.safeTimestamp("resolvedAt")
+                        ?: document.safeTimestamp("createdAt")
+                    )?.toDate()?.time ?: 0L
         )
     }
 

@@ -1,5 +1,8 @@
 package com.mobile.enerjeep.ui.login
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -298,9 +302,14 @@ fun PhoneInputContent(
         modifier = Modifier.height(24.dp)
     )
 
+    val phoneContext = LocalContext.current
+
+    uiState.errorMessage?.let { ResetErrorText(it) }
+
     Button(
+        enabled = !uiState.isLoading,
         onClick = {
-            viewModel.navigateToOtp()
+            phoneContext.findResetActivity()?.let { viewModel.sendOtp(it) }
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -430,9 +439,24 @@ fun OtpInputContent(
         modifier = Modifier.height(24.dp)
     )
 
-    Button(
+    val otpContext = LocalContext.current
+
+    uiState.errorMessage?.let { ResetErrorText(it) }
+
+    TextButton(
+        enabled = !uiState.isLoading,
         onClick = {
-            viewModel.navigateToNewPassword()
+            otpContext.findResetActivity()?.let { viewModel.resendOtp(it) }
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text("Ipadala muli ang OTP")
+    }
+
+    Button(
+        enabled = !uiState.isLoading,
+        onClick = {
+            viewModel.verifyOtp()
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -604,7 +628,10 @@ fun NewPasswordContent(
         modifier = Modifier.height(24.dp)
     )
 
+    uiState.errorMessage?.let { ResetErrorText(it) }
+
     Button(
+        enabled = !uiState.isLoading,
         onClick = {
             viewModel.completeReset()
         },
@@ -623,4 +650,25 @@ fun NewPasswordContent(
             fontWeight = FontWeight.Bold
         )
     }
+}
+
+@Composable
+private fun ResetErrorText(message: String) {
+    Text(
+        text = message,
+        color = Color.Red,
+        fontSize = 13.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+    )
+}
+
+private fun Context.findResetActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }

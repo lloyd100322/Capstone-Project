@@ -13,6 +13,7 @@ import com.mobile.enerjeep.navigation.NavGraph
 import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepTheme
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.components.ToastFeedbackHost
 
 
 @Composable
@@ -31,6 +32,7 @@ fun ContentView(
             color = LightGrayBackground
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
+                ToastFeedbackHost()
                 when (val state = authState) {
                     is AppAuthState.Loading -> {
                         CircularProgressIndicator(

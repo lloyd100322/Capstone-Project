@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.navigation.AppNavigator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,7 +50,8 @@ class CreateAccountViewModel @Inject constructor(
         role: UserRole,
         licenseNumber: String = "",
         plateNumber: String = "",
-        emergencyContact: String = ""
+        emergencyContactName: String = "",
+        emergencyContactNumber: String = ""
     ) {
         val cleanFirstName = firstName.trim()
         val cleanLastName = lastName.trim()
@@ -60,7 +63,8 @@ class CreateAccountViewModel @Inject constructor(
             .trim()
             .uppercase(Locale.ROOT)
 
-        val cleanEmergencyContact = emergencyContact.trim()
+        val cleanEmergencyName = emergencyContactName.trim()
+        val cleanEmergencyNumber = emergencyContactNumber.trim()
 
         if (
             cleanFirstName.isBlank() ||
@@ -81,12 +85,40 @@ class CreateAccountViewModel @Inject constructor(
             return
         }
 
+        if (role == UserRole.Driver) {
+            // The plate number and the license number are checked before
+            // anything is saved, so a wrong value never reaches Firestore.
+            PhilippineIdentifiers.plateNumberError(cleanPlateNumber)
+                ?.let { error ->
+                    _uiState.value = CreateAccountUiState.Error(error)
+                    return
+                }
+
+            PhilippineIdentifiers.licenseNumberError(cleanLicenseNumber)
+                ?.let { error ->
+                    _uiState.value = CreateAccountUiState.Error(error)
+                    return
+                }
+        }
+
         if (
             role == UserRole.Driver &&
-            cleanPlateNumber.isBlank()
+            !EmergencyContact.isValidName(cleanEmergencyName)
         ) {
             _uiState.value = CreateAccountUiState.Error(
-                "Pakilagay ang plate number ng driver"
+                "Ang pangalan ng emergency contact ay kailangan at " +
+                        "dapat hanggang 50 karakter."
+            )
+            return
+        }
+
+        if (
+            role == UserRole.Driver &&
+            !EmergencyContact.isValidNumber(cleanEmergencyNumber)
+        ) {
+            _uiState.value = CreateAccountUiState.Error(
+                "Ang numero ng emergency contact ay dapat valid na " +
+                        "telepono (09XXXXXXXXX o +639XXXXXXXXX)."
             )
             return
         }
@@ -114,15 +146,20 @@ class CreateAccountViewModel @Inject constructor(
                 if (role == UserRole.Driver) {
                     val duplicatePlate = users
                         .whereEqualTo("role", "driver")
-                        .whereEqualTo(
-                            "plateNumber",
-                            cleanPlateNumber
-                        )
-                        .limit(1)
                         .get()
                         .await()
 
-                    if (duplicatePlate.documents.isNotEmpty()) {
+                    // Compare the plates the same way everywhere in the
+                    // app, so "abc 1234" and "ABC-1234" are understood as
+                    // the same plate. Older records are not rewritten.
+                    val alreadyUsed = duplicatePlate.documents.any {
+                        PhilippineIdentifiers.platesMatch(
+                            it.getString("plateNumber"),
+                            cleanPlateNumber
+                        )
+                    }
+
+                    if (alreadyUsed) {
                         _uiState.value = CreateAccountUiState.Error(
                             "Ginagamit na ng ibang driver ang plate number na ito"
                         )
@@ -151,8 +188,20 @@ class CreateAccountViewModel @Inject constructor(
                     userMap["plateNumber"] =
                         cleanPlateNumber
 
+                    // The two emergency contact values are saved in their
+                    // own fields. The old combined field is kept in sync
+                    // so older screens and exports still show something.
+                    userMap["emergencyContactName"] =
+                        cleanEmergencyName
+
+                    userMap["emergencyContactNumber"] =
+                        cleanEmergencyNumber
+
                     userMap["emergencyContact"] =
-                        cleanEmergencyContact
+                        EmergencyContact.combine(
+                            cleanEmergencyName,
+                            cleanEmergencyNumber
+                        )
 
                     // New drivers are active unless an admin deactivates them.
                     userMap["isVehicleActive"] = true

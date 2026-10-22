@@ -8,6 +8,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.safeTimestamp
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,7 +102,7 @@ class QueueViewModel @Inject constructor(
                         compareBy<DocumentSnapshot> {
                             it.getLong("position") ?: Long.MAX_VALUE
                         }.thenBy {
-                            it.getTimestamp("createdAt")?.seconds
+                            it.safeTimestamp("createdAt")?.seconds
                                 ?: Long.MAX_VALUE
                         }
                     )
@@ -131,7 +133,7 @@ class QueueViewModel @Inject constructor(
                                 .orEmpty(),
 
                             time = formatTimestamp(
-                                document.getTimestamp("createdAt")
+                                document.safeTimestamp("createdAt")
                             ).ifBlank {
                                 document.getString("time").orEmpty()
                             },
@@ -147,15 +149,16 @@ class QueueViewModel @Inject constructor(
                         !isActiveStatus(it.getString("status"))
                     }
                     .sortedByDescending {
-                        it.getTimestamp("dispatchedAt")?.seconds
-                            ?: it.getTimestamp("createdAt")?.seconds
+                        it.safeTimestamp("dispatchedAt")?.seconds
+                            ?: it.safeTimestamp("updatedAt")?.seconds
+                            ?: it.safeTimestamp("createdAt")?.seconds
                             ?: 0L
                     }
                     .map { document ->
                         val timestamp =
-                            document.getTimestamp("dispatchedAt")
-                                ?: document.getTimestamp("updatedAt")
-                                ?: document.getTimestamp("createdAt")
+                            document.safeTimestamp("dispatchedAt")
+                                ?: document.safeTimestamp("updatedAt")
+                                ?: document.safeTimestamp("createdAt")
 
                         HistoryVehicle(
                             id = document.id,
@@ -196,7 +199,7 @@ class QueueViewModel @Inject constructor(
                     }
 
                     val timestamp =
-                        document.getTimestamp("dispatchedAt")
+                        document.safeTimestamp("dispatchedAt")
 
                     timestamp != null &&
                             SimpleDateFormat(
@@ -348,33 +351,39 @@ class QueueViewModel @Inject constructor(
      * Dispatches the selected driver and creates exactly one ledger
      * transaction. Active drivers return to the end of the queue.
      */
+    // Queue entries whose dispatch is currently being written.
+    private val dispatchingIds = mutableSetOf<String>()
+
     fun dispatchVehicle(
         vehicleId: String,
         income: Double,
         otherFees: Double
     ) {
         if (income < 0.0) {
-            _uiState.value = QueueUiState.Error(
+            ToastFeedback.show(
                 "Hindi maaaring negatibo ang kita"
             )
             return
         }
 
         if (otherFees < 0.0) {
-            _uiState.value = QueueUiState.Error(
+            ToastFeedback.show(
                 "Hindi maaaring negatibo ang ibang bayad"
             )
             return
         }
 
         if (otherFees > income) {
-            _uiState.value = QueueUiState.Error(
+            ToastFeedback.show(
                 "Hindi maaaring mas mataas ang ibang bayad kaysa sa kita"
             )
             return
         }
 
         viewModelScope.launch {
+            // Ignore a second tap/retry while this dispatch is still running.
+            if (!dispatchingIds.add(vehicleId)) return@launch
+
             try {
                 val queueSnapshot = firestore
                     .collection(FirestoreCollections.QUEUE)
@@ -466,7 +475,7 @@ class QueueViewModel @Inject constructor(
                         compareBy<DocumentSnapshot> {
                             it.getLong("position") ?: Long.MAX_VALUE
                         }.thenBy {
-                            it.getTimestamp("createdAt")?.seconds
+                            it.safeTimestamp("createdAt")?.seconds
                                 ?: Long.MAX_VALUE
                         }
                     )
@@ -515,7 +524,9 @@ class QueueViewModel @Inject constructor(
                  * in history and is not reused.
                  */
                 if (shouldRequeue) {
-                    val requeueId = FirestoreIds.queue(driverId)
+                    // Deterministic id: a retried dispatch rewrites the same
+                    // re-queue entry instead of creating another one.
+                    val requeueId = "queue_${driverId}_after_${vehicleId}"
 
                     val requeueReference = firestore
                         .collection(FirestoreCollections.QUEUE)
@@ -548,8 +559,10 @@ class QueueViewModel @Inject constructor(
                  * Create exactly one ledger record for this dispatch.
                  * Driver earnings continue to use the net amount.
                  */
-                val ledgerId =
-                    "${vehicleId}_dispatch_${System.currentTimeMillis()}"
+                // One ledger (earning) document per dispatched queue entry.
+                // The id is derived from the queue entry, not the clock, so
+                // a retry or double tap rewrites the same document.
+                val ledgerId = "${vehicleId}_dispatch"
 
                 val ledgerReference = firestore
                     .collection(FirestoreCollections.LEDGER)
@@ -580,9 +593,94 @@ class QueueViewModel @Inject constructor(
 
                 batch.commit().await()
 
+                val dispatchedLabel = listOf(plateNumber, driverName)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" — ")
+
+                ToastFeedback.show(
+                    "Na-dispatch na ang driver: $dispatchedLabel"
+                )
+
             } catch (e: Exception) {
-                _uiState.value = QueueUiState.Error(
+                ToastFeedback.show(
                     e.message ?: "Hindi ma-dispatch ang sasakyan"
+                )
+            } finally {
+                dispatchingIds.remove(vehicleId)
+            }
+        }
+    }
+
+    /**
+     * Cancels an active queue entry. The entry moves to the Kasaysayan tab
+     * as "Nakansela" and the remaining active entries are renumbered.
+     */
+    fun cancelQueueEntry(vehicleId: String) {
+        viewModelScope.launch {
+            try {
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
+
+                val target = queueSnapshot.documents
+                    .firstOrNull { it.id == vehicleId }
+                    ?: throw IllegalStateException(
+                        "Hindi makita ang sasakyan sa pila."
+                    )
+
+                if (!isActiveStatus(target.getString("status"))) {
+                    throw IllegalStateException(
+                        "Ang sasakyang ito ay wala na sa aktibong pila."
+                    )
+                }
+
+                val remaining = queueSnapshot.documents
+                    .filter {
+                        it.id != vehicleId &&
+                                isActiveStatus(it.getString("status"))
+                    }
+                    .sortedWith(
+                        compareBy<DocumentSnapshot> {
+                            it.getLong("position") ?: Long.MAX_VALUE
+                        }.thenBy {
+                            it.safeTimestamp("createdAt")?.seconds
+                                ?: Long.MAX_VALUE
+                        }
+                    )
+
+                val batch = firestore.batch()
+
+                batch.update(
+                    target.reference,
+                    mapOf(
+                        "status" to "cancelled",
+                        "position" to 0,
+                        "cancelledAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+
+                remaining.forEachIndexed { index, document ->
+                    batch.update(
+                        document.reference,
+                        mapOf(
+                            "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+
+                batch.commit().await()
+
+                ToastFeedback.show(
+                    "Nakansela ang " +
+                            target.getString("plateNumber").orEmpty() +
+                            " sa pila."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi makansela ang sasakyan."
                 )
             }
         }
@@ -633,7 +731,7 @@ class QueueViewModel @Inject constructor(
                 batch.commit().await()
 
             } catch (e: Exception) {
-                _uiState.value = QueueUiState.Error(
+                ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang posisyon"
                 )
             }

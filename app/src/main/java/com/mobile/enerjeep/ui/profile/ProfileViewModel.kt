@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.navigation.AppNavigator
@@ -224,34 +225,33 @@ class ProfileViewModel @Inject constructor(
     fun updatePassword(
         oldPass: String,
         newPass: String,
-        confirmPass: String
-    ): Boolean {
+        confirmPass: String,
+        onSuccess: () -> Unit = {}
+    ) {
 
-        if (newPass.isBlank()) {
+        if (newPass.length < 6) {
 
-            _uiState.value =
-                ProfileUiState.Error(
-                    "New password cannot be empty."
-                )
+            ToastFeedback.show(
+                "Dapat hindi bababa sa 6 na karakter ang bagong password."
+            )
 
-            return false
+            return
         }
 
         if (newPass != confirmPass) {
 
-            _uiState.value =
-                ProfileUiState.Error(
-                    "Passwords do not match."
-                )
+            ToastFeedback.show(
+                "Hindi magkapareho ang bagong password at kumpirmasyon."
+            )
 
-            return false
+            return
         }
 
         val phone =
             userSession.userProfile
                 ?.phoneNumber
                 ?.trim()
-                ?: return false
+                ?: return
 
         viewModelScope.launch {
 
@@ -272,10 +272,9 @@ class ProfileViewModel @Inject constructor(
 
                 if (savedPassword != oldPass) {
 
-                    _uiState.value =
-                        ProfileUiState.Error(
-                            "Old password is incorrect."
-                        )
+                    ToastFeedback.show(
+                        "Mali ang kasalukuyang password."
+                    )
 
                     return@launch
                 }
@@ -312,17 +311,21 @@ class ProfileViewModel @Inject constructor(
                     "Password updated successfully!"
                 )
 
+                ToastFeedback.show(
+                    "Matagumpay na napalitan ang password."
+                )
+
+                // Only leave the Security screen once the save really finished.
+                onSuccess()
+
             } catch (e: Exception) {
 
-                _uiState.value =
-                    ProfileUiState.Error(
-                        e.message
-                            ?: "Hindi ma-update ang password"
-                    )
+                ToastFeedback.show(
+                    e.message
+                        ?: "Hindi ma-update ang password"
+                )
             }
         }
-
-        return true
     }
 
     fun signOut() {

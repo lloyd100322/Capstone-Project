@@ -151,23 +151,49 @@ fun SalesIcon(modifier: Modifier = Modifier, color: Color = Color.Blue) {
         val width = size.width
         val height = size.height
         
-        // Dollar/Peso sign simplified
-        drawPath(
-            path = Path().apply {
-                moveTo(width * 0.5f, height * 0.1f)
-                lineTo(width * 0.5f, height * 0.9f)
-            },
+        /*
+         * The peso sign of the Philippines: a vertical stem with a bowl on
+         * the right at the top, and two horizontal bars crossing the stem.
+         * The old drawing was a dollar sign, which is not the money of this
+         * app.
+         */
+        val stemWidth = width * 0.12f
+        val stemX = width * 0.38f
+
+        // Vertical stem.
+        drawLine(
             color = color,
-            style = Stroke(width = width * 0.1f)
+            start = Offset(stemX, height * 0.08f),
+            end = Offset(stemX, height * 0.88f),
+            strokeWidth = stemWidth
         )
+
+        // The bowl of the "P", on the right of the stem.
         drawPath(
             path = Path().apply {
-                moveTo(width * 0.3f, height * 0.3f)
-                cubicTo(width * 0.7f, height * 0.3f, width * 0.7f, height * 0.5f, width * 0.5f, height * 0.5f)
-                cubicTo(width * 0.3f, height * 0.5f, width * 0.3f, height * 0.7f, width * 0.7f, height * 0.7f)
+                moveTo(stemX, height * 0.16f)
+                cubicTo(
+                    width * 0.82f, height * 0.16f,
+                    width * 0.82f, height * 0.44f,
+                    stemX, height * 0.44f
+                )
             },
             color = color,
-            style = Stroke(width = width * 0.1f)
+            style = Stroke(width = stemWidth)
+        )
+
+        // The two bars that cross the stem.
+        drawLine(
+            color = color,
+            start = Offset(width * 0.18f, height * 0.44f),
+            end = Offset(width * 0.62f, height * 0.44f),
+            strokeWidth = stemWidth
+        )
+        drawLine(
+            color = color,
+            start = Offset(width * 0.18f, height * 0.58f),
+            end = Offset(width * 0.62f, height * 0.58f),
+            strokeWidth = stemWidth
         )
     }
 }

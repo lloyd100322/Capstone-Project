@@ -68,7 +68,9 @@ class ContentViewModel @Inject constructor(
                         role = matchedRole,
                         licenseNumber = data?.get("licenseNumber") as? String,
                         plateNumber = data?.get("plateNumber") as? String,
-                        emergencyContact = data?.get("emergencyContact") as? String
+                        emergencyContact = data?.get("emergencyContact") as? String,
+                        emergencyContactName = data?.get("emergencyContactName") as? String,
+                        emergencyContactNumber = data?.get("emergencyContactNumber") as? String
                     )
                     
                     userSession.setUser(profile)

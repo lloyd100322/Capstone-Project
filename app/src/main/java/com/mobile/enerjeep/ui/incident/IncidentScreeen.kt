@@ -22,1102 +22,166 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IncidentScreen(
-    onReportClick: () -> Unit,
-    viewModel: IncidentViewModel = hiltViewModel()
-) {
+fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
     var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
+    var selectedIncident by remember { mutableStateOf<IncidentItem?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var selectedIncident by remember {
-        mutableStateOf<IncidentItem?>(null)
-    }
-
-    val sheetState =
-        rememberModalBottomSheetState(
-            skipPartiallyExpanded = true
-        )
-
-    Scaffold(
-        containerColor = LightGrayBackground
-    ) { innerPadding ->
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(
-                    rememberScrollState()
-                )
-                .padding(24.dp)
-        ) {
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Image(
-                    painter = painterResource(
-                        id = R.drawable.app_icon
-                    ),
-                    contentDescription = "Enerjeep Logo",
-                    modifier = Modifier.size(52.dp)
-                )
-
-                Spacer(
-                    modifier = Modifier.width(12.dp)
-                )
-
-                Text(
-                    text = "Enerjeep",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
+    Scaffold(containerColor = LightGrayBackground) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep Logo", modifier = Modifier.size(52.dp)); Spacer(Modifier.width(12.dp)); Text("Enerjeep", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
-
-            Spacer(
-                modifier = Modifier.height(32.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement =
-                    Arrangement.SpaceBetween,
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = "Insidente",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Button(
-                    onClick = onReportClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = EnerjeepBlue
-                    ),
-                    shape = RoundedCornerShape(22.dp)
-                ) {
-                    Text("+ I-report")
-                }
+            Spacer(Modifier.height(32.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Insidente", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(22.dp)) { Text("+ I-report") }
             }
-
-            Spacer(
-                modifier = Modifier.height(24.dp)
-            )
-
+            Spacer(Modifier.height(24.dp))
             when (val state = uiState) {
-
-                IncidentUiState.Loading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment =
-                            Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = EnerjeepBlue
-                        )
-                    }
-                }
-
-                is IncidentUiState.Error -> {
-                    Text(
-                        text = state.message,
-                        color = Color.Red,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-
+                IncidentUiState.Loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = EnerjeepBlue) }
+                is IncidentUiState.Error -> Text(state.message, color = Color.Red, modifier = Modifier.padding(16.dp))
                 is IncidentUiState.Success -> {
-
-                    Row(
-                        modifier =
-                            Modifier.fillMaxWidth()
-                    ) {
-
-                        IncidentStatCard(
-                            modifier =
-                                Modifier.weight(1f),
-                            title = "Bukas",
-                            value =
-                                state.openCount.toString(),
-                            icon = {
-                                Icon(
-                                    Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = WarningOrange
-                                )
-                            }
-                        )
-
-                        Spacer(
-                            modifier =
-                                Modifier.width(16.dp)
-                        )
-
-                        IncidentStatCard(
-                            modifier =
-                                Modifier.weight(1f),
-                            title = "Naayos",
-                            value =
-                                state.resolvedCount.toString(),
-                            icon = {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = SuccessGreen
-                                )
-                            }
-                        )
+                    Row(Modifier.fillMaxWidth()) {
+                        IncidentStatCard(Modifier.weight(1f), "Bukas", state.openCount.toString()) { Icon(Icons.Default.Warning, null, tint = WarningOrange) }
+                        Spacer(Modifier.width(16.dp))
+                        IncidentStatCard(Modifier.weight(1f), "Naayos", state.resolvedCount.toString()) { Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen) }
                     }
-
-                    Spacer(
-                        modifier = Modifier.height(24.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = {
-                            searchQuery = it
-                        },
-                        modifier =
-                            Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text(
-                                "Hanapin ayon sa uri, plaka, o lokasyon"
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null
-                            )
-                        },
-                        singleLine = true
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(24.dp)
-                    )
-
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                    ) {
-
-                        IncidentTabButton(
-                            modifier =
-                                Modifier.weight(1f),
-                            text = "Kasalukuyan",
-                            selected =
-                                selectedTab == 0
-                        ) {
-                            selectedTab = 0
-                        }
-
-                        IncidentTabButton(
-                            modifier =
-                                Modifier.weight(1f),
-                            text = "Kasaysayan",
-                            selected =
-                                selectedTab == 1
-                        ) {
-                            selectedTab = 1
-                        }
+                    Spacer(Modifier.height(24.dp))
+                    OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+                    Spacer(Modifier.height(24.dp))
+                    Row(Modifier.fillMaxWidth().height(48.dp)) {
+                        IncidentTabButton(Modifier.weight(1f), "Ngayon", selectedTab == 0) { selectedTab = 0 }
+                        IncidentTabButton(Modifier.weight(1f), "Kasaysayan", selectedTab == 1) { selectedTab = 1 }
                     }
-
-                    Spacer(
-                        modifier = Modifier.height(24.dp)
-                    )
-
+                    if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
+                    Spacer(Modifier.height(24.dp))
                     if (selectedTab == 0) {
-
-                        val incidents =
-                            state.activeIncidents.filter {
-                                it.title.contains(
-                                    searchQuery,
-                                    true
-                                ) ||
-                                        it.plateNumber.contains(
-                                            searchQuery,
-                                            true
-                                        ) ||
-                                        it.location.contains(
-                                            searchQuery,
-                                            true
-                                        )
-                            }
-
-                        if (incidents.isEmpty()) {
-                            Text(
-                                text =
-                                    "Walang bukas na insidente.",
-                                color = Color.Gray,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(48.dp)
-                            )
-                        } else {
-                            incidents.forEach { incident ->
-
-                                IncidentItemCard(
-                                    incident = incident,
-                                    onViewClick = {
-                                        selectedIncident =
-                                            incident
-                                    },
-                                    onMarkResolvedClick = {
-                                        viewModel.resolveIncident(
-                                            incident.id
-                                        )
-                                    }
-                                )
-
-                                Spacer(
-                                    modifier =
-                                        Modifier.height(12.dp)
-                                )
-                            }
+                        val incidents = state.activeIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
+                        if (incidents.isEmpty()) Text("Walang bukas na insidente.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
+                        else incidents.forEach { incident ->
+                            IncidentItemCard(incident, onViewClick = { selectedIncident = incident }, onMarkResolvedClick = { viewModel.resolveIncident(incident.id) })
+                            Spacer(Modifier.height(12.dp))
                         }
-
                     } else {
-
-                        val incidents =
-                            state.historyIncidents.filter {
-                                it.title.contains(
-                                    searchQuery,
-                                    true
-                                ) ||
-                                        it.plateNumber.contains(
-                                            searchQuery,
-                                            true
-                                        ) ||
-                                        it.location.contains(
-                                            searchQuery,
-                                            true
-                                        )
-                            }
-
-                        if (incidents.isEmpty()) {
-                            Text(
-                                text =
-                                    "Walang history ng insidente.",
-                                color = Color.Gray,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(48.dp)
-                            )
-                        } else {
-                            incidents.forEach { incident ->
-
-                                HistoryIncidentItemCard(
-                                    incident = incident,
-                                    onViewClick = {
-                                        selectedIncident =
-                                            incident
-                                    }
-                                )
-
-                                Spacer(
-                                    modifier =
-                                        Modifier.height(12.dp)
-                                )
-                            }
-                        }
+                        /*
+                         * "Kasaysayan" is the complete list, so an incident
+                         * that was made today is in the history as well.
+                         */
+                        val searched = state.allIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
+                        val incidents = filterHistoryRecords(searched, { it.date }, historyFilter)
+                        if (incidents.isEmpty()) Text("Walang record sa napiling filter.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
+                        else incidents.forEach { incident -> HistoryIncidentItemCard(incident) { selectedIncident = incident }; Spacer(Modifier.height(12.dp)) }
                     }
                 }
             }
         }
     }
-
-    selectedIncident?.let { incident ->
-
-        ModalBottomSheet(
-            onDismissRequest = {
-                selectedIncident = null
-            },
-            sheetState = sheetState,
-            containerColor = Color.White
-        ) {
-            IncidentDetailsContent(
-                incident = incident,
-                onCancel = {
-                    selectedIncident = null
-                },
-                onResolve = {
-
-                    viewModel.resolveIncident(
-                        incident.id
-                    )
-
-                    selectedIncident = null
-                }
-            )
-        }
-    }
+    selectedIncident?.let { incident -> ModalBottomSheet(onDismissRequest = { selectedIncident = null }, sheetState = sheetState, containerColor = Color.White) {
+        IncidentDetailsContent(incident, onCancel = { selectedIncident = null }, onResolve = { viewModel.resolveIncident(incident.id); selectedIncident = null })
+    } }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IncidentReportFormScreen(
-    onBack: () -> Unit,
-    viewModel: IncidentViewModel = hiltViewModel()
-) {
+fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
+    val driverOptions by viewModel.driverOptions.collectAsStateWithLifecycle()
+    var expandedDriver by remember { mutableStateOf(false) }
+    var selectedDriver by remember(driverOptions) { mutableStateOf(driverOptions.firstOrNull()) }
+    var incidentType by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var penalty by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var submitted by remember { mutableStateOf(false) }
 
-    val driverOptions by
-    viewModel.driverOptions
-        .collectAsStateWithLifecycle()
-
-    var expandedDriver by
-    remember { mutableStateOf(false) }
-
-    var selectedDriver by
-    remember(driverOptions) {
-        mutableStateOf(
-            driverOptions.firstOrNull()
-        )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }; Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+        Spacer(Modifier.height(24.dp)); Text("Plaka", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(expanded = expandedDriver, onExpandedChange = { if (!submitted && driverOptions.isNotEmpty()) expandedDriver = !expandedDriver }) {
+            OutlinedTextField(value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" } ?: "Walang rehistradong jeep", onValueChange = {}, readOnly = true, enabled = !submitted && driverOptions.isNotEmpty(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) }, modifier = Modifier.fillMaxWidth().menuAnchor())
+            ExposedDropdownMenu(expanded = expandedDriver, onDismissRequest = { expandedDriver = false }) { driverOptions.forEach { driver -> DropdownMenuItem(text = { Text("${driver.plateNumber} — ${driver.driverName}") }, onClick = { selectedDriver = driver; expandedDriver = false }) } }
+        }
+        if (driverOptions.isEmpty()) Text("Walang driver account na may plaka.", color = Color.Red, fontSize = 12.sp)
+        Spacer(Modifier.height(16.dp))
+        IncidentFormTextField("Uri ng Insidente", incidentType, { if (!submitted) incidentType = it }, "Ilagay ang uri ng insidente")
+        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Lokasyon", location, { if (!submitted) location = it }, "Ilagay ang lokasyon")
+        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { Text("₱") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        Spacer(Modifier.height(16.dp)); Text("Paglalarawan", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
+        OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
+        Spacer(Modifier.height(32.dp))
+        Row(Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).height(56.dp)) { Text("Kanselahin") }; Spacer(Modifier.width(16.dp))
+            Button(onClick = { if (!submitted && selectedDriver != null) { viewModel.reportIncident(selectedDriver!!.plateNumber, incidentType, location, penalty, description); submitted = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
+        }
+        if (submitted) { Spacer(Modifier.height(16.dp)); Text("Na-save ang report. Maaari mo nang isara ang form.", color = SuccessGreen, fontWeight = FontWeight.Medium) }
     }
+}
 
-    var incidentType by
-    remember { mutableStateOf("") }
+@Composable
+fun IncidentStatCard(modifier: Modifier = Modifier, title: String, value: String, icon: @Composable () -> Unit) {
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(16.dp)) { icon(); Spacer(Modifier.height(12.dp)); Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(title, fontSize = 12.sp, color = Color.Gray) } }
+}
 
-    var location by
-    remember { mutableStateOf("") }
-
-    var penalty by
-    remember { mutableStateOf("") }
-
-    var description by
-    remember { mutableStateOf("") }
-
-    var submitted by
-    remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(
-                rememberScrollState()
-            )
-            .padding(24.dp)
-    ) {
-
-        Row(
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            IconButton(
-                onClick = onBack
-            ) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Back"
-                )
-            }
-
-            Text(
-                text = "Mag-report ng Insidente",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
-
-        Text(
-            text = "Plaka",
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        ExposedDropdownMenuBox(
-            expanded = expandedDriver,
-            onExpandedChange = {
-
-                if (
-                    !submitted &&
-                    driverOptions.isNotEmpty()
-                ) {
-                    expandedDriver =
-                        !expandedDriver
-                }
-            }
-        ) {
-
-            OutlinedTextField(
-                value =
-                    selectedDriver?.let {
-                        "${it.plateNumber} — ${it.driverName}"
-                    }
-                        ?: "Walang rehistradong jeep",
-                onValueChange = {},
-                readOnly = true,
-                enabled =
-                    !submitted &&
-                            driverOptions.isNotEmpty(),
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults
-                        .TrailingIcon(
-                            expanded =
-                                expandedDriver
-                        )
-                },
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
-            )
-
-            ExposedDropdownMenu(
-                expanded =
-                    expandedDriver,
-                onDismissRequest = {
-                    expandedDriver = false
-                }
-            ) {
-
-                driverOptions.forEach { driver ->
-
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                "${driver.plateNumber} — ${driver.driverName}"
-                            )
-                        },
-                        onClick = {
-
-                            selectedDriver =
-                                driver
-
-                            expandedDriver =
-                                false
-                        }
-                    )
-                }
-            }
-        }
-
-        if (driverOptions.isEmpty()) {
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
-
-            Text(
-                text =
-                    "Walang driver account na may plaka.",
-                color = Color.Red,
-                fontSize = 12.sp
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        IncidentFormTextField(
-            label = "Uri ng Insidente",
-            value = incidentType,
-            onValueChange = {
-                if (!submitted) {
-                    incidentType = it
-                }
-            },
-            placeholder = "Ilagay ang uri ng insidente"
-        )
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        IncidentFormTextField(
-            label = "Lokasyon",
-            value = location,
-            onValueChange = {
-                if (!submitted) {
-                    location = it
-                }
-            },
-            placeholder = "Ilagay ang lokasyon"
-        )
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        IncidentFormTextField(
-            label = "Multa",
-            value = penalty,
-            onValueChange = {
-                if (
-                    !submitted &&
-                    (
-                            it.isEmpty() ||
-                                    it.all { char ->
-                                        char.isDigit()
-                                    }
-                            )
-                ) {
-                    penalty = it
-                }
-            },
-            placeholder = "0",
-            leadingIcon = {
-                Text("₱")
-            },
-            keyboardOptions =
-                KeyboardOptions(
-                    keyboardType =
-                        KeyboardType.Number
-                )
-        )
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        Text(
-            text = "Paglalarawan",
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        OutlinedTextField(
-            value = description,
-            onValueChange = {
-                if (!submitted) {
-                    description = it
-                }
-            },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(120.dp),
-            placeholder = {
-                Text(
-                    "Ilarawan ang nangyari..."
-                )
-            }
-        )
-
-        Spacer(
-            modifier = Modifier.height(32.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-
-            OutlinedButton(
-                onClick = onBack,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(56.dp)
-            ) {
-                Text("Kanselahin")
-            }
-
-            Spacer(
-                modifier = Modifier.width(16.dp)
-            )
-
-            Button(
-                onClick = {
-
-                    if (
-                        !submitted &&
-                        selectedDriver != null
-                    ) {
-
-                        viewModel.reportIncident(
-                            plateNumber =
-                                selectedDriver!!
-                                    .plateNumber,
-                            type = incidentType,
-                            location = location,
-                            penalty = penalty,
-                            description = description
-                        )
-
-                        submitted = true
-                    } else if (submitted) {
-                        onBack()
-                    }
-                },
-                enabled =
-                    selectedDriver != null &&
-                            driverOptions.isNotEmpty(),
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(56.dp),
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor =
-                            EnerjeepBlue
-                    )
-            ) {
-                Text(
-                    if (submitted)
-                        "Tapos"
-                    else
-                        "Ipasa"
-                )
-            }
-        }
-
-        if (submitted) {
-
-            Spacer(
-                modifier = Modifier.height(16.dp)
-            )
-
-            Text(
-                text =
-                    "Na-save ang report. Maaari mo nang isara ang form.",
-                color = SuccessGreen,
-                fontWeight = FontWeight.Medium
-            )
+@Composable
+fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkResolvedClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(20.dp)) {
+            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = Color.Gray); Text(incident.location, color = Color.Gray); Text(incident.date, color = Color.Gray, fontSize = 12.sp)
+            Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth()) { Button(onClick = onMarkResolvedClick, modifier = Modifier.weight(1f)) { Text("Markahin Bilang Tapos") }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) { Text("Tingnan") } }
         }
     }
 }
 
 @Composable
-fun IncidentStatCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    icon: @Composable () -> Unit
-) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            icon()
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            Text(
-                text = value,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                color = Color.Gray
-            )
+fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(20.dp)) {
+            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = Color.Gray); Text(incident.date, color = Color.Gray, fontSize = 12.sp)
+            Spacer(Modifier.height(12.dp))
+            // The history can hold an incident that is still open, so the
+            // badge follows the real status of the record.
+            val isResolved = incident.status == "Naayos"
+            StatusBadge(incident.status, if (isResolved) SuccessGreenLight else WarningOrangeLight, if (isResolved) SuccessGreen else WarningOrange)
+            Spacer(Modifier.height(12.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.fillMaxWidth()) { Text("Tingnan") }
         }
     }
 }
 
 @Composable
-fun IncidentItemCard(
-    incident: IncidentItem,
-    onViewClick: () -> Unit,
-    onMarkResolvedClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        shape = RoundedCornerShape(20.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-
-            Text(
-                text = incident.title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = incident.plateNumber,
-                color = Color.Gray
-            )
-
-            Text(
-                text = incident.location,
-                color = Color.Gray
-            )
-
-            Text(
-                text = incident.date,
-                color = Color.Gray,
-                fontSize = 12.sp
-            )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            StatusBadge(
-                text = incident.status,
-                backgroundColor = WarningOrangeLight,
-                textColor = WarningOrange
-            )
-
-            Spacer(
-                modifier = Modifier.height(16.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-
-                Button(
-                    onClick =
-                        onMarkResolvedClick,
-                    modifier =
-                        Modifier.weight(1f)
-                ) {
-                    Text("Markahin Bilang Tapos")
-                }
-
-                Spacer(
-                    modifier = Modifier.width(8.dp)
-                )
-
-                OutlinedButton(
-                    onClick =
-                        onViewClick,
-                    modifier =
-                        Modifier.weight(1f)
-                ) {
-                    Text("Tingnan")
-                }
-            }
-        }
+fun IncidentDetailsContent(incident: IncidentItem, onCancel: () -> Unit, onResolve: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(24.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
+        Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
+        IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
+        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara") }; Spacer(Modifier.width(12.dp)); Button(onClick = onResolve, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Markahang Naayos") } }
     }
 }
 
 @Composable
-fun HistoryIncidentItemCard(
-    incident: IncidentItem,
-    onViewClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        shape = RoundedCornerShape(20.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
+fun IncidentInfoRow(label: String, value: String) { Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) { Text(label, color = Color.Gray, fontSize = 12.sp); Text(value, fontWeight = FontWeight.Medium) } }
 
-            Text(
-                text = incident.title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = incident.plateNumber,
-                color = Color.Gray
-            )
-
-            Text(
-                text = incident.date,
-                color = Color.Gray,
-                fontSize = 12.sp
-            )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            StatusBadge(
-                text = incident.status,
-                backgroundColor = SuccessGreenLight,
-                textColor = SuccessGreen
-            )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            OutlinedButton(
-                onClick = onViewClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Tingnan")
-            }
-        }
-    }
+@Composable
+fun IncidentFormTextField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String, leadingIcon: (@Composable () -> Unit)? = null, keyboardOptions: KeyboardOptions = KeyboardOptions.Default) {
+    Text(label, fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp)); OutlinedTextField(value, onValueChange, placeholder = { Text(placeholder) }, leadingIcon = leadingIcon, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = keyboardOptions)
 }
 
 @Composable
-fun IncidentDetailsContent(
-    incident: IncidentItem,
-    onCancel: () -> Unit,
-    onResolve: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp)
-    ) {
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement =
-                Arrangement.SpaceBetween
-        ) {
-
-            Text(
-                text = "Detalye ng Insidente",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            IconButton(
-                onClick = onCancel
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Close"
-                )
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        Text(
-            text = incident.title,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        IncidentInfoRow(
-            "Plaka ng Sasakyan",
-            incident.plateNumber
-        )
-
-        IncidentInfoRow(
-            "Lokasyon",
-            incident.location
-        )
-
-        IncidentInfoRow(
-            "Petsa",
-            incident.date
-        )
-
-        IncidentInfoRow(
-            "Multa",
-            incident.penalty
-        )
-
-        IncidentInfoRow(
-            "Paglalarawan",
-            incident.description
-        )
-
-        IncidentInfoRow(
-            "Naipadala sa Driver",
-            incident.sentToDriver
-        )
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-
-            OutlinedButton(
-                onClick = onCancel,
-                modifier =
-                    Modifier.weight(1f)
-            ) {
-                Text("Isara")
-            }
-
-            Spacer(
-                modifier = Modifier.width(12.dp)
-            )
-
-            Button(
-                onClick = onResolve,
-                modifier =
-                    Modifier.weight(1f),
-                colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor =
-                            EnerjeepBlue
-                    )
-            ) {
-                Text("Markahang Naayos")
-            }
-        }
-    }
+fun IncidentTabButton(modifier: Modifier, text: String, selected: Boolean, onClick: () -> Unit) {
+    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (selected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) } }
 }
 
 @Composable
-fun IncidentInfoRow(
-    label: String,
-    value: String
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp)
-    ) {
-
-        Text(
-            text = label,
-            color = Color.Gray,
-            fontSize = 12.sp
-        )
-
-        Text(
-            text = value,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-fun IncidentFormTextField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    leadingIcon: @Composable (() -> Unit)? = null,
-    keyboardOptions: KeyboardOptions =
-        KeyboardOptions.Default
-) {
-
-    Text(
-        text = label,
-        fontWeight = FontWeight.Medium
-    )
-
-    Spacer(
-        modifier = Modifier.height(8.dp)
-    )
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = {
-            Text(placeholder)
-        },
-        leadingIcon = leadingIcon,
-        modifier =
-            Modifier.fillMaxWidth(),
-        singleLine = true,
-        keyboardOptions =
-            keyboardOptions
-    )
-}
-
-@Composable
-fun IncidentTabButton(
-    modifier: Modifier,
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier
-            .fillMaxHeight()
-            .padding(horizontal = 4.dp),
-        onClick = onClick,
-        colors =
-            CardDefaults.cardColors(
-                containerColor =
-                    if (selected)
-                        Color.White
-                    else
-                        Color.Transparent
-            ),
-        shape =
-            RoundedCornerShape(12.dp)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment =
-                Alignment.Center
-        ) {
-            Text(
-                text = text,
-                fontWeight =
-                    if (selected)
-                        FontWeight.Bold
-                    else
-                        FontWeight.Normal
-            )
-        }
-    }
-}
-
-@Composable
-fun StatusBadge(
-    text: String,
-    backgroundColor: Color,
-    textColor: Color
-) {
-    Surface(
-        color = backgroundColor,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Text(
-            text = text,
-            color = textColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            modifier =
-                Modifier.padding(
-                    horizontal = 12.dp,
-                    vertical = 4.dp
-                )
-        )
-    }
+fun StatusBadge(text: String, backgroundColor: Color, textColor: Color) {
+    Surface(color = backgroundColor, shape = RoundedCornerShape(12.dp)) { Text(text, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
 }

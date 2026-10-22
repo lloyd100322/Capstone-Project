@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
@@ -711,7 +712,7 @@ fun DriverEditProfileContent(
                 )
 
                 Text(
-                    text = "Emergency Contact",
+                    text = "Emergency Contact Name",
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
@@ -721,15 +722,46 @@ fun DriverEditProfileContent(
                 )
 
                 OutlinedTextField(
-                    value = uiState.emergencyContact,
+                    value = uiState.emergencyContactName,
                     onValueChange = {
-                        viewModel.updateEmergencyContact(
-                            it
+                        viewModel.updateEmergencyContactName(
+                            EmergencyContact.sanitizeName(it)
                         )
                     },
                     placeholder = {
                         Text(
-                            "Numero o pangalan"
+                            "Pangalan ng contact"
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
+
+                Text(
+                    text = "Emergency Contact Number",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+
+                OutlinedTextField(
+                    value = uiState.emergencyContactNumber,
+                    onValueChange = {
+                        viewModel.updateEmergencyContactNumber(
+                            EmergencyContact.sanitizeNumber(it)
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            "09XXXXXXXXX"
                         )
                     },
                     singleLine = true,

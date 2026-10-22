@@ -35,6 +35,16 @@ import com.mobile.enerjeep.ui.incident.IncidentScreen
 import com.mobile.enerjeep.ui.incident.IncidentReportFormScreen
 import com.mobile.enerjeep.ui.report.ReportScreen
 import com.mobile.enerjeep.ui.profile.ProfileScreen
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.mobile.enerjeep.ui.components.ToastFeedback
 
 enum class HomeTab {
     Home, Pila, Talaan, Insidente, MgaUlat, Profile
@@ -59,6 +69,12 @@ fun HomeScreen(
             .collectAsStateWithLifecycle()
 
         val totalJeeps by viewModel.totalJeepsCount
+            .collectAsStateWithLifecycle()
+
+        val totalSales by viewModel.totalSales
+            .collectAsStateWithLifecycle()
+
+        val openIncidentCount by viewModel.openIncidentCount
             .collectAsStateWithLifecycle()
 
         Scaffold(
@@ -186,6 +202,8 @@ fun HomeScreen(
                             firstName = userProfile?.firstName ?: "Admin",
                             activeJeeps = activeJeeps,
                             totalJeeps = totalJeeps,
+                            totalSales = totalSales,
+                            openIncidentCount = openIncidentCount,
 
                             // Changed: open Account Management first.
                             onCreateAccountClick = {
@@ -271,6 +289,8 @@ fun HomeContent(
     firstName: String,
     activeJeeps: Int,
     totalJeeps: Int,
+    totalSales: Double,
+    openIncidentCount: Int,
     onCreateAccountClick: () -> Unit,
     onTerminalFeeClick: () -> Unit,
     onReportIncidentClick: () -> Unit,
@@ -326,7 +346,7 @@ fun HomeContent(
             SummaryCard(
                 modifier = Modifier.weight(1f),
                 title = "Kabuuang Benta",
-                value = "₱0",
+                value = DashboardSummary.formatPeso(totalSales),
                 icon = {
                     SalesIcon(
                         modifier = Modifier.size(24.dp),
@@ -357,7 +377,7 @@ fun HomeContent(
         SummaryCard(
             modifier = Modifier.fillMaxWidth(0.5f),
             title = "Insidente",
-            value = "0",
+            value = openIncidentCount.toString(),
             icon = {
                 WarningIcon(
                     modifier = Modifier.size(24.dp),
@@ -624,9 +644,126 @@ fun EmergencyContactButton(
     bgColor: Color,
     textColor: Color
 ) {
+    val context = LocalContext.current
+
+    var pendingNumber by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    // Fallback: opens the phone dialer with the number already filled in.
+    // The user only has to press the green Call button.
+    fun openDialer(cleanNumber: String) {
+        try {
+            val intent = Intent(
+                Intent.ACTION_DIAL,
+                Uri.fromParts("tel", cleanNumber, null)
+            )
+
+            context.startActivity(intent)
+
+            ToastFeedback.show(
+                "Binuksan ang dialer para sa $cleanNumber. Pindutin ang Call."
+            )
+        } catch (e: ActivityNotFoundException) {
+            ToastFeedback.show(
+                "Walang available na phone dialer sa device."
+            )
+        } catch (e: Exception) {
+            ToastFeedback.show(
+                "Hindi mabuksan ang dialer."
+            )
+        }
+    }
+
+    fun startDirectCall(cleanNumber: String) {
+        try {
+            val intent = Intent(
+                Intent.ACTION_CALL,
+                Uri.fromParts("tel", cleanNumber, null)
+            )
+
+            context.startActivity(intent)
+
+            // Confirms that the call action was launched,
+            // not that the recipient answered.
+            ToastFeedback.show(
+                "Tumatawag sa $cleanNumber..."
+            )
+        } catch (e: Exception) {
+            // SecurityException (no CALL_PHONE permission),
+            // ActivityNotFoundException or any other failure:
+            // always fall back to the dialer so the person can
+            // still place the emergency call.
+            openDialer(cleanNumber)
+        }
+    }
+
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { granted ->
+
+            val requestedNumber = pendingNumber
+
+            if (requestedNumber != null) {
+                if (granted) {
+                    startDirectCall(requestedNumber)
+                } else {
+                    openDialer(requestedNumber)
+                }
+            }
+
+            pendingNumber = null
+        }
+
     Button(
         onClick = {
-            // Existing call action is not changed here.
+            val cleanNumber = number.filter {
+                it.isDigit() || it == '+'
+            }
+
+            if (cleanNumber.isBlank()) {
+                ToastFeedback.show(
+                    "Walang valid na contact number."
+                )
+                return@Button
+            }
+
+            // Android does not let a normal app place an emergency call with
+            // ACTION_CALL (the system swallows it for numbers such as 911),
+            // so the dialer never opened. For emergency numbers always use
+            // ACTION_DIAL: the dialer opens with the number filled in and the
+            // person presses Call. No CALL_PHONE permission is needed.
+            if (isEmergencyServiceNumber(cleanNumber)) {
+                openDialer(cleanNumber)
+                return@Button
+            }
+
+            val supportsTelephony =
+                context.packageManager.hasSystemFeature(
+                    PackageManager.FEATURE_TELEPHONY
+                )
+
+            if (!supportsTelephony) {
+                openDialer(cleanNumber)
+                return@Button
+            }
+
+            val hasPermission =
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.CALL_PHONE
+                ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasPermission) {
+                startDirectCall(cleanNumber)
+            } else {
+                pendingNumber = cleanNumber
+
+                permissionLauncher.launch(
+                    Manifest.permission.CALL_PHONE
+                )
+            }
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -635,14 +772,16 @@ fun EmergencyContactButton(
             containerColor = bgColor
         ),
         shape = RoundedCornerShape(16.dp),
-        contentPadding = PaddingValues(horizontal = 20.dp)
+        contentPadding = PaddingValues(
+            horizontal = 20.dp
+        )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                icon,
+                imageVector = icon,
                 contentDescription = null,
                 tint = textColor,
                 modifier = Modifier.size(24.dp)
@@ -667,3 +806,8 @@ fun EmergencyContactButton(
         }
     }
 }
+
+private val EMERGENCY_SERVICE_NUMBERS = setOf("911", "112", "117", "999")
+
+private fun isEmergencyServiceNumber(number: String): Boolean =
+    number in EMERGENCY_SERVICE_NUMBERS

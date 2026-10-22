@@ -5,8 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +33,8 @@ data class DriverProfileUiState(
     val phone: String = "",
     val licenseNumber: String = "",
     val plateNumber: String = "",
-    val emergencyContact: String = "",
+    val emergencyContactName: String = "",
+    val emergencyContactNumber: String = "",
     val oldPassword: String = "",
     val newPassword: String = "",
     val confirmPassword: String = ""
@@ -135,12 +139,37 @@ class DriverProfileViewModel @Inject constructor(
                                     .orEmpty()
                                     .uppercase(),
 
-                            emergencyContact =
-                                document
-                                    .getString(
-                                        "emergencyContact"
-                                    )
-                                    .orEmpty()
+                            emergencyContactName =
+                                readEmergencyContact(
+                                    document,
+                                    "emergencyContactName"
+                                )
+                                    .ifBlank {
+                                        // Older accounts only have the
+                                        // one combined value.
+                                        EmergencyContact
+                                            .splitLegacy(
+                                                document.getString(
+                                                    "emergencyContact"
+                                                )
+                                            )
+                                            .name
+                                    },
+
+                            emergencyContactNumber =
+                                readEmergencyContact(
+                                    document,
+                                    "emergencyContactNumber"
+                                )
+                                    .ifBlank {
+                                        EmergencyContact
+                                            .splitLegacy(
+                                                document.getString(
+                                                    "emergencyContact"
+                                                )
+                                            )
+                                            .number
+                                    }
                         )
                 }
     }
@@ -207,12 +236,21 @@ class DriverProfileViewModel @Inject constructor(
             )
     }
 
-    fun updateEmergencyContact(
+    fun updateEmergencyContactName(
         value: String
     ) {
         _uiState.value =
             _uiState.value.copy(
-                emergencyContact = value
+                emergencyContactName = value
+            )
+    }
+
+    fun updateEmergencyContactNumber(
+        value: String
+    ) {
+        _uiState.value =
+            _uiState.value.copy(
+                emergencyContactNumber = value
             )
     }
 
@@ -278,6 +316,42 @@ class DriverProfileViewModel @Inject constructor(
                 .trim()
                 .uppercase()
 
+        // The plate number, the license number and the emergency contact
+        // are checked before anything is saved.
+        PhilippineIdentifiers.plateNumberError(cleanPlate)
+            ?.let { error ->
+                ToastFeedback.show(error)
+                return
+            }
+
+        PhilippineIdentifiers.licenseNumberError(state.licenseNumber.trim())
+            ?.let { error ->
+                ToastFeedback.show(error)
+                return
+            }
+
+        val cleanEmergencyName =
+            state.emergencyContactName.trim()
+
+        val cleanEmergencyNumber =
+            state.emergencyContactNumber.trim()
+
+        if (!EmergencyContact.isValidName(cleanEmergencyName)) {
+            ToastFeedback.show(
+                "Ang pangalan ng emergency contact ay kailangan at " +
+                        "dapat hanggang 50 karakter."
+            )
+            return
+        }
+
+        if (!EmergencyContact.isValidNumber(cleanEmergencyNumber)) {
+            ToastFeedback.show(
+                "Ang numero ng emergency contact ay dapat valid na " +
+                        "telepono (09XXXXXXXXX o +639XXXXXXXXX)."
+            )
+            return
+        }
+
         viewModelScope.launch {
 
             try {
@@ -307,7 +381,10 @@ class DriverProfileViewModel @Inject constructor(
                     state.licenseNumber.trim()
 
                 val cleanEmergency =
-                    state.emergencyContact.trim()
+                    EmergencyContact.combine(
+                        cleanEmergencyName,
+                        cleanEmergencyNumber
+                    )
 
                 if (newPhone != currentPhone) {
 
@@ -353,6 +430,12 @@ class DriverProfileViewModel @Inject constructor(
 
                             "emergencyContact" to
                                     cleanEmergency,
+
+                            "emergencyContactName" to
+                                    cleanEmergencyName,
+
+                            "emergencyContactNumber" to
+                                    cleanEmergencyNumber,
 
                             "updatedAt" to
                                     FieldValue
@@ -427,12 +510,35 @@ class DriverProfileViewModel @Inject constructor(
                                                     .orEmpty()
                                                     .uppercase(),
 
-                                            emergencyContact =
-                                                document
-                                                    .getString(
-                                                        "emergencyContact"
-                                                    )
-                                                    .orEmpty()
+                                            emergencyContactName =
+                                                readEmergencyContact(
+                                                    document,
+                                                    "emergencyContactName"
+                                                )
+                                                    .ifBlank {
+                                                        EmergencyContact
+                                                            .splitLegacy(
+                                                                document.getString(
+                                                                    "emergencyContact"
+                                                                )
+                                                            )
+                                                            .name
+                                                    },
+
+                                            emergencyContactNumber =
+                                                readEmergencyContact(
+                                                    document,
+                                                    "emergencyContactNumber"
+                                                )
+                                                    .ifBlank {
+                                                        EmergencyContact
+                                                            .splitLegacy(
+                                                                document.getString(
+                                                                    "emergencyContact"
+                                                                )
+                                                            )
+                                                            .number
+                                                    }
                                         )
                                 }
                             }
@@ -459,6 +565,12 @@ class DriverProfileViewModel @Inject constructor(
 
                                 "emergencyContact" to
                                         cleanEmergency,
+
+                                "emergencyContactName" to
+                                        cleanEmergencyName,
+
+                                "emergencyContactNumber" to
+                                        cleanEmergencyNumber,
 
                                 "updatedAt" to
                                         FieldValue
@@ -577,11 +689,24 @@ class DriverProfileViewModel @Inject constructor(
         val state =
             _uiState.value
 
-        if (
-            state.newPassword.isBlank() ||
-            state.newPassword !=
-            state.confirmPassword
-        ) {
+        if (state.oldPassword.isBlank()) {
+            ToastFeedback.show(
+                "Ilagay ang kasalukuyang password."
+            )
+            return
+        }
+
+        if (state.newPassword.length < 6) {
+            ToastFeedback.show(
+                "Dapat hindi bababa sa 6 na karakter ang bagong password."
+            )
+            return
+        }
+
+        if (state.newPassword != state.confirmPassword) {
+            ToastFeedback.show(
+                "Hindi magkapareho ang bagong password at kumpirmasyon."
+            )
             return
         }
 
@@ -603,6 +728,9 @@ class DriverProfileViewModel @Inject constructor(
                         "password"
                     ) != state.oldPassword
                 ) {
+                    ToastFeedback.show(
+                        "Mali ang kasalukuyang password."
+                    )
                     return@launch
                 }
 
@@ -637,8 +765,14 @@ class DriverProfileViewModel @Inject constructor(
                         confirmPassword = ""
                     )
 
-            } catch (_: Exception) {
-                // Keep existing silent-error behavior.
+                ToastFeedback.show(
+                    "Matagumpay na napalitan ang password."
+                )
+
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi ma-update ang password."
+                )
             }
         }
     }
@@ -647,4 +781,18 @@ class DriverProfileViewModel @Inject constructor(
         listener?.remove()
         super.onCleared()
     }
+}
+
+/**
+ * Reads one of the two emergency contact fields. Older accounts do not
+ * have these fields yet, so the value is simply empty and the caller
+ * falls back to the old combined value.
+ */
+private fun readEmergencyContact(
+    document: com.google.firebase.firestore.DocumentSnapshot,
+    fieldName: String
+): String {
+    return document.getString(fieldName)
+        ?.trim()
+        .orEmpty()
 }

@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.data.FirestoreIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,7 +55,10 @@ data class ReportMultiyaItem(
     val plateNumber: String,
     val driverName: String,
     val date: String,
-    val amount: Double
+    val amount: Double,
+    // When the record was saved. Used to split "Ngayon" from the history
+    // and to spot a fine that is written in two collections.
+    val createdAtMillis: Long = 0L
 )
 
 data class DonasyonItem(
@@ -76,13 +80,23 @@ sealed interface ReportUiState {
         val historyData: List<IncomeHistory>,
         val currentIncidents: List<ReportIncidentItem>,
         val historyIncidents: List<ReportIncidentItem>,
+        // Every incident, open and already resolved. The "Kasaysayan" tab
+        // shows this list, so an incident that was made today is written
+        // in the history as well.
+        val allIncidents: List<ReportIncidentItem>,
         val totalIncidentPenalty: Double,
         val currentMultiya: List<ReportMultiyaItem>,
         val historyMultiya: List<ReportMultiyaItem>,
+        // Every fine. The "Kasaysayan" tab shows this list, so a fine that
+        // was made today is written in the history as well.
+        val allMultiya: List<ReportMultiyaItem>,
         val multiyaNgayon: Double,
         val kabuuangMultiya: Double,
         val currentDonasyon: List<DonasyonItem>,
         val historyDonasyon: List<DonasyonItem>,
+        // Every donation. The "Kasaysayan" tab shows this list, so a
+        // donation that was made today is written in the history as well.
+        val allDonasyon: List<DonasyonItem>,
         val donasyonNgayon: Double,
         val kabuuangDonasyon: Double
     ) : ReportUiState
@@ -397,6 +411,12 @@ class ReportViewModel @Inject constructor(
          * -----------------------------
          */
 
+        val allIncidents =
+            incidentDocs
+                .map(
+                    ::mapReportIncident
+                )
+
         val currentIncidents =
             incidentDocs
                 .filterNot(
@@ -428,52 +448,69 @@ class ReportViewModel @Inject constructor(
          * -----------------------------
          *
          * "Ngayon" means today's records.
+         *
+         * A fine can be saved in two places in this app. The "kita"
+         * collection keeps records entered with the "Add collection"
+         * button (type = "Multa"); the "ledger" collection is the source
+         * of truth for dispatch earnings, so the ledger also holds a
+         * row when the fee type is "Multa". Both rows describe the same
+         * fine and both must be counted once.
          */
-        val multiyaAll =
-            kitaDocs.filter {
-                it.getString(
-                    "type"
-                )?.equals(
-                    "Multiya",
-                    ignoreCase = true
-                ) == true
-            }
-
-        val currentMultiya =
-            multiyaAll
+        val kitaMultiya =
+            kitaDocs
                 .filter {
-                    isTodayDocument(it)
+                    MultiyaReport.isKitaMultiya(
+                        it.getString("type")
+                    )
                 }
                 .map(
                     ::mapReportMultiya
                 )
 
-        val historyMultiya =
-            multiyaAll
+        // Fines written through the "ledger" collection. Only the
+        // feeType matters, so a terminal fee or a dispatch earning is
+        // never counted as a fine.
+        val ledgerMultiya =
+            ledgerDocs
                 .filter {
-                    !isTodayDocument(it)
+                    MultiyaReport.isLedgerMultiya(
+                        it.getString("feeType")
+                    )
                 }
                 .map(
                     ::mapReportMultiya
                 )
+
+        // A fine that is written in both collections is only counted once.
+        val multiyaSummary =
+            MultiyaReport.build(
+                kitaMultiya,
+                ledgerMultiya
+            )
+
+        val currentMultiya = multiyaSummary.current
+
+        val historyMultiya = multiyaSummary.history
+
+        val allMultiya = multiyaSummary.all
 
         val multiyaNgayon =
-            currentMultiya.sumOf {
-                it.amount
-            }
+            multiyaSummary.currentTotal
 
         val kabuuangMultiya =
-            multiyaAll.sumOf {
-                it.getDouble(
-                    "amount"
-                ) ?: 0.0
-            }
+            multiyaSummary.total
 
         /*
          * -----------------------------
          * DONATION REPORT
          * -----------------------------
          */
+
+        val allDonasyon =
+            donationDocs
+                .map(
+                    ::mapDonation
+                )
 
         val currentDonasyon =
             donationDocs
@@ -523,6 +560,9 @@ class ReportViewModel @Inject constructor(
                 historyIncidents =
                     historyIncidents,
 
+                allIncidents =
+                    allIncidents,
+
                 totalIncidentPenalty =
                     totalIncidentPenalty,
 
@@ -531,6 +571,9 @@ class ReportViewModel @Inject constructor(
 
                 historyMultiya =
                     historyMultiya,
+
+                allMultiya =
+                    allMultiya,
 
                 multiyaNgayon =
                     multiyaNgayon,
@@ -543,6 +586,9 @@ class ReportViewModel @Inject constructor(
 
                 historyDonasyon =
                     historyDonasyon,
+
+                allDonasyon =
+                    allDonasyon,
 
                 donasyonNgayon =
                     donasyonNgayon,
@@ -684,16 +730,25 @@ class ReportViewModel @Inject constructor(
                     .getString(
                         "date"
                     )
+                    ?.takeIf { it.isNotBlank() }
                     ?: formatDate(
                         document
                     ),
 
             amount =
+                (
+                        document.get("amount")
+                            as? Number
+                        )
+                    ?.toDouble()
+                    ?: 0.0,
+
+            createdAtMillis =
                 document
-                    .getDouble(
-                        "amount"
-                    )
-                    ?: 0.0
+                    .safeTimestamp("createdAt")
+                    ?.toDate()
+                    ?.time
+                    ?: 0L
         )
     }
 
@@ -766,7 +821,7 @@ class ReportViewModel @Inject constructor(
     ): Boolean {
 
         val timestamp =
-            document.getTimestamp(
+            document.safeTimestamp(
                 "createdAt"
             )
 
@@ -855,7 +910,7 @@ class ReportViewModel @Inject constructor(
     ): Long {
 
         return document
-            .getTimestamp(
+            .safeTimestamp(
                 "createdAt"
             )
             ?.seconds
@@ -867,7 +922,7 @@ class ReportViewModel @Inject constructor(
     ): String {
 
         val timestamp =
-            document.getTimestamp(
+            document.safeTimestamp(
                 "createdAt"
             )
 
@@ -960,7 +1015,7 @@ class ReportViewModel @Inject constructor(
     ): String {
 
         return document
-            .getTimestamp(
+            .safeTimestamp(
                 "createdAt"
             )
             ?.toDate()

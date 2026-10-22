@@ -1,7 +1,10 @@
+
 package com.mobile.enerjeep.ui.login
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,7 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -25,16 +28,13 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.MainActivity
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.res.painterResource
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.navigation.AppNavigator
+import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
-import com.mobile.enerjeep.ui.theme.EnerjeepTheme
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
-import com.mobile.enerjeep.navigation.Screen
+import kotlinx.coroutines.delay
 
 @Composable
 fun LoginScreen(
@@ -61,12 +61,63 @@ fun LoginScreen(
         mutableStateOf("")
     }
 
+    var resendCooldownSeconds by remember {
+        mutableIntStateOf(0)
+    }
+
+    /*
+     * Keep the OTP screen visible during verification,
+     * resend requests, and OTP-related errors.
+     */
+    val isOtpStage = when (uiState) {
+        LoginUiState.CodeSent,
+        LoginUiState.ResendingOtp,
+        LoginUiState.VerifyingOtp -> true
+
+        is LoginUiState.OtpError -> true
+
+        else -> false
+    }
+
+    /*
+     * Handle successful login and start the resend countdown
+     * after Firebase confirms that the OTP was sent.
+     */
     LaunchedEffect(uiState) {
-        if (uiState is LoginUiState.Success) {
-            onLoginSuccess()
-            viewModel.resetState()
+        when (uiState) {
+            LoginUiState.CodeSent -> {
+                resendCooldownSeconds = 30
+            }
+
+            LoginUiState.Success -> {
+                onLoginSuccess()
+                viewModel.resetState()
+            }
+
+            else -> Unit
         }
     }
+
+    /*
+     * Update the resend countdown without blocking the UI.
+     */
+    LaunchedEffect(resendCooldownSeconds) {
+        if (resendCooldownSeconds > 0) {
+            delay(1000L)
+            resendCooldownSeconds -= 1
+        }
+    }
+
+    val errorMessage = when (val state = uiState) {
+        is LoginUiState.Error -> state.message
+        is LoginUiState.OtpError -> state.message
+        else -> null
+    }
+
+    val isBusy =
+        uiState is LoginUiState.Loading ||
+                uiState is LoginUiState.ResendingOtp ||
+                uiState is LoginUiState.VerifyingOtp
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -126,11 +177,11 @@ fun LoginScreen(
                 ) {
 
                     Text(
-                        text =
-                            if (uiState is LoginUiState.CodeSent)
-                                "I-verify ang Numero"
-                            else
-                                "Mag-sign In",
+                        text = if (isOtpStage) {
+                            "I-verify ang Numero"
+                        } else {
+                            "Mag-sign In"
+                        },
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.Black
@@ -140,7 +191,9 @@ fun LoginScreen(
                         modifier = Modifier.height(24.dp)
                     )
 
-                    if (uiState !is LoginUiState.CodeSent) {
+                    if (!isOtpStage) {
+
+                        // PHONE NUMBER
 
                         Text(
                             text = "Numero ng Telepono",
@@ -163,8 +216,7 @@ fun LoginScreen(
                                     RoundedCornerShape(12.dp)
                                 )
                                 .padding(horizontal = 16.dp),
-                            verticalAlignment =
-                                Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
 
                             Text(
@@ -178,18 +230,14 @@ fun LoginScreen(
                                     .padding(horizontal = 12.dp)
                                     .height(24.dp)
                                     .width(1.dp)
-                                    .background(
-                                        FieldBorderColor
-                                    )
+                                    .background(FieldBorderColor)
                             )
 
                             TextField(
                                 value = phoneNumber,
                                 onValueChange = { input ->
                                     phoneNumber = input
-                                        .filter {
-                                            it.isDigit()
-                                        }
+                                        .filter { it.isDigit() }
                                         .take(10)
                                 },
                                 placeholder = {
@@ -199,31 +247,26 @@ fun LoginScreen(
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                colors =
-                                    TextFieldDefaults.colors(
-                                        focusedContainerColor =
-                                            Color.Transparent,
-                                        unfocusedContainerColor =
-                                            Color.Transparent,
-                                        disabledContainerColor =
-                                            Color.Transparent,
-                                        focusedIndicatorColor =
-                                            Color.Transparent,
-                                        unfocusedIndicatorColor =
-                                            Color.Transparent
-                                    ),
-                                keyboardOptions =
-                                    KeyboardOptions(
-                                        keyboardType =
-                                            KeyboardType.Phone
-                                    ),
-                                singleLine = true
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    disabledContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                ),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Phone
+                                ),
+                                singleLine = true,
+                                enabled = !isBusy
                             )
                         }
 
                         Spacer(
                             modifier = Modifier.height(20.dp)
                         )
+
+                        // PASSWORD
 
                         Text(
                             text = "Password",
@@ -246,38 +289,41 @@ fun LoginScreen(
                             trailingIcon = {
                                 IconButton(
                                     onClick = {
-                                        passwordVisible =
-                                            !passwordVisible
+                                        passwordVisible = !passwordVisible
                                     }
                                 ) {
                                     Icon(
-                                        imageVector =
-                                            if (passwordVisible)
-                                                Icons.Default.Visibility
-                                            else
-                                                Icons.Default.VisibilityOff,
-                                        contentDescription = null
+                                        imageVector = if (passwordVisible) {
+                                            Icons.Default.Visibility
+                                        } else {
+                                            Icons.Default.VisibilityOff
+                                        },
+                                        contentDescription = if (passwordVisible) {
+                                            "Hide password"
+                                        } else {
+                                            "Show password"
+                                        }
                                     )
                                 }
                             },
-                            visualTransformation =
-                                if (passwordVisible)
-                                    VisualTransformation.None
-                                else
-                                    PasswordVisualTransformation(),
-                            keyboardOptions =
-                                KeyboardOptions(
-                                    keyboardType =
-                                        KeyboardType.Password
-                                ),
+                            visualTransformation = if (passwordVisible) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password
+                            ),
                             singleLine = true,
-                            colors =
-                                OutlinedTextFieldDefaults.colors(
-                                    unfocusedBorderColor =
-                                        FieldBorderColor,
-                                    focusedBorderColor =
-                                        EnerjeepBlue
-                                )
+                            enabled = !isBusy,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = FieldBorderColor,
+                                focusedBorderColor = EnerjeepBlue
+                            )
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(8.dp)
                         )
 
                         Text(
@@ -285,7 +331,9 @@ fun LoginScreen(
                             color = EnerjeepBlue,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable {
+                            modifier = Modifier.clickable(
+                                enabled = !isBusy
+                            ) {
                                 appNavigator.navigateTo(
                                     Screen.ResetPassword
                                 )
@@ -293,6 +341,8 @@ fun LoginScreen(
                         )
 
                     } else {
+
+                        // OTP VERIFICATION
 
                         Text(
                             text = "Ilagay ang SMS Code",
@@ -309,9 +359,7 @@ fun LoginScreen(
                             value = otpCode,
                             onValueChange = { input ->
                                 otpCode = input
-                                    .filter {
-                                        it.isDigit()
-                                    }
+                                    .filter { it.isDigit() }
                                     .take(6)
                             },
                             placeholder = {
@@ -322,19 +370,15 @@ fun LoginScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            keyboardOptions =
-                                KeyboardOptions(
-                                    keyboardType =
-                                        KeyboardType.Number
-                                ),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number
+                            ),
                             singleLine = true,
-                            colors =
-                                OutlinedTextFieldDefaults.colors(
-                                    unfocusedBorderColor =
-                                        FieldBorderColor,
-                                    focusedBorderColor =
-                                        EnerjeepBlue
-                                )
+                            enabled = !isBusy,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = FieldBorderColor,
+                                focusedBorderColor = EnerjeepBlue
+                            )
                         )
 
                         Spacer(
@@ -343,15 +387,32 @@ fun LoginScreen(
 
                         TextButton(
                             onClick = {
-                                viewModel.resetState()
+                                viewModel.resendVerificationCode(activity)
                             },
-                            contentPadding =
-                                PaddingValues(0.dp)
+                            enabled =
+                                resendCooldownSeconds == 0 &&
+                                        !isBusy,
+                            contentPadding = PaddingValues(0.dp)
                         ) {
                             Text(
-                                text = "Palitan ang numero",
+                                text = if (
+                                    uiState is LoginUiState.ResendingOtp
+                                ) {
+                                    "Nagpapadala ng OTP..."
+                                } else {
+                                    "Ipadala muli ang OTP"
+                                },
                                 color = EnerjeepBlue,
                                 fontSize = 14.sp
+                            )
+                        }
+
+                        if (resendCooldownSeconds > 0) {
+                            Text(
+                                text = "Maaari muling magpadala sa " +
+                                        "${resendCooldownSeconds}s",
+                                color = Color.Gray,
+                                fontSize = 12.sp
                             )
                         }
                     }
@@ -360,29 +421,25 @@ fun LoginScreen(
                         modifier = Modifier.height(24.dp)
                     )
 
-                    if (uiState is LoginUiState.Error) {
+                    // ERROR MESSAGE
+
+                    errorMessage?.let { message ->
                         Text(
-                            text =
-                                (uiState as LoginUiState.Error)
-                                    .message,
+                            text = message,
                             color = Color.Red,
                             fontSize = 14.sp,
-                            modifier =
-                                Modifier.padding(
-                                    bottom = 16.dp
-                                )
+                            modifier = Modifier.padding(
+                                bottom = 16.dp
+                            )
                         )
                     }
 
+                    // LOGIN / VERIFY BUTTON
+
                     Button(
                         onClick = {
-                            if (
-                                uiState is
-                                        LoginUiState.CodeSent
-                            ) {
-                                viewModel.verifyOtp(
-                                    otpCode
-                                )
+                            if (isOtpStage) {
+                                viewModel.verifyOtp(otpCode)
                             } else {
                                 viewModel.sendVerificationCode(
                                     "+63$phoneNumber",
@@ -394,38 +451,25 @@ fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        enabled =
-                            uiState !is
-                                    LoginUiState.Loading,
+                        enabled = !isBusy,
                         shape = RoundedCornerShape(24.dp),
-                        colors =
-                            ButtonDefaults.buttonColors(
-                                containerColor =
-                                    EnerjeepBlue
-                            )
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = EnerjeepBlue
+                        )
                     ) {
-                        if (
-                            uiState is
-                                    LoginUiState.Loading
-                        ) {
+                        if (isBusy) {
                             CircularProgressIndicator(
-                                modifier =
-                                    Modifier.size(
-                                        24.dp
-                                    ),
+                                modifier = Modifier.size(24.dp),
                                 color = Color.White,
                                 strokeWidth = 2.dp
                             )
                         } else {
                             Text(
-                                text =
-                                    if (
-                                        uiState is
-                                                LoginUiState.CodeSent
-                                    )
-                                        "I-verify ang Code"
-                                    else
-                                        "Mag-login",
+                                text = if (isOtpStage) {
+                                    "I-verify ang Code"
+                                } else {
+                                    "Mag-login"
+                                },
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
