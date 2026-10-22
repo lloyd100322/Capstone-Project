@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
 
@@ -47,7 +48,7 @@ fun QueueScreen(
 
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableStateOf(0) } // 0: Kasalukuyan, 1: Kasaysayan
+    var selectedTab by remember { mutableStateOf(0) } // 0: Ngayon (aktibong pila), 1: Kasaysayan
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
 
     // Instead of just a boolean, hold the actual vehicle being dispatched so the modal knows what to show
@@ -146,16 +147,25 @@ fun QueueScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Dynamic Lists
+                    // Dynamic Lists (filtered by the search bar: plaka o driver)
+                    val searchMatches = { plate: String, driver: String ->
+                        searchQuery.isBlank() ||
+                                plate.contains(searchQuery, ignoreCase = true) ||
+                                driver.contains(searchQuery, ignoreCase = true)
+                    }
                     if (selectedTab == 0) {
-                        if (state.activeQueue.isEmpty()) {
+                        val searchedQueue = state.activeQueue.filter { vehicle ->
+                            searchMatches(vehicle.plateNumber, vehicle.driverName)
+                        }
+                        if (searchedQueue.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                                 Text("Walang sasakyan sa pila.", color = Color.Gray)
                             }
                         } else {
-                            state.activeQueue.forEach { vehicle ->
+                            searchedQueue.forEachIndexed { index, vehicle ->
                                 QueueItem(
                                     vehicle = vehicle,
+                                    displayPosition = index + 1,
                                     onDispatchClick = { vehicleToDispatch = vehicle },
                                     onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
                                     onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) }
@@ -167,7 +177,14 @@ fun QueueScreen(
                         HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        val filteredHistory = filterHistoryRecords(state.historyQueue, { it.time }, historyFilter)
+                        val filteredHistory = filterHistoryRecords(
+                            state.historyQueue.filter { history ->
+                                searchMatches(history.plateNumber, history.driverName)
+                            },
+                            { it.time },
+                            historyFilter,
+                            { it.createdAtMillis.takeIf { millis -> millis > 0 } }
+                        )
 
                         if (filteredHistory.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -248,6 +265,7 @@ fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, 
 @Composable
 fun QueueItem(
     vehicle: QueueVehicle,
+    displayPosition: Int,
     onDispatchClick: () -> Unit,
     onPositionUpdate: (Int) -> Unit,
     onCancelClick: () -> Unit
@@ -260,7 +278,7 @@ fun QueueItem(
         AlertDialog(
             onDismissRequest = { showCancelConfirm = false },
             title = { Text("Kanselahin ang pila?") },
-            text = { Text("Aalisin ang ${vehicle.plateNumber} sa pila at ililipat sa kasaysayan bilang Nakansela.") },
+            text = { Text("Mananatili sa pila ang ${vehicle.plateNumber} bilang \"Nakansela\" at ilalagay sa pinakadulo. Maaari pa itong i-dispatch mamaya.") },
             confirmButton = {
                 TextButton(onClick = {
                     showCancelConfirm = false
@@ -274,8 +292,9 @@ fun QueueItem(
     }
 
     // Resolve UI colors based on ViewModel status string
-    val (statusBg, statusColor) = when (vehicle.status.lowercase()) {
-        "nakapila" -> Pair(WarningOrangeLight, WarningOrange)
+    val (statusBg, statusColor) = when {
+        vehicle.isCancelled -> Pair(ErrorRedLight, ErrorRed)
+        vehicle.status.lowercase() == "nakapila" -> Pair(WarningOrangeLight, WarningOrange)
         else -> Pair(SuccessGreenLight, SuccessGreen)
     }
 
@@ -288,7 +307,7 @@ fun QueueItem(
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(modifier = Modifier.size(40.dp), shape = RoundedCornerShape(12.dp), color = EnerjeepBlue) {
-                    Box(contentAlignment = Alignment.Center) { Text(text = vehicle.position.toString(), color = Color.White, fontWeight = FontWeight.Bold) }
+                    Box(contentAlignment = Alignment.Center) { Text(text = displayPosition.toString(), color = Color.White, fontWeight = FontWeight.Bold) }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -297,11 +316,11 @@ fun QueueItem(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(text = vehicle.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(modifier = Modifier.weight(1f))
-                        StatusBadge(text = vehicle.status, backgroundColor = statusBg, textColor = statusColor)
+                        StatusBadge(text = if (vehicle.isCancelled) "Nakansela" else vehicle.status, backgroundColor = statusBg, textColor = statusColor)
                     }
                     Text(text = vehicle.driverName, fontSize = 14.sp, color = Color.Gray)
                     Text(text = vehicle.route, fontSize = 12.sp, color = Color.Gray)
-                    Text(text = "Posisyon #${vehicle.position} • Sumali: ${vehicle.time}", fontSize = 12.sp, color = Color.Gray)
+                    Text(text = "Posisyon #${displayPosition} • Sumali: ${vehicle.time}", fontSize = 12.sp, color = Color.Gray)
                 }
             }
 
@@ -405,8 +424,8 @@ fun QueueItem(
                     ActionButton(
                         icon = { ArrowUpIcon(modifier = Modifier.size(16.dp)) },
                         onClick = {
-                            if (vehicle.position > 1) {
-                                onPositionUpdate(vehicle.position - 1)
+                            if (displayPosition > 1) {
+                                onPositionUpdate(displayPosition - 1)
                             }
                         }
                     )
@@ -415,7 +434,7 @@ fun QueueItem(
                     ActionButton(
                         icon = { ArrowDownIcon(modifier = Modifier.size(16.dp)) },
                         onClick = {
-                            onPositionUpdate(vehicle.position + 1)
+                            onPositionUpdate(displayPosition + 1)
                         }
                     )
                 }
@@ -530,7 +549,7 @@ fun DispatchCollectionContent(
             value = income,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) income = it },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Text("₱", modifier = Modifier.padding(start = 12.dp), color = Color.Gray) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp).size(18.dp), color = Color.Gray) },
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)
@@ -544,7 +563,7 @@ fun DispatchCollectionContent(
             value = otherFees,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) otherFees = it },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Text("₱", modifier = Modifier.padding(start = 12.dp), color = Color.Gray) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp).size(18.dp), color = Color.Gray) },
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)

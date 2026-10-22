@@ -54,7 +54,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(24.dp))
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(20.dp)) {
-                Text("Netong Kita Buwan na To", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
+                Text(if (isHistory) "Netong Kita sa Kasaysayan" else "Netong Kita Ngayon", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
                 Spacer(Modifier.height(4.dp))
                 Text("₱${String.format("%,.0f", uiState.netEarnings)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
@@ -69,7 +69,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         }
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            KitaTabButton(Modifier.weight(1f), "Kasalukuyan", uiState.selectedTab == KitaTabType.KASALUKUYAN) { viewModel.onTabSelected(KitaTabType.KASALUKUYAN) }
+            KitaTabButton(Modifier.weight(1f), "Ngayon", uiState.selectedTab == KitaTabType.NGAYON) { viewModel.onTabSelected(KitaTabType.NGAYON) }
             KitaTabButton(Modifier.weight(1f), "Kasaysayan", isHistory) { viewModel.onTabSelected(KitaTabType.KASAYSAYAN) }
         }
         if (isHistory) {
@@ -88,7 +88,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(16.dp))
         if (visibleRecords.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text(if (!isHistory) "Wala pang kita buwan na to." else "Walang record sa napiling filter.", color = Color.Gray, fontSize = 14.sp)
+                Text(if (!isHistory) "Wala pang kita ngayon." else "Walang record sa napiling filter.", color = Color.Gray, fontSize = 14.sp)
             }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {

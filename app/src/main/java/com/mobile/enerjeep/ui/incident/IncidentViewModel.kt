@@ -31,7 +31,8 @@ data class IncidentItem(
     val penalty: String,
     val description: String,
     val sentToDriver: String = "Oo",
-    val status: String = "Bukas"
+    val status: String = "Bukas",
+    val createdAtMillis: Long = 0L
 )
 
 data class IncidentDriverOption(
@@ -46,9 +47,9 @@ sealed interface IncidentUiState {
     data class Success(
         val activeIncidents: List<IncidentItem>,
         val historyIncidents: List<IncidentItem>,
-        // Every incident, open and already resolved. The "Kasaysayan" tab
-        // shows this list, so an incident that was made today is written
-        // in the history as well.
+        // Every incident, open and already resolved. The "Naayos" tab
+        // shows only the resolved ones (historyIncidents), so an incident
+        // that was made today is written in the history as well.
         val allIncidents: List<IncidentItem>,
         val openCount: Int,
         val resolvedCount: Int
@@ -131,7 +132,12 @@ class IncidentViewModel @Inject constructor(
                                 mapIncident(
                                     document.id,
                                     document.data
-                                        ?: emptyMap()
+                                        ?: emptyMap(),
+                                    document
+                                        .safeTimestamp("createdAt")
+                                        ?.toDate()
+                                        ?.time
+                                        ?: 0L
                                 )
 
                             val resolved =
@@ -449,7 +455,8 @@ class IncidentViewModel @Inject constructor(
 
     private fun mapIncident(
         id: String,
-        data: Map<String, Any>
+        data: Map<String, Any>,
+        createdAtMillis: Long = 0L
     ): IncidentItem {
 
         val driverName =
@@ -520,7 +527,9 @@ class IncidentViewModel @Inject constructor(
                     "Naayos"
                 } else {
                     "Bukas"
-                }
+                },
+
+            createdAtMillis = createdAtMillis
         )
     }
 

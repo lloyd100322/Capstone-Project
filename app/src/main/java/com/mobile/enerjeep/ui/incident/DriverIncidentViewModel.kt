@@ -7,7 +7,6 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.data.safeTimestamp
-import com.mobile.enerjeep.ui.components.HistoryTabs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,18 +24,20 @@ data class DriverIncident(
     val multiya: Double = 0.0,
     val isSentToDriver: Boolean = true,
     // Newest activity (resolved time, else created time) used for ordering.
-    val sortMillis: Long = 0L
+    val sortMillis: Long = 0L,
+    // Creation time of the record, used by the "Ngayon" date filter.
+    val createdAtMillis: Long = 0L
 )
 
 enum class IncidentTabType {
-    KASALUKUYAN, KASAYSAYAN
+    DI_NAAYOS, NAAYOS
 }
 
 data class DriverIncidentUiState(
     val openCount: Int = 0,
     val resolvedCount: Int = 0,
     val searchQuery: String = "",
-    val selectedTab: IncidentTabType = IncidentTabType.KASALUKUYAN,
+    val selectedTab: IncidentTabType = IncidentTabType.DI_NAAYOS,
     val allIncidents: List<DriverIncident> = emptyList(),
     val filteredIncidents: List<DriverIncident> = emptyList(),
     val selectedIncident: DriverIncident? = null,
@@ -119,19 +120,18 @@ class DriverIncidentViewModel @Inject constructor(
 
     private fun applyFilters() {
         val currentState = _uiState.value
-        val showHistory = currentState.selectedTab == IncidentTabType.KASAYSAYAN
 
         /*
-         * "Kasalukuyan" keeps showing the incidents that are still open.
-         * "Kasaysayan" is the complete list, so an incident that was made
-         * today is written in the history as well, the same way the Kita
-         * screen does it.
+         * "Di-Naayos" shows only the incidents that are still open.
+         * "Naayos" shows only the resolved incidents.
          */
-        val tabIncidents = HistoryTabs.visible(
-            items = currentState.allIncidents,
-            isCurrent = { incident -> !incident.isResolved },
-            showHistory = showHistory
-        )
+        val tabIncidents = currentState.allIncidents.filter { incident ->
+            if (currentState.selectedTab == IncidentTabType.NAAYOS) {
+                incident.isResolved
+            } else {
+                !incident.isResolved
+            }
+        }
 
         val filtered = tabIncidents.filter { incident ->
             incident.title.contains(currentState.searchQuery, ignoreCase = true) ||
@@ -160,7 +160,12 @@ class DriverIncidentViewModel @Inject constructor(
             sortMillis = (
                     document.safeTimestamp("resolvedAt")
                         ?: document.safeTimestamp("createdAt")
-                    )?.toDate()?.time ?: 0L
+                    )?.toDate()?.time ?: 0L,
+            createdAtMillis = document
+                .safeTimestamp("createdAt")
+                ?.toDate()
+                ?.time
+                ?: 0L
         )
     }
 

@@ -23,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
@@ -61,26 +62,33 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                     OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth().height(48.dp)) {
-                        IncidentTabButton(Modifier.weight(1f), "Ngayon", selectedTab == 0) { selectedTab = 0 }
-                        IncidentTabButton(Modifier.weight(1f), "Kasaysayan", selectedTab == 1) { selectedTab = 1 }
+                        IncidentTabButton(Modifier.weight(1f), "Di-Naayos", selectedTab == 0) { selectedTab = 0 }
+                        IncidentTabButton(Modifier.weight(1f), "Naayos", selectedTab == 1) { selectedTab = 1 }
                     }
                     if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
                     Spacer(Modifier.height(24.dp))
                     if (selectedTab == 0) {
                         val incidents = state.activeIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
-                        if (incidents.isEmpty()) Text("Walang bukas na insidente.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
+                        if (incidents.isEmpty()) Text("Walang insidenteng hindi pa naayos.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
                         else incidents.forEach { incident ->
                             IncidentItemCard(incident, onViewClick = { selectedIncident = incident }, onMarkResolvedClick = { viewModel.resolveIncident(incident.id) })
                             Spacer(Modifier.height(12.dp))
                         }
                     } else {
                         /*
-                         * "Kasaysayan" is the complete list, so an incident
-                         * that was made today is in the history as well.
+                         * "Naayos" shows only the resolved incidents.
+                         * The creation timestamp is passed so a record
+                         * that was made today also shows under the
+                         * "Ngayon" filter of this tab.
                          */
-                        val searched = state.allIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
-                        val incidents = filterHistoryRecords(searched, { it.date }, historyFilter)
-                        if (incidents.isEmpty()) Text("Walang record sa napiling filter.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
+                        val searched = state.historyIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
+                        val incidents = filterHistoryRecords(
+                            searched,
+                            { it.date },
+                            historyFilter,
+                            { it.createdAtMillis.takeIf { millis -> millis > 0 } }
+                        )
+                        if (incidents.isEmpty()) Text("Walang naayos na insidente sa napiling filter.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
                         else incidents.forEach { incident -> HistoryIncidentItemCard(incident) { selectedIncident = incident }; Spacer(Modifier.height(12.dp)) }
                     }
                 }
@@ -115,7 +123,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         Spacer(Modifier.height(16.dp))
         IncidentFormTextField("Uri ng Insidente", incidentType, { if (!submitted) incidentType = it }, "Ilagay ang uri ng insidente")
         Spacer(Modifier.height(16.dp)); IncidentFormTextField("Lokasyon", location, { if (!submitted) location = it }, "Ilagay ang lokasyon")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { Text("₱") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(Modifier.size(18.dp), Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         Spacer(Modifier.height(16.dp)); Text("Paglalarawan", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
         OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
         Spacer(Modifier.height(32.dp))
@@ -149,8 +157,8 @@ fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
         Column(Modifier.padding(20.dp)) {
             Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = Color.Gray); Text(incident.date, color = Color.Gray, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
-            // The history can hold an incident that is still open, so the
-            // badge follows the real status of the record.
+            // The "Naayos" tab only holds resolved incidents, but the
+            // badge still follows the real status of the record.
             val isResolved = incident.status == "Naayos"
             StatusBadge(incident.status, if (isResolved) SuccessGreenLight else WarningOrangeLight, if (isResolved) SuccessGreen else WarningOrange)
             Spacer(Modifier.height(12.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.fillMaxWidth()) { Text("Tingnan") }

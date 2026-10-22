@@ -40,8 +40,8 @@ object KitaHistory {
 
     /**
      * The "Kasaysayan" tab shows the complete history, so an earning that
-     * was saved today is visible in the history as well as in the current
-     * month. The "Kasalukuyan" tab keeps showing the current month only.
+     * was saved today is visible in the history as well as in "Ngayon".
+     * The "Ngayon" tab keeps showing the earnings of today only.
      */
     fun visible(
         records: List<KitaRecord>,

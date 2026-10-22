@@ -170,7 +170,12 @@ fun UlatNgMultiyaScreen(currentMultiya: List<ReportMultiyaItem>, allMultiya: Lis
         // is in the history as well.
         val source = if (selectedTab == 0) currentMultiya else allMultiya
         val searched = source.filter { it.plateNumber.contains(searchQuery, true) }
-        val list = if (selectedTab == 1) filterHistoryRecords(searched, { it.date }, historyFilter) else searched
+        val list = if (selectedTab == 1) filterHistoryRecords(
+            searched,
+            { it.date },
+            historyFilter,
+            { it.createdAtMillis.takeIf { millis -> millis > 0L } }
+        ) else searched
         if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang multa ngayon.", color = Color.Gray) }
         else list.forEach { ReportMultiyaCard(it); Spacer(Modifier.height(12.dp)) }
     }

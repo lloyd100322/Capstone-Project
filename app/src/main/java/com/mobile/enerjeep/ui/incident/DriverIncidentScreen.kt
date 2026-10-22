@@ -45,8 +45,13 @@ import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
-    val isHistory = uiState.selectedTab == IncidentTabType.KASAYSAYAN
-    val visibleIncidents = if (isHistory) filterHistoryRecords(uiState.filteredIncidents, { it.date }, historyFilter) else uiState.filteredIncidents
+    val isResolvedTab = uiState.selectedTab == IncidentTabType.NAAYOS
+    val visibleIncidents = if (isResolvedTab) filterHistoryRecords(
+        uiState.filteredIncidents,
+        { it.date },
+        historyFilter,
+        { it.createdAtMillis.takeIf { millis -> millis > 0 } }
+    ) else uiState.filteredIncidents
 
     Column(Modifier.fillMaxSize().background(LightGrayBackground).padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(24.dp))
@@ -72,10 +77,10 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         )
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DriverTabButton(Modifier.weight(1f), "Kasalukuyan", uiState.selectedTab == IncidentTabType.KASALUKUYAN) { viewModel.onTabSelected(IncidentTabType.KASALUKUYAN) }
-            DriverTabButton(Modifier.weight(1f), "Kasaysayan", isHistory) { viewModel.onTabSelected(IncidentTabType.KASAYSAYAN) }
+            DriverTabButton(Modifier.weight(1f), "Di-Naayos", uiState.selectedTab == IncidentTabType.DI_NAAYOS) { viewModel.onTabSelected(IncidentTabType.DI_NAAYOS) }
+            DriverTabButton(Modifier.weight(1f), "Naayos", isResolvedTab) { viewModel.onTabSelected(IncidentTabType.NAAYOS) }
         }
-        if (isHistory) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
+        if (isResolvedTab) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
         if (uiState.errorMessage != null) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -86,7 +91,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
                 CircularProgressIndicator(color = EnerjeepBlue)
             }
         } else if (visibleIncidents.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text(if (isHistory) "Walang record sa napiling filter." else "Walang bukas na insidente.", color = Color.Gray, fontSize = 14.sp) }
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = Color.Gray, fontSize = 14.sp) }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                 items(visibleIncidents, key = { it.id }) { incident -> DriverIncidentCard(incident) { viewModel.selectIncident(incident) } }

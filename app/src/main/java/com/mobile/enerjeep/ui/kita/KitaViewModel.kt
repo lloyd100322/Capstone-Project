@@ -36,7 +36,7 @@ data class KitaRecord(
 )
 
 enum class KitaTabType {
-    KASALUKUYAN,
+    NGAYON,
     KASAYSAYAN
 }
 
@@ -45,7 +45,7 @@ data class KitaUiState(
     val totalKita: Double = 0.0,
     val totalBayad: Double = 0.0,
     val totalMultiya: Double = 0.0,
-    val selectedTab: KitaTabType = KitaTabType.KASALUKUYAN,
+    val selectedTab: KitaTabType = KitaTabType.NGAYON,
     val searchQuery: String = "",
     val records: List<KitaRecord> = emptyList(),
     val filteredRecords: List<KitaRecord> = emptyList()
@@ -236,7 +236,7 @@ class KitaViewModel @Inject constructor(
             type = document.getString("type")
                 ?.let { if (it.equals("Multiya", ignoreCase = true)) "Multa" else it }
                 ?: "Kita",
-            isHistory = !isCurrentMonth(millis),
+            isHistory = !isToday(millis),
             createdAtMillis = millis,
             sourceId = "kita:${document.id}"
         )
@@ -259,7 +259,7 @@ class KitaViewModel @Inject constructor(
             date = displayDate,
             amount = amount,
             type = "Kita",
-            isHistory = !isCurrentMonth(millis),
+            isHistory = !isToday(millis),
             createdAtMillis = millis,
             sourceId = "ledger:${document.id}"
         )
@@ -333,10 +333,11 @@ class KitaViewModel @Inject constructor(
         val showHistory = tab == KitaTabType.KASAYSAYAN
 
         /*
-         * "Kasalukuyan" keeps showing the earnings of the current month.
+         * "Ngayon" keeps showing the earnings of today only.
          * "Kasaysayan" is the complete history: every earning that was
-         * saved, including the ones of the current month, so a driver
-         * who just earned money sees it in both views.
+         * saved, including the ones of today, so a driver who just
+         * earned money sees it in both views. Once the day has passed,
+         * the record automatically stays only in the history.
          */
         val currentTabRecords = KitaHistory.visible(
             records = allRecords,
@@ -404,13 +405,13 @@ class KitaViewModel @Inject constructor(
         return (document.get(field) as? Number)?.toDouble()
     }
 
-    private fun isCurrentMonth(createdAtMillis: Long): Boolean {
+    private fun isToday(createdAtMillis: Long): Boolean {
         if (createdAtMillis <= 0L) return false
 
-        val monthKey = SimpleDateFormat("yyyyMM", Locale.getDefault())
-        val currentMonth = monthKey.format(Date())
-        val recordMonth = monthKey.format(Date(createdAtMillis))
-        return currentMonth == recordMonth
+        val dayKey = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+        val currentDay = dayKey.format(Date())
+        val recordDay = dayKey.format(Date(createdAtMillis))
+        return currentDay == recordDay
     }
 
     private fun formatMillis(millis: Long): String {

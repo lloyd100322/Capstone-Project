@@ -29,7 +29,8 @@ data class QueueVehicle(
     val route: String,
     val time: String,
     val status: String,
-    val showPositionEdit: Boolean = false
+    val showPositionEdit: Boolean = false,
+    val isCancelled: Boolean = false
 )
 
 data class HistoryVehicle(
@@ -37,7 +38,8 @@ data class HistoryVehicle(
     val plateNumber: String,
     val driverName: String,
     val time: String,
-    val status: String
+    val status: String,
+    val createdAtMillis: Long = 0L
 )
 
 sealed interface QueueUiState {
@@ -100,6 +102,8 @@ class QueueViewModel @Inject constructor(
                     }
                     .sortedWith(
                         compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
                             it.getLong("position") ?: Long.MAX_VALUE
                         }.thenBy {
                             it.safeTimestamp("createdAt")?.seconds
@@ -140,7 +144,10 @@ class QueueViewModel @Inject constructor(
 
                             status = document
                                 .getString("status")
-                                ?: "Nakapila"
+                                ?: "Nakapila",
+
+                            isCancelled = document
+                                .getBoolean("isCancelled") == true
                         )
                     }
 
@@ -174,6 +181,11 @@ class QueueViewModel @Inject constructor(
                             time = formatTimestamp(timestamp).ifBlank {
                                 document.getString("time").orEmpty()
                             },
+
+                            createdAtMillis = timestamp
+                                ?.toDate()
+                                ?.time
+                                ?: 0L,
 
                             status = when (
                                 document.getString("status")
@@ -473,6 +485,8 @@ class QueueViewModel @Inject constructor(
                     }
                     .sortedWith(
                         compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
                             it.getLong("position") ?: Long.MAX_VALUE
                         }.thenBy {
                             it.safeTimestamp("createdAt")?.seconds
@@ -629,8 +643,10 @@ class QueueViewModel @Inject constructor(
     }
 
     /**
-     * Cancels an active queue entry. The entry moves to the Kasaysayan tab
-     * as "Nakansela" and the remaining active entries are renumbered.
+     * Cancels an active queue entry. The entry stays in the queue as
+     * "Nakansela" and is moved to the LAST position ("pinakadulo") of the
+     * active list. It does not go to the Kasaysayan tab and can still be
+     * dispatched later.
      */
     fun cancelQueueEntry(vehicleId: String) {
         viewModelScope.launch {
@@ -659,6 +675,8 @@ class QueueViewModel @Inject constructor(
                     }
                     .sortedWith(
                         compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
                             it.getLong("position") ?: Long.MAX_VALUE
                         }.thenBy {
                             it.safeTimestamp("createdAt")?.seconds
@@ -681,16 +699,19 @@ class QueueViewModel @Inject constructor(
                         )
                     }
 
+                    // The cancelled entry stays in the queue at the bottom.
                     transaction.update(
                         target.reference,
                         mapOf(
-                            "status" to "cancelled",
-                            "position" to 0,
+                            "isCancelled" to true,
+                            "position" to remaining.size + 1,
                             "cancelledAt" to FieldValue.serverTimestamp(),
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
 
+                    // The remaining entries keep (or move up) their
+                    // positions above the cancelled entry.
                     remaining.forEachIndexed { index, document ->
                         transaction.update(
                             document.reference,
@@ -707,7 +728,7 @@ class QueueViewModel @Inject constructor(
                 ToastFeedback.show(
                     "Nakansela ang " +
                             target.getString("plateNumber").orEmpty() +
-                            " sa pila."
+                            ". Inilipat ito sa pinakadulo ng pila."
                 )
             } catch (e: Exception) {
                 ToastFeedback.show(
