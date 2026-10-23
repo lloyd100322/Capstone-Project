@@ -618,9 +618,10 @@ class QueueViewModel @Inject constructor(
 
     /**
      * Cancels an active queue entry. The entry stays in the queue as
-     * "Nakansela" and is moved to the LAST position ("pinakadulo") of the
-     * active list. It does not go to the Kasaysayan tab and can still be
-     * dispatched later.
+     * "Nakansela" at the LAST position ("pinakadulo") and OUT of the
+     * line: no dispatch button. "Ibalik sa Pila" returns it to the END
+     * of the active pila, exactly like any other waiting vehicle. It
+     * does not go to the Kasaysayan tab.
      */
     fun cancelQueueEntry(vehicleId: String) {
         viewModelScope.launch {

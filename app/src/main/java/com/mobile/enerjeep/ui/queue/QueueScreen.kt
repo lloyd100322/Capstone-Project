@@ -175,8 +175,9 @@ fun QueueScreen(
                              * line can be dispatched. To send someone else
                              * first, move it to the top with the arrows
                              * ("Selects which one goes first").
-                             * A "Nakansela" entry is OUT of the line, so it
-                             * stays dispatchable at any time.
+                             * A "Nakansela" entry is OUT of the line - it
+                             * has no dispatch button and rejoins the END
+                             * of the pila through "Ibalik sa Pila".
                              */
                             val frontOfLineId = state.activeQueue
                                 .firstOrNull { !it.isCancelled }
@@ -187,8 +188,7 @@ fun QueueScreen(
                                     vehicle = vehicle,
                                     displayPosition = vehicle.position,
                                     positionEditingEnabled = searchQuery.isBlank(),
-                                    canDispatch = vehicle.isCancelled ||
-                                            vehicle.id == frontOfLineId,
+                                    canDispatch = vehicle.id == frontOfLineId,
                                     onDispatchClick = { vehicleToDispatch = vehicle },
                                     onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
                                     onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) },
