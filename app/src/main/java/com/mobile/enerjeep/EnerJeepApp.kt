@@ -34,7 +34,7 @@ class EnerJeepApp : Application() {
              */
             debugFactory
                 .create(FirebaseApp.getInstance())
-                .getAppCheckToken()
+                .getToken()
                 .addOnSuccessListener { token ->
                     Log.d(
                         "AppCheckDebug",
