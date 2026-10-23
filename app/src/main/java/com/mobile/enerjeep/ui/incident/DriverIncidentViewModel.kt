@@ -82,7 +82,13 @@ class DriverIncidentViewModel @Inject constructor(
 
                 if (snapshot == null) return@addSnapshotListener
 
+                /*
+                 * Reports that were saved WITHOUT sending are admin-only
+                 * drafts - a driver must only see incidents that were
+                 * explicitly sent to them.
+                 */
                 val incidents = snapshot.documents
+                    .filter { it.getBoolean("sentToDriver") != false }
                     .map { mapIncident(it) }
                     .sortedByDescending { it.sortMillis }
 

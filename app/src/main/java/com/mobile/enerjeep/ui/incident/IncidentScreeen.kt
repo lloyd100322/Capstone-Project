@@ -96,7 +96,15 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
         }
     }
     selectedIncident?.let { incident -> ModalBottomSheet(onDismissRequest = { selectedIncident = null }, sheetState = sheetState, containerColor = Color.White) {
-        IncidentDetailsContent(incident, onCancel = { selectedIncident = null }, onResolve = { viewModel.resolveIncident(incident.id); selectedIncident = null })
+        IncidentDetailsContent(
+            incident,
+            onCancel = { selectedIncident = null },
+            onResolve = { viewModel.resolveIncident(incident.id); selectedIncident = null },
+            onSendToDriver = {
+                viewModel.sendIncidentToDriver(incident.id)
+                selectedIncident = null
+            }
+        )
     } }
 }
 
@@ -111,6 +119,8 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
     var penalty by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var submitted by remember { mutableStateOf(false) }
+    var savedSentToDriver by remember { mutableStateOf(true) }
+    var showSendPrompt by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }; Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
@@ -129,9 +139,87 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).height(56.dp)) { Text("Kanselahin") }; Spacer(Modifier.width(16.dp))
-            Button(onClick = { if (!submitted && selectedDriver != null) { viewModel.reportIncident(selectedDriver!!.plateNumber, incidentType, location, penalty, description); submitted = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
+            Button(onClick = { if (!submitted && selectedDriver != null) { showSendPrompt = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
         }
-        if (submitted) { Spacer(Modifier.height(16.dp)); Text("Na-save ang report. Maaari mo nang isara ang form.", color = SuccessGreen, fontWeight = FontWeight.Medium) }
+        if (submitted) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                if (savedSentToDriver) {
+                    "Na-save at naipadala na sa mga driver ang report. Maaari mo nang isara ang form."
+                } else {
+                    "Na-save ang report nang hindi ipinapadala. Makikita mo ito sa Detalye kung nais mo itong ipadala."
+                },
+                color = SuccessGreen,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+
+    /*
+     * Hindi "ipasa" agad - nagtatanong muna kung ipapadala ba sa mga
+     * driver ang insidente o i-save lamang muna (admin-only draft).
+     */
+    if (showSendPrompt) {
+        AlertDialog(
+            onDismissRequest = { showSendPrompt = false },
+            title = { Text("Ipadala sa mga driver ang insidente?") },
+            text = {
+                Text(
+                    "Ipapakita ang insidente sa app ng mga driver. " +
+                            "Pwede mo rin itong i-save muna nang hindi " +
+                            "ipinapadala."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSendPrompt = false
+                        selectedDriver?.let {
+                            viewModel.reportIncident(
+                                it.plateNumber,
+                                incidentType,
+                                location,
+                                penalty,
+                                description,
+                                sendToDriver = true
+                            )
+                            savedSentToDriver = true
+                            submitted = true
+                        }
+                    }
+                ) {
+                    Text("Ipadala sa Driver", color = EnerjeepBlue)
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            showSendPrompt = false
+                            selectedDriver?.let {
+                                viewModel.reportIncident(
+                                    it.plateNumber,
+                                    incidentType,
+                                    location,
+                                    penalty,
+                                    description,
+                                    sendToDriver = false
+                                )
+                                savedSentToDriver = false
+                                submitted = true
+                            }
+                        }
+                    ) {
+                        Text("I-save Lang")
+                    }
+                    TextButton(
+                        onClick = { showSendPrompt = false }
+                    ) {
+                        Text("Kanselahin", color = Color.Gray)
+                    }
+                }
+            }
+        )
     }
 }
 
@@ -167,11 +255,19 @@ fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
 }
 
 @Composable
-fun IncidentDetailsContent(incident: IncidentItem, onCancel: () -> Unit, onResolve: () -> Unit) {
+fun IncidentDetailsContent(incident: IncidentItem, onCancel: () -> Unit, onResolve: () -> Unit, onSendToDriver: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
         Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
         IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
+        if (incident.sentToDriver == "Hindi") {
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onSendToDriver,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) { Text("Ipadala sa Driver Ngayon") }
+        }
         Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara") }; Spacer(Modifier.width(12.dp)); Button(onClick = onResolve, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Markahan Bilang Naayos") } }
     }
 }

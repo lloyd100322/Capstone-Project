@@ -246,12 +246,41 @@ class IncidentViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Sends a previously saved (but not sent) incident to the drivers.
+     */
+    fun sendIncidentToDriver(incidentId: String) {
+        viewModelScope.launch {
+            try {
+                firestore
+                    .collection(FirestoreCollections.INCIDENTS)
+                    .document(incidentId)
+                    .update(
+                        mapOf(
+                            "sentToDriver" to true,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    .await()
+
+                ToastFeedback.show(
+                    "Naipadala na sa mga driver ang insidente."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi maipadala ang insidente."
+                )
+            }
+        }
+    }
+
     fun reportIncident(
         plateNumber: String,
         type: String,
         location: String,
         penalty: String,
-        description: String
+        description: String,
+        sendToDriver: Boolean = true
     ) {
 
         val profile =
@@ -347,7 +376,7 @@ class IncidentViewModel @Inject constructor(
                         "description" to
                                 description.trim(),
 
-                        "sentToDriver" to true,
+                        "sentToDriver" to sendToDriver,
 
                         "isResolved" to false,
 
@@ -509,7 +538,7 @@ class IncidentViewModel @Inject constructor(
                     ?: "",
 
             sentToDriver =
-                if (data["sentToDriver"] == true) {
+                if (data["sentToDriver"] as? Boolean ?: true) {
                     "Oo"
                 } else {
                     "Hindi"
