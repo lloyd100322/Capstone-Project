@@ -84,8 +84,18 @@ object EmergencyContact {
     fun isValidNumber(value: String): Boolean {
         val clean = value.trim()
 
-        return clean.matches(Regex("^09\d{9}$")) ||
-                clean.matches(Regex("^\+639\d{9}$"))
+        // 09XXXXXXXXX
+        if (clean.length == 11 &&
+            clean.startsWith("09") &&
+            clean.all { it.isDigit() }
+        ) {
+            return true
+        }
+
+        // +639XXXXXXXXX
+        return clean.length == 13 &&
+                clean.startsWith("+639") &&
+                clean.drop(4).all { it.isDigit() }
     }
 
     /**
