@@ -29,20 +29,42 @@ class EnerJeepApp : Application() {
             /*
              * Always print the App Check debug token at startup so it can
              * be registered in the Firebase console (App Check -> Settings
-             * -> Manage debug tokens). Older SDK builds only logged it
-             * once, which made the token hard to find.
+             * -> Manage debug tokens). The message itself repeats the
+             * AppCheckDebug words so ANY Logcat search (tag or full text)
+             * will find it.
              */
-            debugFactory
-                .create(FirebaseApp.getInstance())
-                .getToken()
-                .addOnSuccessListener { token ->
-                    Log.d(
-                        "AppCheckDebug",
-                        "Enter this debug token into the list of " +
-                            "valid debug tokens in the Firebase " +
-                            "console for your project: ${token.getToken()}"
-                    )
-                }
+            Log.d(
+                "AppCheckDebug",
+                "AppCheckDebug: EnerJeepApp started (debug build) - " +
+                    "loading AppCheckDebug token..."
+            )
+
+            try {
+                debugFactory
+                    .create(FirebaseApp.getInstance())
+                    .getToken()
+                    .addOnSuccessListener { token ->
+                        Log.d(
+                            "AppCheckDebug",
+                            "AppCheckDebug TOKEN: ${token.getToken()} - " +
+                                "i-paste ito sa Firebase console > " +
+                                "App Check > Settings > Manage debug tokens"
+                        )
+                    }
+                    .addOnFailureListener { error ->
+                        Log.e(
+                            "AppCheckDebug",
+                            "AppCheckDebug: hindi nakuha ang token: " +
+                                error.message
+                        )
+                    }
+            } catch (error: Exception) {
+                Log.e(
+                    "AppCheckDebug",
+                    "AppCheckDebug: error sa token request: " +
+                        error.message
+                )
+            }
         } else {
             appCheck.installAppCheckProviderFactory(
                 PlayIntegrityAppCheckProviderFactory.getInstance()
