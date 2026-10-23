@@ -8,6 +8,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,7 +60,8 @@ sealed interface QueueUiState {
 
 @HiltViewModel
 class QueueViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userSession: UserSession
 ) : ViewModel() {
 
     private val _uiState =
@@ -77,6 +79,109 @@ class QueueViewModel @Inject constructor(
 
     init {
         startQueueListener()
+        healActiveRoster()
+    }
+
+    /**
+     * Every ACTIVE driver belongs in the queue. Drivers left out by older
+     * app versions (dispatched before the return-to-the-end rule existed)
+     * or by account repairs are added back at the END of the pila — the
+     * same rule used after a dispatch. Runs once when the queue opens and
+     * only for admins (drivers may not write to the queue).
+     */
+    private fun healActiveRoster() {
+        if (!userSession.isAdmin()) return
+
+        viewModelScope.launch {
+            try {
+                val usersSnapshot = firestore
+                    .collection(FirestoreCollections.USERS)
+                    .whereEqualTo("role", "driver")
+                    .get()
+                    .await()
+
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
+
+                val openEntries = queueSnapshot.documents.filter {
+                    isActiveStatus(it.getString("status"))
+                }
+
+                val openDriverIds = openEntries
+                    .mapNotNull { it.getString("driverId") }
+                    .toSet()
+
+                val stranded = usersSnapshot.documents.filter { user ->
+                    val userId = user
+                        .getString("userId")
+                        .orEmpty()
+                        .ifBlank { user.id }
+
+                    user.getBoolean("isVehicleActive") != false &&
+                            !user.getString("status").orEmpty()
+                                .equals("inactive", ignoreCase = true) &&
+                            userId !in openDriverIds
+                }
+
+                if (stranded.isEmpty()) {
+                    return@launch
+                }
+
+                var nextPosition = openEntries
+                    .mapNotNull { it.getLong("position")?.toInt() }
+                    .maxOrNull()
+                    ?: 0
+
+                stranded.forEach { user ->
+                    val userId = user
+                        .getString("userId")
+                        .orEmpty()
+                        .ifBlank { user.id }
+
+                    val driverName = listOf(
+                        user.getString("firstName"),
+                        user.getString("lastName")
+                    ).filter { !it.isNullOrBlank() }
+                        .joinToString(" ")
+                        .ifBlank { "Driver" }
+
+                    val queueId = FirestoreIds.queue(userId)
+
+                    firestore
+                        .collection(FirestoreCollections.QUEUE)
+                        .document(queueId)
+                        .set(
+                            mapOf<String, Any>(
+                                "id" to queueId,
+                                "driverId" to userId,
+                                "plateNumber" to user
+                                    .getString("plateNumber")
+                                    .orEmpty(),
+                                "driverName" to driverName,
+                                "route" to DEFAULT_ROUTE,
+                                "position" to ++nextPosition,
+                                "status" to "Nakapila",
+                                "time" to SimpleDateFormat(
+                                    "hh:mm a",
+                                    Locale.getDefault()
+                                ).format(Date()),
+                                "createdAt" to FieldValue.serverTimestamp()
+                            )
+                        )
+                        .await()
+                }
+
+                ToastFeedback.show(
+                    "Bumalik sa dulo ng pila ang " +
+                            stranded.size +
+                            " aktibong driver na wala sa pila."
+                )
+            } catch (_: Exception) {
+                // Best effort: the queue keeps working without the repair.
+            }
+        }
     }
 
     private fun startQueueListener() {

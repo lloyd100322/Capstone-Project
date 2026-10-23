@@ -170,11 +170,25 @@ fun QueueScreen(
                                 Text("Walang sasakyan sa pila.", color = Color.Gray)
                             }
                         } else {
-                            searchedQueue.forEachIndexed { index, vehicle ->
+                            /*
+                             * FIFO: only the jeepney at the FRONT of the
+                             * line can be dispatched. To send someone else
+                             * first, move it to the top with the arrows
+                             * ("Selects which one goes first").
+                             * A "Nakansela" entry is OUT of the line, so it
+                             * stays dispatchable at any time.
+                             */
+                            val frontOfLineId = state.activeQueue
+                                .firstOrNull { !it.isCancelled }
+                                ?.id
+
+                            searchedQueue.forEach { vehicle ->
                                 QueueItem(
                                     vehicle = vehicle,
-                                    displayPosition = index + 1,
+                                    displayPosition = vehicle.position,
                                     positionEditingEnabled = searchQuery.isBlank(),
+                                    canDispatch = vehicle.isCancelled ||
+                                            vehicle.id == frontOfLineId,
                                     onDispatchClick = { vehicleToDispatch = vehicle },
                                     onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
                                     onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) },
@@ -277,6 +291,7 @@ fun QueueItem(
     vehicle: QueueVehicle,
     displayPosition: Int,
     positionEditingEnabled: Boolean = true,
+    canDispatch: Boolean = true,
     onDispatchClick: () -> Unit,
     onPositionUpdate: (Int) -> Unit,
     onCancelClick: () -> Unit,
@@ -421,18 +436,22 @@ fun QueueItem(
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = onDispatchClick,
-                        modifier = Modifier.weight(1f).height(44.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
-                        shape = RoundedCornerShape(22.dp)
-                    ) {
-                        NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("I-dispatch", fontSize = 14.sp)
+                    if (canDispatch) {
+                        Button(
+                            onClick = onDispatchClick,
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                            shape = RoundedCornerShape(22.dp)
+                        ) {
+                            NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("I-dispatch", fontSize = 14.sp)
+                        }
                     }
                     if (positionEditingEnabled) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                        if (canDispatch) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         // UP ARROW: Decreases position number (moves closer to 1)
                         ActionButton(
                             icon = { ArrowUpIcon(modifier = Modifier.size(16.dp)) },
