@@ -2,7 +2,7 @@
   "name": "enerjeep-functions",
   "description": "Cloud Functions for the EnerJeep Android app",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {
