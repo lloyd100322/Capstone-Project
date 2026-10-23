@@ -3,7 +3,6 @@ package com.mobile.enerjeep.ui.home
 import androidx.lifecycle.ViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserSession
@@ -11,17 +10,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
-
-/**
- * The emergency contact of one driver account, the values that were
- * typed in when the account was created.
- */
-data class DriverEmergencyContact(
-    val driverName: String,
-    val plateNumber: String,
-    val contactName: String,
-    val contactNumber: String
-)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -78,11 +66,6 @@ class HomeViewModel @Inject constructor(
      * were created. The emergency dialog of the admin dashboard lists
      * them, so the admin can call the contact of a driver right away.
      */
-    private val _driverContacts =
-        MutableStateFlow<List<DriverEmergencyContact>>(emptyList())
-
-    val driverContacts =
-        _driverContacts.asStateFlow()
 
     /*
      * Every listener is registered here and removed in onCleared().
@@ -271,57 +254,6 @@ class HomeViewModel @Inject constructor(
     fun isDriver(): Boolean =
         userSession.isDriver()
 
-    init {
-        listeners += firestore
-            .collection(FirestoreCollections.USERS)
-            .whereEqualTo("role", "driver")
-            .addSnapshotListener { snapshot, _ ->
-
-                if (snapshot == null) {
-                    return@addSnapshotListener
-                }
-
-                _driverContacts.value = snapshot.documents
-                    .mapNotNull { document ->
-                        val data = document.data
-                            ?: return@mapNotNull null
-
-                        val legacy = EmergencyContact.splitLegacy(
-                            data["emergencyContact"] as? String
-                        )
-
-                        val contactName =
-                            (data["emergencyContactName"] as? String)
-                                ?.takeIf { it.isNotBlank() }
-                                ?: legacy.name
-
-                        val contactNumber =
-                            (data["emergencyContactNumber"] as? String)
-                                ?.takeIf { it.isNotBlank() }
-                                ?: legacy.number
-
-                        // A contact without a number cannot be called.
-                        if (contactNumber.isBlank()) {
-                            return@mapNotNull null
-                        }
-
-                        DriverEmergencyContact(
-                            driverName = listOf(
-                                data["firstName"] as? String ?: "",
-                                data["lastName"] as? String ?: ""
-                            ).filter { it.isNotBlank() }
-                                .joinToString(" ")
-                                .ifBlank { "Driver" },
-                            plateNumber = data["plateNumber"]
-                                as? String ?: "",
-                            contactName = contactName
-                                .ifBlank { "Emergency Contact" },
-                            contactNumber = contactNumber
-                        )
-                    }
-                    .sortedBy { it.driverName }
-            }
-    }
 
     override fun onCleared() {
         listeners.forEach { it.remove() }

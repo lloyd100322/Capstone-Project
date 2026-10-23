@@ -77,9 +77,6 @@ fun HomeScreen(
         val openIncidentCount by viewModel.openIncidentCount
             .collectAsStateWithLifecycle()
 
-        val driverContacts by viewModel.driverContacts
-            .collectAsStateWithLifecycle()
-
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
@@ -282,7 +279,6 @@ fun HomeScreen(
                             userProfile?.emergencyContactName,
                         emergencyContactNumber =
                             userProfile?.emergencyContactNumber,
-                        driverContacts = driverContacts
                     )
                 }
             }
@@ -559,8 +555,7 @@ fun HomeContent(
 fun EmergencyDialog(
     onDismiss: () -> Unit,
     emergencyContactName: String? = null,
-    emergencyContactNumber: String? = null,
-    driverContacts: List<DriverEmergencyContact> = emptyList()
+    emergencyContactNumber: String? = null
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -632,29 +627,6 @@ fun EmergencyDialog(
                             ?.takeIf { it.isNotBlank() }
                             ?: "Emergency Contact",
                         number = emergencyContactNumber,
-                        icon = Icons.Default.Person,
-                        bgColor = EnerjeepBlue,
-                        textColor = Color.White
-                    )
-                }
-
-                /*
-                 * The emergency contacts that were entered when the
-                 * driver accounts were created. On the admin dashboard
-                 * the dialog lists them, so the admin can call the
-                 * contact of any driver right away.
-                 */
-                driverContacts.forEach { contact ->
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    EmergencyContactButton(
-                        title = contact.contactName,
-                        subtitle = listOf(
-                            contact.driverName,
-                            contact.plateNumber
-                        ).filter { it.isNotBlank() }
-                            .joinToString(" • "),
-                        number = contact.contactNumber,
                         icon = Icons.Default.Person,
                         bgColor = EnerjeepBlue,
                         textColor = Color.White

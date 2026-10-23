@@ -404,25 +404,36 @@ class DriverProfileViewModel @Inject constructor(
                  * A plate number must stay unique, the same rule the
                  * Create Account screen uses. Otherwise reports would
                  * attach earnings and incidents to the wrong driver.
+                 *
+                 * Drivers may not list every account (only admins can),
+                 * so the double-check is best effort here: when the
+                 * database refuses the list, the save continues. The
+                 * Create Account screen (admin) is the strict gate.
                  */
-                val driversSnapshot = users
-                    .whereEqualTo("role", "driver")
-                    .get()
-                    .await()
+                if (cleanPlate != oldProfile.plateNumber) {
+                    val alreadyUsed = try {
+                        users
+                            .whereEqualTo("role", "driver")
+                            .get()
+                            .await()
+                            .documents
+                            .any {
+                                it.id != currentPhone &&
+                                        PhilippineIdentifiers.platesMatch(
+                                            it.getString("plateNumber"),
+                                            cleanPlate
+                                        )
+                            }
+                    } catch (_: Exception) {
+                        false
+                    }
 
-                val alreadyUsed = driversSnapshot.documents.any {
-                    it.id != currentPhone &&
-                            PhilippineIdentifiers.platesMatch(
-                                it.getString("plateNumber"),
-                                cleanPlate
-                            )
-                }
-
-                if (alreadyUsed) {
-                    ToastFeedback.show(
-                        "Ginagamit na ng ibang driver ang plate number na ito"
-                    )
-                    return@launch
+                    if (alreadyUsed) {
+                        ToastFeedback.show(
+                            "Ginagamit na ng ibang driver ang plate number na ito"
+                        )
+                        return@launch
+                    }
                 }
 
                 oldRef

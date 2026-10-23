@@ -49,8 +49,20 @@ service cloud.firestore {
     }
 
     // Passwords are never stored on the profile document.
+    //
+    // CREATE: the new document must not carry a password field at all.
     function hasNoPasswordField() {
       return !request.resource.data.keys().hasAny(['password']);
+    }
+
+    // UPDATE: documents that still carry a LEGACY plaintext password
+    // field must remain editable (deactivate, profile edits), and the
+    // one-time migration that DELETES that field must always pass.
+    // Only writes that add or change a password value are rejected.
+    function doesNotSetPassword() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['password'])
+             || !request.resource.data.keys().hasAny(['password']);
     }
 
     // ------------------------------------------------------------------
@@ -69,9 +81,10 @@ service cloud.firestore {
                     && hasNoPasswordField();
 
       // A user edits their own profile; an admin edits any profile
-      // (activate/deactivate). Never accept a plaintext password.
+      // (activate/deactivate). Never accept a plaintext password, but
+      // legacy documents that still have one can be updated.
       allow update: if ((isAdmin() || (isMember() && isOwner(phone)))
-                        && hasNoPasswordField());
+                        && doesNotSetPassword());
 
       allow delete: if isAdmin();
     }
