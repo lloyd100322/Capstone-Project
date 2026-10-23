@@ -7,7 +7,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
-import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.navigation.AppNavigator
@@ -176,6 +175,7 @@ class CreateAccountViewModel @Inject constructor(
                     "firstName" to cleanFirstName,
                     "lastName" to cleanLastName,
                     "phoneNumber" to cleanPhoneNumber,
+                    "password" to cleanPassword,
                     "role" to role.name.lowercase(Locale.ROOT),
                     "status" to "active",
                     "createdAt" to FieldValue.serverTimestamp()
@@ -210,24 +210,6 @@ class CreateAccountViewModel @Inject constructor(
                 val batch = firestore.batch()
 
                 batch.set(userReference, userMap)
-
-                /*
-                 * The password is stored ONLY as a salted hash, in its
-                 * own collection that just the owner can read. The
-                 * profile document never carries a password.
-                 */
-                val saltedPassword = PasswordHasher.hash(cleanPassword)
-
-                batch.set(
-                    firestore
-                        .collection(FirestoreCollections.USER_SECRETS)
-                        .document(cleanPhoneNumber),
-                    mapOf(
-                        "passwordHash" to saltedPassword.hash,
-                        "passwordSalt" to saltedPassword.salt,
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
-                )
 
                 if (role == UserRole.Driver) {
                     val queueSnapshot = firestore

@@ -41,7 +41,6 @@ class DriverViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DriverDashboardUiState())
     val uiState: StateFlow<DriverDashboardUiState> = _uiState.asStateFlow()
 
-    private var profileListener: ListenerRegistration? = null
     private var queueListener: ListenerRegistration? = null
     private var incidentListener: ListenerRegistration? = null
 
@@ -52,7 +51,7 @@ class DriverViewModel @Inject constructor(
     private fun attachListeners() {
         val profile = userSession.userProfile ?: return
 
-        profileListener = firestore.collection(FirestoreCollections.USERS)
+        firestore.collection(FirestoreCollections.USERS)
             .document(profile.phoneNumber)
             .addSnapshotListener { document, _ ->
                 if (document != null && document.exists()) {
@@ -143,7 +142,6 @@ class DriverViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        profileListener?.remove()
         queueListener?.remove()
         incidentListener?.remove()
         super.onCleared()

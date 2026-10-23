@@ -31,19 +31,12 @@ class ContentViewModel @Inject constructor(
         checkSession()
     }
 
-    /** Re-runs the session check (used by the retry button). */
-    fun retry() {
-        checkSession()
-    }
-
     private fun checkSession() {
         val currentUser = auth.currentUser
         if (currentUser == null) {
             _authState.value = AppAuthState.Unauthenticated
             return
         }
-
-        _authState.value = AppAuthState.Loading
 
         viewModelScope.launch {
             try {
@@ -71,6 +64,7 @@ class ContentViewModel @Inject constructor(
                         firstName = data?.get("firstName") as? String ?: "",
                         lastName = data?.get("lastName") as? String ?: "",
                         phoneNumber = data?.get("phoneNumber") as? String ?: "",
+                        password = data?.get("password") as? String ?: "",
                         role = matchedRole,
                         licenseNumber = data?.get("licenseNumber") as? String,
                         plateNumber = data?.get("plateNumber") as? String,
@@ -87,15 +81,8 @@ class ContentViewModel @Inject constructor(
                     _authState.value = AppAuthState.Unauthenticated
                 }
             } catch (e: Exception) {
-                /*
-                 * A network problem is NOT a logout. The Firebase session
-                 * is still valid, so show an error with a retry button
-                 * instead of throwing the user back to the login form
-                 * (which used to leave a half-signed-in state behind).
-                 */
-                _authState.value = AppAuthState.Error(
-                    "Hindi ma-load ang account. Pakisubukan muli."
-                )
+                // Network error or other issues, default to login for safety
+                _authState.value = AppAuthState.Unauthenticated
             }
         }
     }
@@ -105,5 +92,4 @@ sealed interface AppAuthState {
     data object Loading : AppAuthState
     data object Unauthenticated : AppAuthState
     data class Authenticated(val startDestination: Screen) : AppAuthState
-    data class Error(val message: String) : AppAuthState
 }
