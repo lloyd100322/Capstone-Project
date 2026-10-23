@@ -153,6 +153,14 @@ fun QueueScreen(
                                 plate.contains(searchQuery, ignoreCase = true) ||
                                 driver.contains(searchQuery, ignoreCase = true)
                     }
+                    if (searchQuery.isNotBlank()) {
+                        Text(
+                            "I-clear ang search para magpalit ng posisyon ng mga sasakyan.",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     if (selectedTab == 0) {
                         val searchedQueue = state.activeQueue.filter { vehicle ->
                             searchMatches(vehicle.plateNumber, vehicle.driverName)

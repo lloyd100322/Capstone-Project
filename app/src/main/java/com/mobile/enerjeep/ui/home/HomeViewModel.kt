@@ -32,6 +32,13 @@ class HomeViewModel @Inject constructor(
     val userProfile: UserProfile?
         get() = userSession.userProfile
 
+    /**
+     * Reactive profile. The Home screen collects this so the emergency
+     * dialog always shows the CURRENT contact (it used to keep showing
+     * the values from login even after the profile was edited).
+     */
+    val userProfileFlow = userSession.userProfileFlow
+
     private val _activeJeepsCount =
         MutableStateFlow(0)
 

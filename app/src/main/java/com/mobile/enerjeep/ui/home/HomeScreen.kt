@@ -56,7 +56,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val isAdmin = viewModel.isAdmin()
-    val userProfile = viewModel.userProfile
+    val userProfile by viewModel.userProfileFlow
+        .collectAsStateWithLifecycle()
 
     if (isAdmin) {
         var selectedTab by remember { mutableStateOf(HomeTab.Home) }
