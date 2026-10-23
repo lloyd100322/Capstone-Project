@@ -10,6 +10,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -690,8 +691,29 @@ class AccountManagementViewModel @Inject constructor(
     }
 
     private fun setError(message: String) {
+        /*
+         * A raw Firestore "PERMISSION_DENIED" message is not helpful to
+         * the person testing. It almost always means the NEW firestore
+         * rules are not deployed yet (the old rules rejected updates to
+         * accounts that still carry a legacy password field). Say what
+         * to do instead, and use a Toast so the message is not only a
+         * quick glimpse (the account list clears the red error text).
+         */
+        val friendly = if (
+            message.contains("permission", ignoreCase = true)
+        ) {
+            "Hindi pinapayagan ng Firestore rules ang aksyong ito — " +
+                    "malamang ay hindi pa naka-deploy ang pinakabagong " +
+                    "rules. I-deploy muna ito sa terminal: " +
+                    "firebase deploy --only firestore:rules"
+        } else {
+            message
+        }
+
+        ToastFeedback.show(friendly)
+
         _uiState.value = _uiState.value.copy(
-            errorMessage = message
+            errorMessage = friendly
         )
     }
 
