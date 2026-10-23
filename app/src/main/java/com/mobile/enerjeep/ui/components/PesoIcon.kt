@@ -43,8 +43,8 @@ private val PESO_FONT_WEIGHT = FontWeight.Bold
  */
 private const val PESO_SIZE_RATIO = 0.85f
 
-/** 4. IUSOG PATAAS/BABA kung hindi ninyo gusto ang direksyon (sp). */
-private const val PESO_VERTICAL_OFFSET_SP = 0f
+/** 4. IUSOG PATAAS/BABA kung hindi ninyo gusto ang direksyon (dp). */
+private const val PESO_VERTICAL_OFFSET_DP = 0f
 
 /**
  * Ang peso sign bilang text. Lahat ng screen ay dumadaan dito kaya isang
@@ -65,10 +65,10 @@ fun PesoIcon(
             color = color,
             fontWeight = PESO_FONT_WEIGHT,
             fontSize = (size.value * PESO_SIZE_RATIO).sp,
-            modifier = if (PESO_VERTICAL_OFFSET_SP == 0f) {
+            modifier = if (PESO_VERTICAL_OFFSET_DP == 0f) {
                 Modifier
             } else {
-                Modifier.offset(y = PESO_VERTICAL_OFFSET_SP.sp)
+                Modifier.offset(y = PESO_VERTICAL_OFFSET_DP.dp)
             }
         )
     }
