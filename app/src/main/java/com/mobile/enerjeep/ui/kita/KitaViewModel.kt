@@ -339,8 +339,17 @@ class KitaViewModel @Inject constructor(
          * earned money sees it in both views. Once the day has passed,
          * the record automatically stays only in the history.
          */
+        /*
+         * The "today" check is redone here every time the list is
+         * rebuilt, so records regroup correctly even when the app was
+         * left open past midnight.
+         */
+        val refreshedRecords = allRecords.map { record ->
+            record.copy(isHistory = !isToday(record.createdAtMillis))
+        }
+
         val currentTabRecords = KitaHistory.visible(
-            records = allRecords,
+            records = refreshedRecords,
             showHistory = showHistory
         )
 

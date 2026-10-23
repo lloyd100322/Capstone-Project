@@ -207,7 +207,7 @@ fun TerminalFeeFormContent(
         OutlinedTextField(
             value = amount,
             onValueChange = { if (it.isEmpty() || it.all(Char::isDigit)) amount = it },
-            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp).size(18.dp)) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp) },
             trailingIcon = {
                 Column(Modifier.padding(end = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase", modifier = Modifier.size(20.dp).clickable { amount = ((amount.toIntOrNull() ?: 0) + 10).toString() })

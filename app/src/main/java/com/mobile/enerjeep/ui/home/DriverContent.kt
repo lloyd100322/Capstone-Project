@@ -95,7 +95,7 @@ fun DriverContent(
                         selectedTab = DriverTab.Kita
                         showIncidentForm = false
                     },
-                    icon = { SalesIcon(modifier = Modifier.size(24.dp), color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else Color.Gray) },
+                    icon = { SalesIcon(size = 24.dp, color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else Color.Gray) },
                     label = { Text("Kita", fontSize = 10.sp) }
                 )
                 NavigationBarItem(

@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.data.EmergencyContact
 
 private val ProfileLightGray =
     Color(0xFFF8F9FA)
@@ -180,12 +181,16 @@ fun ProfileScreen(
                                 onSave = {
                                         first,
                                         last,
-                                        phone ->
+                                        phone,
+                                        contactName,
+                                        contactNumber ->
 
                                     viewModel.updateProfile(
                                         first,
                                         last,
-                                        phone
+                                        phone,
+                                        contactName,
+                                        contactNumber
                                     )
 
                                     currentView =
@@ -524,6 +529,8 @@ fun EditProfileContent(
     onSave: (
         String,
         String,
+        String,
+        String,
         String
     ) -> Unit
 ) {
@@ -545,6 +552,14 @@ fun EditProfileContent(
             profile.phoneNumber
                 .removePrefix("+63")
         )
+    }
+
+    var emergencyContactName by remember(profile) {
+        mutableStateOf(profile.emergencyContactName)
+    }
+
+    var emergencyContactNumber by remember(profile) {
+        mutableStateOf(profile.emergencyContactNumber)
     }
 
     Column(
@@ -681,6 +696,70 @@ fun EditProfileContent(
 
                 Spacer(
                     modifier =
+                        Modifier.height(16.dp)
+                )
+
+                OutlinedTextField(
+                    value = emergencyContactName,
+                    onValueChange = {
+                        emergencyContactName =
+                            EmergencyContact.sanitizeName(it)
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Emergency Contact Name")
+                    },
+                    placeholder = {
+                        Text("Pangalan ng contact")
+                    },
+                    singleLine = true
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(16.dp)
+                )
+
+                OutlinedTextField(
+                    value = emergencyContactNumber,
+                    onValueChange = {
+                        emergencyContactNumber =
+                            EmergencyContact.sanitizeNumber(it)
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Emergency Contact Number")
+                    },
+                    placeholder = {
+                        Text("09XXXXXXXXX")
+                    },
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType =
+                                KeyboardType.Phone
+                        ),
+                    singleLine = true
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(8.dp)
+                )
+
+                Text(
+                    text =
+                        "Ito ang lalabas sa Emergency button ng dashboard. " +
+                                "Pwedeng iwanang blank pareho kung walang contact.",
+                    color =
+                        Color.Gray,
+                    fontSize =
+                        12.sp
+                )
+
+                Spacer(
+                    modifier =
                         Modifier.height(32.dp)
                 )
 
@@ -710,7 +789,9 @@ fun EditProfileContent(
                             onSave(
                                 firstName,
                                 lastName,
-                                profile.phoneNumber
+                                profile.phoneNumber,
+                                emergencyContactName,
+                                emergencyContactNumber
                             )
                         },
                         modifier =

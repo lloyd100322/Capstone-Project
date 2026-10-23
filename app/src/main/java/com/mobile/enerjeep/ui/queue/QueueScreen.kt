@@ -166,9 +166,11 @@ fun QueueScreen(
                                 QueueItem(
                                     vehicle = vehicle,
                                     displayPosition = index + 1,
+                                    positionEditingEnabled = searchQuery.isBlank(),
                                     onDispatchClick = { vehicleToDispatch = vehicle },
                                     onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
-                                    onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) }
+                                    onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) },
+                                    onRestoreClick = { viewModel.restoreQueueEntry(vehicle.id) }
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
@@ -266,9 +268,11 @@ fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, 
 fun QueueItem(
     vehicle: QueueVehicle,
     displayPosition: Int,
+    positionEditingEnabled: Boolean = true,
     onDispatchClick: () -> Unit,
     onPositionUpdate: (Int) -> Unit,
-    onCancelClick: () -> Unit
+    onCancelClick: () -> Unit,
+    onRestoreClick: () -> Unit = {}
 ) {
     var isEditingPosition by remember { mutableStateOf(false) }
     var newPositionInput by remember { mutableStateOf("0") }
@@ -419,41 +423,55 @@ fun QueueItem(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("I-dispatch", fontSize = 14.sp)
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // UP ARROW: Decreases position number (moves closer to 1)
-                    ActionButton(
-                        icon = { ArrowUpIcon(modifier = Modifier.size(16.dp)) },
-                        onClick = {
-                            if (displayPosition > 1) {
-                                onPositionUpdate(displayPosition - 1)
+                    if (positionEditingEnabled) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // UP ARROW: Decreases position number (moves closer to 1)
+                        ActionButton(
+                            icon = { ArrowUpIcon(modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                if (displayPosition > 1) {
+                                    onPositionUpdate(displayPosition - 1)
+                                }
                             }
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // DOWN ARROW: Increases position number (moves further back)
-                    ActionButton(
-                        icon = { ArrowDownIcon(modifier = Modifier.size(16.dp)) },
-                        onClick = {
-                            onPositionUpdate(displayPosition + 1)
-                        }
-                    )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // DOWN ARROW: Increases position number (moves further back)
+                        ActionButton(
+                            icon = { ArrowDownIcon(modifier = Modifier.size(16.dp)) },
+                            onClick = {
+                                onPositionUpdate(displayPosition + 1)
+                            }
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    ActionButton(
-                        modifier = Modifier.weight(1f),
-                        text = "Posisyon",
-                        icon = { Text("#", fontWeight = FontWeight.Bold) },
-                        onClick = { isEditingPosition = true }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    ActionButton(
-                        modifier = Modifier.weight(1f),
-                        text = "Kanselahin",
-                        icon = { CancelIcon(modifier = Modifier.size(16.dp), color = ErrorRed) },
-                        textColor = ErrorRed,
-                        onClick = { showCancelConfirm = true }
-                    )
+                    if (positionEditingEnabled) {
+                        ActionButton(
+                            modifier = Modifier.weight(1f),
+                            text = "Posisyon",
+                            icon = { Text("#", fontWeight = FontWeight.Bold) },
+                            onClick = { isEditingPosition = true }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    if (vehicle.isCancelled) {
+                        ActionButton(
+                            modifier = Modifier.weight(1f),
+                            text = "Ibalik sa Pila",
+                            icon = { NavigationIcon(modifier = Modifier.size(16.dp), color = SuccessGreen) },
+                            textColor = SuccessGreen,
+                            onClick = onRestoreClick
+                        )
+                    } else {
+                        ActionButton(
+                            modifier = Modifier.weight(1f),
+                            text = "Kanselahin",
+                            icon = { CancelIcon(modifier = Modifier.size(16.dp), color = ErrorRed) },
+                            textColor = ErrorRed,
+                            onClick = { showCancelConfirm = true }
+                        )
+                    }
                 }
             }
         }
@@ -549,7 +567,7 @@ fun DispatchCollectionContent(
             value = income,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) income = it },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp).size(18.dp), color = Color.Gray) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) },
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)
@@ -563,7 +581,7 @@ fun DispatchCollectionContent(
             value = otherFees,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) otherFees = it },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp).size(18.dp), color = Color.Gray) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) },
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)

@@ -362,7 +362,7 @@ fun HomeContent(
                 value = DashboardSummary.formatPeso(totalSales),
                 icon = {
                     SalesIcon(
-                        modifier = Modifier.size(24.dp),
+                        size = 24.dp,
                         color = EnerjeepBlue
                     )
                 },

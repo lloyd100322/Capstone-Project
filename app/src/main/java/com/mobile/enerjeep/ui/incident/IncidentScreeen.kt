@@ -123,7 +123,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         Spacer(Modifier.height(16.dp))
         IncidentFormTextField("Uri ng Insidente", incidentType, { if (!submitted) incidentType = it }, "Ilagay ang uri ng insidente")
         Spacer(Modifier.height(16.dp)); IncidentFormTextField("Lokasyon", location, { if (!submitted) location = it }, "Ilagay ang lokasyon")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(Modifier.size(18.dp), Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         Spacer(Modifier.height(16.dp)); Text("Paglalarawan", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
         OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
         Spacer(Modifier.height(32.dp))

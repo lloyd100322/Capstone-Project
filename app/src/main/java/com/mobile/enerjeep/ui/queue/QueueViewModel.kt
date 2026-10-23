@@ -29,7 +29,6 @@ data class QueueVehicle(
     val route: String,
     val time: String,
     val status: String,
-    val showPositionEdit: Boolean = false,
     val isCancelled: Boolean = false
 )
 
@@ -227,136 +226,6 @@ class QueueViewModel @Inject constructor(
                     totalDispatchedToday = dispatchedToday
                 )
             }
-    }
-
-    /**
-     * Adds an existing driver to the queue.
-     * Drivers marked as inactive cannot be added.
-     */
-    fun addVehicleToQueue(
-        driverId: String,
-        route: String
-    ) {
-        viewModelScope.launch {
-            try {
-                val driverSnapshot = firestore
-                    .collection(FirestoreCollections.USERS)
-                    .whereEqualTo("userId", driverId)
-                    .whereEqualTo("role", "driver")
-                    .limit(1)
-                    .get()
-                    .await()
-
-                val driver = driverSnapshot.documents.firstOrNull()
-                    ?: throw IllegalStateException(
-                        "Hindi makita ang driver account."
-                    )
-
-                if (driver.getBoolean("isVehicleActive") == false) {
-                    throw IllegalStateException(
-                        "Hindi aktibo ang jeepney na ito."
-                    )
-                }
-
-                if (
-                    driver.getString("status")
-                        .orEmpty()
-                        .equals("inactive", ignoreCase = true)
-                ) {
-                    throw IllegalStateException(
-                        "Hindi aktibo ang account na ito."
-                    )
-                }
-
-                val existingQueue = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .whereEqualTo("driverId", driverId)
-                    .get()
-                    .await()
-
-                val alreadyQueued = existingQueue.documents.any {
-                    isActiveStatus(it.getString("status"))
-                }
-
-                if (alreadyQueued) {
-                    throw IllegalStateException(
-                        "Nasa pila na ang driver na ito."
-                    )
-                }
-
-                val plate = driver
-                    .getString("plateNumber")
-                    .orEmpty()
-                    .trim()
-                    .uppercase(Locale.ROOT)
-
-                if (plate.isBlank()) {
-                    throw IllegalStateException(
-                        "Walang plaka ang driver."
-                    )
-                }
-
-                val firstName = driver
-                    .getString("firstName")
-                    .orEmpty()
-
-                val lastName = driver
-                    .getString("lastName")
-                    .orEmpty()
-
-                val driverName = listOf(firstName, lastName)
-                    .filter { it.isNotBlank() }
-                    .joinToString(" ")
-                    .ifBlank { "Driver" }
-
-                val queueSnapshot = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .get()
-                    .await()
-
-                val activeQueue = queueSnapshot.documents.filter {
-                    isActiveStatus(it.getString("status"))
-                }
-
-                val nextPosition = activeQueue
-                    .mapNotNull {
-                        it.getLong("position")?.toInt()
-                    }
-                    .maxOrNull()
-                    ?.plus(1)
-                    ?: 1
-
-                val id = FirestoreIds.queue(driverId)
-
-                val queueData = mapOf<String, Any>(
-                    "id" to id,
-                    "driverId" to driverId,
-                    "plateNumber" to plate,
-                    "driverName" to driverName,
-                    "route" to route.trim().ifBlank {
-                        DEFAULT_ROUTE
-                    },
-                    "position" to nextPosition,
-                    "status" to "Nakapila",
-                    "time" to SimpleDateFormat(
-                        "hh:mm a",
-                        Locale.getDefault()
-                    ).format(Date()),
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-
-                firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .document(id)
-                    .set(queueData)
-                    .await()
-
-            } catch (e: Exception) {
-                _uiState.value = QueueUiState.Error(
-                    e.message ?: "Hindi maidagdag sa pila"
-                )
-            }
-        }
     }
 
     /**
@@ -733,6 +602,96 @@ class QueueViewModel @Inject constructor(
             } catch (e: Exception) {
                 ToastFeedback.show(
                     e.message ?: "Hindi makansela ang sasakyan."
+                )
+            }
+        }
+    }
+
+    /**
+     * Returns a cancelled entry to the normal queue. It is placed at the
+     * END of the non-cancelled entries (just above the other cancelled
+     * ones) and the whole queue is renumbered.
+     */
+    fun restoreQueueEntry(vehicleId: String) {
+        viewModelScope.launch {
+            try {
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
+
+                val target = queueSnapshot.documents
+                    .firstOrNull { it.id == vehicleId }
+                    ?: throw IllegalStateException(
+                        "Hindi makita ang sasakyan sa pila."
+                    )
+
+                if (!isActiveStatus(target.getString("status"))) {
+                    throw IllegalStateException(
+                        "Ang sasakyang ito ay wala na sa aktibong pila."
+                    )
+                }
+
+                val remaining = queueSnapshot.documents
+                    .filter {
+                        it.id != vehicleId &&
+                                isActiveStatus(it.getString("status"))
+                    }
+                    .sortedWith(
+                        compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
+                            it.getLong("position") ?: Long.MAX_VALUE
+                        }.thenBy {
+                            it.safeTimestamp("createdAt")?.seconds
+                                ?: Long.MAX_VALUE
+                        }
+                    )
+
+                /*
+                 * The restored entry joins the END of the normal
+                 * (non-cancelled) group, before any cancelled entries.
+                 */
+                val ordered = remaining.filter {
+                    it.getBoolean("isCancelled") != true
+                } + listOf(target) + remaining.filter {
+                    it.getBoolean("isCancelled") == true
+                }
+
+                firestore.runTransaction { transaction ->
+                    val freshEntry = transaction.get(target.reference)
+
+                    if (!freshEntry.exists() ||
+                        !isActiveStatus(freshEntry.getString("status"))
+                    ) {
+                        throw IllegalStateException(
+                            "Ang sasakyang ito ay wala na sa aktibong pila."
+                        )
+                    }
+
+                    ordered.forEachIndexed { index, document ->
+                        val update = mutableMapOf<String, Any>(
+                            "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+
+                        if (document.id == vehicleId) {
+                            update["isCancelled"] = false
+                        }
+
+                        transaction.update(document.reference, update)
+                    }
+
+                    true
+                }.await()
+
+                ToastFeedback.show(
+                    "Ibinalik sa pila ang " +
+                            target.getString("plateNumber").orEmpty() + "."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi maibalik ang sasakyan sa pila."
                 )
             }
         }
