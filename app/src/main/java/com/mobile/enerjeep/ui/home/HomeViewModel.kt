@@ -61,13 +61,7 @@ class HomeViewModel @Inject constructor(
     val openIncidentCount =
         _openIncidentCount.asStateFlow()
 
-    /*
-     * The emergency contacts that were entered when the driver accounts
-     * were created. The emergency dialog of the admin dashboard lists
-     * them, so the admin can call the contact of a driver right away.
-     */
-
-    /*
+    /* 
      * Every listener is registered here and removed in onCleared().
      * Without this the app leaked four full-collection listeners on
      * every visit to the Home screen.
