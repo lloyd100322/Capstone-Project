@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -66,6 +67,12 @@ class ContentViewModel @Inject constructor(
                         it.name.lowercase() == roleString.lowercase() 
                     } ?: UserRole.Driver
 
+                    // Same fallback as the login flow: old accounts only
+                    // carry the combined "emergencyContact" value.
+                    val legacyEmergency = EmergencyContact.splitLegacy(
+                        data?.get("emergencyContact") as? String
+                    )
+
                     val profile = UserProfile(
                         userId = data?.get("userId") as? String ?: "",
                         firstName = data?.get("firstName") as? String ?: "",
@@ -75,8 +82,14 @@ class ContentViewModel @Inject constructor(
                         licenseNumber = data?.get("licenseNumber") as? String,
                         plateNumber = data?.get("plateNumber") as? String,
                         emergencyContact = data?.get("emergencyContact") as? String,
-                        emergencyContactName = data?.get("emergencyContactName") as? String,
-                        emergencyContactNumber = data?.get("emergencyContactNumber") as? String
+                        emergencyContactName =
+                            (data?.get("emergencyContactName") as? String)
+                                ?.takeIf { it.isNotBlank() }
+                                ?: legacyEmergency.name.takeIf { it.isNotBlank() },
+                        emergencyContactNumber =
+                            (data?.get("emergencyContactNumber") as? String)
+                                ?.takeIf { it.isNotBlank() }
+                                ?: legacyEmergency.number.takeIf { it.isNotBlank() }
                     )
                     
                     userSession.setUser(profile)

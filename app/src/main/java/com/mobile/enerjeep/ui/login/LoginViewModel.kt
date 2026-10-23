@@ -13,6 +13,7 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.UserProfile
@@ -349,6 +350,16 @@ class LoginViewModel @Inject constructor(
                     )
                 } ?: UserRole.Driver
 
+                /*
+                 * The emergency contact is read from the two dedicated
+                 * fields. Older accounts only have the combined
+                 * "emergencyContact" value, so that one is split as a
+                 * fallback and the dialog never shows up empty.
+                 */
+                val legacyEmergency = EmergencyContact.splitLegacy(
+                    data["emergencyContact"] as? String
+                )
+
                 userSession.setUser(UserProfile(
                     userId = data["userId"] as? String ?: "",
                     firstName = data["firstName"] as? String ?: "",
@@ -360,9 +371,13 @@ class LoginViewModel @Inject constructor(
                     emergencyContact =
                         data["emergencyContact"] as? String,
                     emergencyContactName =
-                        data["emergencyContactName"] as? String,
+                        (data["emergencyContactName"] as? String)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: legacyEmergency.name.takeIf { it.isNotBlank() },
                     emergencyContactNumber =
-                        data["emergencyContactNumber"] as? String
+                        (data["emergencyContactNumber"] as? String)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: legacyEmergency.number.takeIf { it.isNotBlank() }
                 ))
 
                 _uiState.value = LoginUiState.Success

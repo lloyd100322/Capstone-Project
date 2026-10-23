@@ -76,6 +76,9 @@ fun HomeScreen(
         val openIncidentCount by viewModel.openIncidentCount
             .collectAsStateWithLifecycle()
 
+        val driverContacts by viewModel.driverContacts
+            .collectAsStateWithLifecycle()
+
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             bottomBar = {
@@ -277,7 +280,8 @@ fun HomeScreen(
                         emergencyContactName =
                             userProfile?.emergencyContactName,
                         emergencyContactNumber =
-                            userProfile?.emergencyContactNumber
+                            userProfile?.emergencyContactNumber,
+                        driverContacts = driverContacts
                     )
                 }
             }
@@ -554,7 +558,8 @@ fun HomeContent(
 fun EmergencyDialog(
     onDismiss: () -> Unit,
     emergencyContactName: String? = null,
-    emergencyContactNumber: String? = null
+    emergencyContactNumber: String? = null,
+    driverContacts: List<DriverEmergencyContact> = emptyList()
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -629,6 +634,29 @@ fun EmergencyDialog(
                     )
                 }
 
+                /*
+                 * The emergency contacts that were entered when the
+                 * driver accounts were created. On the admin dashboard
+                 * the dialog lists them, so the admin can call the
+                 * contact of any driver right away.
+                 */
+                driverContacts.forEach { contact ->
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    EmergencyContactButton(
+                        title = contact.contactName,
+                        subtitle = listOf(
+                            contact.driverName,
+                            contact.plateNumber
+                        ).filter { it.isNotBlank() }
+                            .joinToString(" • "),
+                        number = contact.contactNumber,
+                        icon = Icons.Default.Person,
+                        bgColor = EnerjeepBlue,
+                        textColor = Color.White
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 EmergencyContactButton(
@@ -675,7 +703,8 @@ fun EmergencyContactButton(
     number: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     bgColor: Color,
-    textColor: Color
+    textColor: Color,
+    subtitle: String? = null
 ) {
     val context = LocalContext.current
 
@@ -800,7 +829,7 @@ fun EmergencyContactButton(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp),
+            .heightIn(min = 64.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = bgColor
         ),
@@ -829,6 +858,14 @@ fun EmergencyContactButton(
                     fontSize = 14.sp,
                     color = textColor
                 )
+
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 11.sp,
+                        color = textColor.copy(alpha = 0.85f)
+                    )
+                }
 
                 Text(
                     text = number,

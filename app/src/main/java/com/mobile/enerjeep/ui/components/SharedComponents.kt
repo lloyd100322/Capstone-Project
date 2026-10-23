@@ -154,14 +154,21 @@ fun PesoIcon(modifier: Modifier = Modifier, color: Color = Color.Black) {
 
         /*
          * The peso sign of the Philippines: a "P" with two horizontal
-         * bars crossing the stem. Refined proportions and rounded caps
-         * so the glyph stays clean at small sizes (form fields, cards,
-         * bottom navigation).
+         * bars crossing the stem below the bowl.
+         *
+         * Proportions (of the icon box):
+         *  - stem   : x = 32%, y from 8% to 92%
+         *  - bowl   : from the stem top back to the stem at 48% height
+         *  - bars   : at 64% and 78% height, clear of the bowl stroke
+         *
+         * The gap between the bowl and the first bar is deliberate:
+         * when the strokes touched, the two shapes merged into one blob
+         * at small sizes (18-24 dp) and the bars looked misplaced.
          */
-        val stroke = width * 0.11f
-        val stemX = width * 0.34f
-        val top = height * 0.10f
-        val bottom = height * 0.90f
+        val stroke = width * 0.09f
+        val stemX = width * 0.32f
+        val top = height * 0.08f
+        val bottom = height * 0.92f
 
         // Vertical stem of the "P".
         drawLine(
@@ -177,9 +184,9 @@ fun PesoIcon(modifier: Modifier = Modifier, color: Color = Color.Black) {
             path = Path().apply {
                 moveTo(stemX, top)
                 cubicTo(
-                    width * 0.88f, top,
-                    width * 0.88f, height * 0.46f,
-                    stemX, height * 0.46f
+                    width * 0.86f, top,
+                    width * 0.86f, height * 0.48f,
+                    stemX, height * 0.48f
                 )
             },
             color = color,
@@ -189,15 +196,15 @@ fun PesoIcon(modifier: Modifier = Modifier, color: Color = Color.Black) {
         // The two bars that cross the stem below the bowl.
         drawLine(
             color = color,
-            start = Offset(width * 0.12f, height * 0.58f),
-            end = Offset(width * 0.74f, height * 0.58f),
+            start = Offset(width * 0.14f, height * 0.64f),
+            end = Offset(width * 0.60f, height * 0.64f),
             strokeWidth = stroke,
             cap = StrokeCap.Round
         )
         drawLine(
             color = color,
-            start = Offset(width * 0.12f, height * 0.74f),
-            end = Offset(width * 0.74f, height * 0.74f),
+            start = Offset(width * 0.14f, height * 0.78f),
+            end = Offset(width * 0.60f, height * 0.78f),
             strokeWidth = stroke,
             cap = StrokeCap.Round
         )
