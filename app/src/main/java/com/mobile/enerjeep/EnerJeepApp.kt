@@ -34,13 +34,13 @@ class EnerJeepApp : Application() {
              */
             debugFactory
                 .create(FirebaseApp.getInstance())
-                .appCheckToken
+                .getAppCheckToken()
                 .addOnSuccessListener { token ->
                     Log.d(
                         "AppCheckDebug",
                         "Enter this debug token into the list of " +
                             "valid debug tokens in the Firebase " +
-                            "console for your project: ${token.token}"
+                            "console for your project: ${token.getToken()}"
                     )
                 }
         } else {
