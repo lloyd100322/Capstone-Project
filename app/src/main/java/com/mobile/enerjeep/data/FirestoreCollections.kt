@@ -20,6 +20,12 @@ object FirestoreCollections {
 
     /** App settings (queue rotation cutoff, deduction tiers, ...). */
     const val SETTINGS = "settings"
+
+    /** Accountability trail - superadmin-only reads (see rules). */
+    const val ACTIVITY_LOGS = "activityLogs"
+
+    /** Superadmin-managed "available admin" emergency list. */
+    const val EMERGENCY_CONTACTS = "emergencyContacts"
 }
 
 object FirestoreIds {

@@ -43,6 +43,7 @@ fun DriverContent(
     appNavigator: AppNavigator,
     emergencyContactName: String? = null,
     emergencyContactNumber: String? = null,
+    adminContacts: List<Pair<String, String>> = emptyList(),
     viewModel: DriverViewModel = hiltViewModel()
 ) {
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
@@ -163,7 +164,8 @@ fun DriverContent(
                         showEmergencyDialog = false
                     },
                     emergencyContactName = emergencyContactName,
-                    emergencyContactNumber = emergencyContactNumber
+                    emergencyContactNumber = emergencyContactNumber,
+                    adminContacts = adminContacts
                 )
             }
         }

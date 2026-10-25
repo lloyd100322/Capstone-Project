@@ -7,6 +7,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.UserSession
@@ -92,7 +93,8 @@ class AccountManagementViewModel @Inject constructor(
 
                     if (
                         roleLower != "admin" &&
-                        roleLower != "driver"
+                        roleLower != "driver" &&
+                        roleLower != "superadmin"
                     ) {
                         return@mapNotNull null
                     }
@@ -132,10 +134,10 @@ class AccountManagementViewModel @Inject constructor(
 
                         name = name,
 
-                        role = if (roleLower == "admin") {
-                            "Admin"
-                        } else {
-                            "Driver"
+                        role = when (roleLower) {
+                            "superadmin" -> "Superadmin"
+                            "admin" -> "Admin"
+                            else -> "Driver"
                         },
 
                         phone = document
@@ -547,6 +549,14 @@ class AccountManagementViewModel @Inject constructor(
         }
 
         batch.commit().await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    if (newIsActive) "Ibalik sa Serbisyo"
+                    else "Alisin sa Serbisyo",
+                    account.name
+                )
     }
 
     fun deleteAccount(accountId: String) {
@@ -639,6 +649,13 @@ class AccountManagementViewModel @Inject constructor(
 
                 batch.commit().await()
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Binura ang Account",
+                    accountId
+                )
+
             } catch (e: Exception) {
                 setError(
                     e.message ?: "Hindi mabura ang account."
@@ -649,7 +666,47 @@ class AccountManagementViewModel @Inject constructor(
         }
     }
 
-    private fun isCurrentAccount(account: AccountItem): Boolean {
+    fun isSuperadmin(): Boolean = userSession.isSuperadmin()
+
+    /**
+     * Superadmin only: promote a driver to admin or demote an admin
+     * back to driver. Firestore rules also block role writes that do
+     * not come from a superadmin.
+     */
+    fun changeUserRole(accountId: String, newRole: String) {
+        viewModelScope.launch {
+            try {
+                setBusy(accountId, true)
+
+                firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(accountId)
+                    .update("role", newRole.lowercase(Locale.ROOT))
+                    .await()
+
+                val roleLabel = when (newRole.lowercase(Locale.ROOT)) {
+                    "admin" -> "Admin"
+                    "superadmin" -> "Superadmin"
+                    else -> "Driver"
+                }
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Palit ng Level",
+                    "Ginawang $roleLabel ang account ($accountId)"
+                )
+
+                ToastFeedback.show("Napalitan na ang level: $roleLabel")
+            } catch (e: Exception) {
+                setError(e.message ?: "Hindi mapalitan ang level")
+            } finally {
+                setBusy(accountId, false)
+            }
+        }
+    }
+
+    fun isCurrentAccount(account: AccountItem): Boolean {
         val profile = userSession.userProfile ?: return false
 
         return (

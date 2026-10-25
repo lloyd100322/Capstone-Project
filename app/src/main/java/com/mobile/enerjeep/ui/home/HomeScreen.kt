@@ -75,6 +75,8 @@ fun HomeScreen(
             .collectAsStateWithLifecycle()
 
         val openIncidentCount by viewModel.openIncidentCount
+        val emergencyContactsList by viewModel.emergencyContacts
+            .collectAsStateWithLifecycle()
             .collectAsStateWithLifecycle()
 
         Scaffold(
@@ -292,7 +294,8 @@ fun HomeScreen(
             emergencyContactName =
                 userProfile?.emergencyContactName,
             emergencyContactNumber =
-                userProfile?.emergencyContactNumber
+                userProfile?.emergencyContactNumber,
+            adminContacts = emergencyContactsList
         )
     }
 }
@@ -538,7 +541,8 @@ fun HomeContent(
 fun EmergencyDialog(
     onDismiss: () -> Unit,
     emergencyContactName: String? = null,
-    emergencyContactNumber: String? = null
+    emergencyContactNumber: String? = null,
+    adminContacts: List<Pair<String, String>> = emptyList()
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -616,25 +620,24 @@ fun EmergencyDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                /*
+                 * The superadmin-managed "available admin" contacts -
+                 * the drivers may call them for help. (The old hardcoded
+                 * placeholder numbers were removed.)
+                 */
+                adminContacts.forEach { (name, number) ->
+                    if (number.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                EmergencyContactButton(
-                    title = "Dispatch ng Koop",
-                    number = "+63 (2) 1234-5678",
-                    icon = Icons.Default.HeadsetMic,
-                    bgColor = EnerjeepBlue,
-                    textColor = Color.White
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                EmergencyContactButton(
-                    title = "Pamunuan",
-                    number = "+63 917 500 0000",
-                    icon = Icons.Default.Phone,
-                    bgColor = Color(0xFFFBBF24),
-                    textColor = Color.Black
-                )
+                        EmergencyContactButton(
+                            title = name.ifBlank { "Admin" },
+                            number = number,
+                            icon = Icons.Default.Person,
+                            bgColor = EnerjeepBlue,
+                            textColor = Color.White
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 

@@ -108,7 +108,8 @@ sealed interface ReportUiState {
 
 @HiltViewModel
 class ReportViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userSession: com.mobile.enerjeep.data.UserSession
 ) : ViewModel() {
 
     private val _uiState =
@@ -648,6 +649,13 @@ class ReportViewModel @Inject constructor(
                     .document(id)
                     .set(data)
                     .await()
+
+                com.mobile.enerjeep.data.ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Donasyon",
+                    "₱" + (donasyon.amount ?: 0.0).toString()
+                )
 
             } catch (e: Exception) {
 

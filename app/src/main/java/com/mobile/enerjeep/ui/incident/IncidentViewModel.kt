@@ -6,6 +6,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.PhilippineIdentifiers
@@ -263,6 +264,13 @@ class IncidentViewModel @Inject constructor(
                     )
                     .await()
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Ipinadala sa Driver",
+                    incidentId
+                )
+
                 ToastFeedback.show(
                     "Naipadala na sa mga driver ang insidente."
                 )
@@ -401,6 +409,13 @@ class IncidentViewModel @Inject constructor(
                     .set(data)
                     .await()
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Bagong Insidente",
+                    "${plateNumber.trim()} • $type • $location"
+                )
+
                 ToastFeedback.show(
                     "Naitala ang insidente para sa ${plateNumber.trim()}."
                 )
@@ -439,6 +454,13 @@ class IncidentViewModel @Inject constructor(
                         )
                     )
                     .await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Naayos na Insidente",
+                    incidentId
+                )
 
                 ToastFeedback.show(
                     "Naayos na ang insidente. Nasa Kasaysayan na ito."

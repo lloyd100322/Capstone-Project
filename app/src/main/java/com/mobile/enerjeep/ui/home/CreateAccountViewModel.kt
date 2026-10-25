@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.PasswordHasher
@@ -314,6 +315,14 @@ class CreateAccountViewModel @Inject constructor(
 
                 // Create the user and initial queue entry together.
                 batch.commit().await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Gumawa ng Account",
+                    "$cleanFirstName $cleanLastName (" +
+                            effectiveRole.name + ")"
+                )
 
                 _uiState.value = CreateAccountUiState.Success
 

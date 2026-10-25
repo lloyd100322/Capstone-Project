@@ -61,6 +61,16 @@ class HomeViewModel @Inject constructor(
     val openIncidentCount =
         _openIncidentCount.asStateFlow()
 
+    /*
+     * The superadmin-managed "available admin" emergency list. Drivers
+     * see these contacts in the Emergency dialog.
+     */
+    private val _emergencyContacts =
+        MutableStateFlow<List<Pair<String, String>>>(emptyList())
+
+    val emergencyContacts =
+        _emergencyContacts.asStateFlow()
+
     /* 
      * Every listener is registered here and removed in onCleared().
      * Without this the app leaked four full-collection listeners on
@@ -74,6 +84,21 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun startListeners() {
+
+        listeners += firestore
+            .collection(FirestoreCollections.EMERGENCY_CONTACTS)
+            .addSnapshotListener { snapshot, _ ->
+                _emergencyContacts.value = snapshot
+                    ?.documents
+                    ?.filter {
+                        it.getBoolean("isActive") != false
+                    }
+                    ?.map { document ->
+                        document.getString("name").orEmpty() to
+                                document.getString("number").orEmpty()
+                    }
+                    .orEmpty()
+            }
 
         /*
          * Total registered drivers.

@@ -28,13 +28,22 @@ import com.mobile.enerjeep.navigation.Screen
 @Composable
 fun AccountManagementScreen(
     appNavigator: AppNavigator,
-    viewModel: AccountManagementViewModel = hiltViewModel()
+    viewModel: AccountManagementViewModel = hiltViewModel(),
+    superadminViewModel: SuperadminViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var accountPendingDeletion by remember {
         mutableStateOf<AccountItem?>(null)
     }
+
+    /*
+     * Superadmin toolbox: the emergency list, the accountability log
+     * and the settings open INSIDE this screen (no new module needed).
+     * 0 = Mga Account, 1 = Emergency List, 2 = Talaan, 3 = Settings
+     */
+    var superadminView by remember { mutableStateOf(0) }
+    val isSuperadmin = viewModel.isSuperadmin()
 
     Scaffold(
         topBar = {
@@ -106,6 +115,75 @@ fun AccountManagementScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
+            /*
+             * Superadmin-only toolbox buttons. An admin never sees
+             * these - that is how the higher level shows itself.
+             */
+            if (isSuperadmin) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SuperadminTabButton(
+                        modifier = Modifier.weight(1f),
+                        text = "Emergency",
+                        selected = superadminView == 1
+                    ) { superadminView = 1 }
+                    SuperadminTabButton(
+                        modifier = Modifier.weight(1f),
+                        text = "Talaan",
+                        selected = superadminView == 2
+                    ) { superadminView = 2 }
+                    SuperadminTabButton(
+                        modifier = Modifier.weight(1f),
+                        text = "Settings",
+                        selected = superadminView == 3
+                    ) { superadminView = 3 }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            when {
+                isSuperadmin && superadminView == 1 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { superadminView = 0 }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Bumalik"
+                            )
+                        }
+                        Text("Bumalik sa Mga Account", fontSize = 12.sp)
+                    }
+                    EmergencyListView(superadminViewModel)
+                }
+
+                isSuperadmin && superadminView == 2 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { superadminView = 0 }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Bumalik"
+                            )
+                        }
+                        Text("Bumalik sa Mga Account", fontSize = 12.sp)
+                    }
+                    ActivityLogView(superadminViewModel)
+                }
+
+                isSuperadmin && superadminView == 3 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { superadminView = 0 }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Bumalik"
+                            )
+                        }
+                        Text("Bumalik sa Mga Account", fontSize = 12.sp)
+                    }
+                    SettingsView(superadminViewModel)
+                }
+
+                else -> {
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = {
@@ -187,8 +265,26 @@ fun AccountManagementScreen(
                         onDelete = {
                             accountPendingDeletion = account
                         },
+                        onChangeRole = if (
+                            isSuperadmin && !viewModel.isCurrentAccount(account)
+                        ) {
+                            {
+                                viewModel.changeUserRole(
+                                    account.id,
+                                    if (account.role == "Driver") {
+                                        "admin"
+                                    } else {
+                                        "driver"
+                                    }
+                                )
+                            }
+                        } else {
+                            null
+                        },
                         isBusy = account.id in uiState.busyAccountIds
                     )
+                }
+            }
                 }
             }
         }
@@ -239,6 +335,7 @@ fun AccountCard(
     account: AccountItem,
     onToggleStatus: () -> Unit,
     onDelete: () -> Unit,
+    onChangeRole: (() -> Unit)? = null,
     isBusy: Boolean = false
 ) {
     Card(
@@ -267,17 +364,17 @@ fun AccountCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 val roleBgColor =
-                    if (account.role == "Admin") {
-                        Color(0xFF1B49B5)
-                    } else {
-                        Color(0xFFFEF3C7)
+                    when (account.role) {
+                        "Superadmin" -> Color(0xFF6D28D9)
+                        "Admin" -> Color(0xFF1B49B5)
+                        else -> Color(0xFFFEF3C7)
                     }
 
                 val roleTextColor =
-                    if (account.role == "Admin") {
-                        Color.White
-                    } else {
+                    if (account.role == "Driver") {
                         Color(0xFFD97706)
+                    } else {
+                        Color.White
                     }
 
                 Surface(
@@ -380,13 +477,45 @@ fun AccountCard(
                 ) {
                     Text(
                         text = if (account.isActive) {
-                            "I-deactivate"
+                            "Alisin sa Serbisyo"
                         } else {
-                            "I-activate"
+                            "Ibalik sa Serbisyo"
                         },
                         color = Color.Black,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 11.sp
                     )
+                }
+
+                /*
+                 * Superadmin only: promote a driver to admin or demote
+                 * an admin back to driver.
+                 */
+                if (onChangeRole != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedButton(
+                        onClick = onChangeRole,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        enabled = !isBusy,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            Color(0xFF1B49B5)
+                        )
+                    ) {
+                        Text(
+                            text = if (account.role == "Driver") {
+                                "Gawing Admin"
+                            } else {
+                                "Gawing Driver"
+                            },
+                            color = Color(0xFF1B49B5),
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -410,5 +539,29 @@ fun AccountCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun SuperadminTabButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(40.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            1.dp,
+            if (selected) Color(0xFF6D28D9) else Color.LightGray
+        )
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = if (selected) Color(0xFF6D28D9) else Color.Black
+        )
     }
 }

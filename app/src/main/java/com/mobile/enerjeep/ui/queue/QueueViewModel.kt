@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.UserSession
@@ -737,6 +738,14 @@ class QueueViewModel @Inject constructor(
                     .filter { it.isNotBlank() }
                     .joinToString(" — ")
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Dispatch",
+                    "$plateNumber — $driverName • " +
+                            oppositeRoute(currentDocument.getString("route"))
+                )
+
                 ToastFeedback.show(
                     "Na-dispatch na ang driver: $dispatchedLabel"
                 )
@@ -841,6 +850,13 @@ class QueueViewModel @Inject constructor(
                     true
                 }.await()
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Kanselahin sa Pila",
+                    target.getString("plateNumber").orEmpty()
+                )
+
                 ToastFeedback.show(
                     "Nakansela ang " +
                             target.getString("plateNumber").orEmpty() +
@@ -938,6 +954,13 @@ class QueueViewModel @Inject constructor(
                     true
                 }.await()
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Ibalik sa Pila",
+                    target.getString("plateNumber").orEmpty()
+                )
+
                 ToastFeedback.show(
                     "Ibinalik sa pila ang " +
                             target.getString("plateNumber").orEmpty() + "."
@@ -1031,10 +1054,13 @@ class QueueViewModel @Inject constructor(
      * The queue "day" flips at 11:00 PM (23:00) - after the cut-off the
      * queue already belongs to the next operating day.
      */
-    fun queueDayId(now: Date = Date()): String {
+    fun queueDayId(
+        now: Date = Date(),
+        cutoffHour: Int = 23
+    ): String {
         val calendar = Calendar.getInstance()
         calendar.time = now
-        if (calendar.get(Calendar.HOUR_OF_DAY) >= 23) {
+        if (calendar.get(Calendar.HOUR_OF_DAY) >= cutoffHour) {
             calendar.add(Calendar.DAY_OF_MONTH, 1)
         }
         return SimpleDateFormat(
@@ -1061,6 +1087,13 @@ class QueueViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 rotateQueueIfNeeded(force = true)
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Reset ng Pila",
+                    "Manual reset"
+                )
+
                 ToastFeedback.show(
                     "Na-reset na ang pila: ang dating #1 ay nasa huli na."
                 )
@@ -1078,12 +1111,14 @@ class QueueViewModel @Inject constructor(
             .get()
             .await()
 
-        val today = queueDayId()
-
         firestore.runTransaction { transaction ->
             val metaReference = rotationMetaReference()
             val meta = transaction.get(metaReference)
             val lastReset = meta.getString("lastQueueDay")
+
+            // The cut-off hour is editable by the superadmin (Settings).
+            val cutoffHour = meta.getLong("cutoffHour")?.toInt() ?: 23
+            val today = queueDayId(Date(), cutoffHour)
 
             if (!force && lastReset == today) {
                 return@runTransaction false
@@ -1207,6 +1242,13 @@ class QueueViewModel @Inject constructor(
 
                     true
                 }.await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Tapos Na",
+                    target.getString("plateNumber").orEmpty()
+                )
 
                 ToastFeedback.show(
                     "Tapos na ang biyahe. Wala na sa pila ang " +

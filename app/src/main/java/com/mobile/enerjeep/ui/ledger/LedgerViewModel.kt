@@ -56,7 +56,8 @@ sealed interface LedgerUiState {
 
 @HiltViewModel
 class LedgerViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userSession: com.mobile.enerjeep.data.UserSession
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LedgerUiState>(LedgerUiState.Loading)
@@ -229,6 +230,13 @@ class LedgerViewModel @Inject constructor(
                     "createdAt" to FieldValue.serverTimestamp()
                 )
                 firestore.collection(FirestoreCollections.LEDGER).document(documentId).set(data).await()
+
+                com.mobile.enerjeep.data.ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Koleksyon sa Talaan",
+                    "$plateNumber • $feeType • ₱$amount"
+                )
             } catch (e: Exception) {
                 _uiState.value = LedgerUiState.Error(e.message ?: "Hindi na-save ang collection")
             }
