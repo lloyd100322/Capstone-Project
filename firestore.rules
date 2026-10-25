@@ -95,8 +95,15 @@ service cloud.firestore {
       // A user edits their own profile; an admin edits any profile
       // (activate/deactivate). Never accept a plaintext password, but
       // legacy documents that still have one can be updated.
+      //
+      // Only a superadmin may CHANGE the role field of an account
+      // (promote/demote). This stops an admin from promoting himself.
       allow update: if ((isAdmin() || (isMember() && isOwner(phone)))
-                        && doesNotSetPassword());
+                        && doesNotSetPassword()
+                        && (isSuperadmin()
+                            || !request.resource.data.diff(resource.data)
+                                 .affectedKeys()
+                                 .hasAny(['role'])));
 
       allow delete: if isAdmin();
     }
@@ -139,6 +146,31 @@ service cloud.firestore {
     match /settings/{docId} {
       allow read: if isMember();
       allow write: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /activityLogs - audit log (accountability)
+    //
+    // EVERY admin action is recorded here (dispatch, cancel, create
+    // account, donations, ...). Only the SUPERADMIN can read the log -
+    // auditing the admins is the oversight power of the level above.
+    // Entries can never be edited or deleted, so the trail is honest.
+    // ------------------------------------------------------------------
+    match /activityLogs/{logId} {
+      allow read: if isSuperadmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // /emergencyContacts - the "available admin" emergency list
+    //
+    // Only the SUPERADMIN manages this list (add/edit/remove). Every
+    // member can read it - the drivers use it to call for help.
+    // ------------------------------------------------------------------
+    match /emergencyContacts/{contactId} {
+      allow read: if isMember();
+      allow create, update, delete: if isSuperadmin();
     }
 
     // ------------------------------------------------------------------
