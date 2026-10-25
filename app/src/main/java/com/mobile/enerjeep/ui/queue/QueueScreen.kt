@@ -9,8 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -304,7 +302,7 @@ fun QueueScreen(
                                     vehicle = vehicle,
                                     displayPosition = vehicle.position,
                                     compact = compactView,
-                                    positionEditingEnabled = searchQuery.isBlank(),
+                                    canReorder = searchQuery.isBlank(),
                                     canDispatch = vehicle.id == frontOfLineId,
                                     onDispatchClick = { vehicleToDispatch = vehicle },
                                     onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
@@ -418,15 +416,13 @@ fun QueueItem(
     vehicle: QueueVehicle,
     displayPosition: Int,
     compact: Boolean = false,
-    positionEditingEnabled: Boolean = true,
+    canReorder: Boolean = true,
     canDispatch: Boolean = true,
     onDispatchClick: () -> Unit,
     onPositionUpdate: (Int) -> Unit,
     onCancelClick: () -> Unit,
     onRestoreClick: () -> Unit = {}
 ) {
-    var isEditingPosition by remember { mutableStateOf(false) }
-    var newPositionInput by remember { mutableStateOf("0") }
     var showCancelConfirm by remember { mutableStateOf(false) }
 
     if (showCancelConfirm) {
@@ -502,168 +498,103 @@ fun QueueItem(
                     }
 
                     /*
-                     * The "Posisyon" BUTTON is gone: tapping the position
-                     * line opens the position editor instead.
+                     * Posisyon = the big NUMBER badge on the left only.
+                     * The old "Posisyon" button / tap-to-edit is gone;
+                     * reordering is done with the big up/down arrows.
                      */
                     Text(
-                        text = "Posisyon #${displayPosition} • Sumali: ${vehicle.time}" +
-                                if (positionEditingEnabled && !compact) {
-                                    "  (pindutin para baguhin)"
-                                } else {
-                                    ""
-                                },
+                        text = "Sumali: ${vehicle.time}",
                         fontSize = if (compact) 11.sp else 12.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.clickable(enabled = positionEditingEnabled) {
-                            newPositionInput = displayPosition.toString()
-                            isEditingPosition = true
-                        }
+                        color = Color.Gray
                     )
                 }
 
                 /*
-                 * Kanselahin / Ibalik sa Pila lives in the CORNER of the
-                 * box so the row stays clean even in a long pila.
+                 * Upper-right corner: an X button for "Kanselahin" (with
+                 * the confirm dialog), or "Ibalik sa Pila" for cancelled
+                 * rows. No more text button in the middle of the row.
                  */
-                TextButton(
-                    onClick = {
-                        if (vehicle.isCancelled) {
-                            onRestoreClick()
-                        } else {
-                            showCancelConfirm = true
-                        }
-                    },
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text(
-                        text = if (vehicle.isCancelled) "Ibalik sa Pila" else "Kanselahin",
-                        fontSize = 11.sp,
-                        color = if (vehicle.isCancelled) SuccessGreen else ErrorRed
-                    )
+                if (vehicle.isCancelled) {
+                    TextButton(
+                        onClick = onRestoreClick,
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = "Ibalik sa Pila",
+                            fontSize = 11.sp,
+                            color = SuccessGreen
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = { showCancelConfirm = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Kanselahin",
+                            tint = ErrorRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(if (compact) 8.dp else 20.dp))
 
-            if (isEditingPosition) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    /*
-                     * The two arrow buttons used to be 24.dp each and were
-                     * stacked inside a 48.dp tall field, so they took the
-                     * whole height of the field and the number the driver
-                     * typed was cut off. The field is now taller and the
-                     * arrows are smaller, so the number is always fully
-                     * visible while typing and after saving.
-                     */
-                    OutlinedTextField(
-                        value = newPositionInput,
-                        onValueChange = {
-                            if (it.isEmpty() || it.all { char -> char.isDigit() }) {
-                                newPositionInput = it
+            if (canDispatch) {
+                Button(
+                    onClick = onDispatchClick,
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                    shape = RoundedCornerShape(22.dp)
+                ) {
+                    NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("I-dispatch", fontSize = 14.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            /*
+             * The ONLY position control: two BIG up/down arrows. The old
+             * "Posisyon" button + number field + Set/Bawi are gone.
+             * Hidden in compact mode, while searching and for cancelled
+             * rows (they wait at the end anyway).
+             */
+            if (canReorder && !compact && !vehicle.isCancelled) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (displayPosition > 1) {
+                                onPositionUpdate(displayPosition - 1)
                             }
                         },
                         modifier = Modifier.weight(1f).height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedBorderColor = FieldBorderColor,
-                            focusedBorderColor = EnerjeepBlue
-                        ),
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        trailingIcon = {
-                            Column(
-                                modifier = Modifier.padding(end = 4.dp),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropUp,
-                                    contentDescription = "Up",
-                                    tint = Color.Gray,
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clickable {
-                                            val current = newPositionInput.toIntOrNull() ?: 0
-                                            newPositionInput = (current + 1).toString()
-                                        }
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = "Down",
-                                    tint = Color.Gray,
-                                    modifier = Modifier
-                                        .size(20.dp)
-                                        .clickable {
-                                            val current = newPositionInput.toIntOrNull() ?: 0
-                                            if (current > 0) newPositionInput = (current - 1).toString()
-                                        }
-                                )
-                            }
-                        }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            newPositionInput.toIntOrNull()?.let {
-                                onPositionUpdate(it)
-                                isEditingPosition = false
-                                newPositionInput = "0"
-                            }
-                        },
-                        modifier = Modifier.height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("Set", fontSize = 14.sp) }
-                    Spacer(modifier = Modifier.width(8.dp))
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        ArrowUpIcon(
+                            modifier = Modifier.size(28.dp),
+                            color = EnerjeepBlue
+                        )
+                    }
                     OutlinedButton(
                         onClick = {
-                            isEditingPosition = false
-                            newPositionInput = "0"
+                            onPositionUpdate(displayPosition + 1)
                         },
-                        modifier = Modifier.height(56.dp),
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("Bawi", fontSize = 14.sp, color = Color.Black) }
-                }
-            } else {
-                if (canDispatch) {
-                    Button(
-                        onClick = onDispatchClick,
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
-                        shape = RoundedCornerShape(22.dp)
+                        contentPadding = PaddingValues(0.dp)
                     ) {
-                        NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("I-dispatch", fontSize = 14.sp)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                /*
-                 * Position arrows stay for fine tuning who goes first -
-                 * hidden in compact mode and while searching.
-                 */
-                if (positionEditingEnabled && !compact) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        ActionButton(
-                            icon = { ArrowUpIcon(modifier = Modifier.size(16.dp)) },
-                            onClick = {
-                                if (displayPosition > 1) {
-                                    onPositionUpdate(displayPosition - 1)
-                                }
-                            }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        ActionButton(
-                            icon = { ArrowDownIcon(modifier = Modifier.size(16.dp)) },
-                            onClick = {
-                                onPositionUpdate(displayPosition + 1)
-                            }
+                        ArrowDownIcon(
+                            modifier = Modifier.size(28.dp),
+                            color = EnerjeepBlue
                         )
                     }
                 }
