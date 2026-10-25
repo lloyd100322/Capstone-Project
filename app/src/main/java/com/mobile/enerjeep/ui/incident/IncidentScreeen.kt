@@ -26,16 +26,25 @@ import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
+import com.mobile.enerjeep.ui.ledger.LedgerViewModel
+import com.mobile.enerjeep.ui.ledger.TerminalFeeFormContent
 import com.mobile.enerjeep.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    /* Ang "Talaan" tab ay tinanggal: dito na sa Insidente ang pag-record
+     * ng bayad ng multa ("may incident -> nagbayad"). */
+    val ledgerViewModel: LedgerViewModel = hiltViewModel()
+    val ledgerDrivers by ledgerViewModel.driverOptions.collectAsStateWithLifecycle()
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     var selectedIncident by remember { mutableStateOf<IncidentItem?>(null) }
+    var showMultaModal by remember { mutableStateOf(false) }
+    var multaPrefillPlate by remember { mutableStateOf("") }
+    var multaPrefillAmount by remember { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(containerColor = LightGrayBackground) { padding ->
@@ -46,7 +55,19 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
             Spacer(Modifier.height(32.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Insidente", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(22.dp)) { Text("+ I-report") }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = {
+                            multaPrefillPlate = ""
+                            multaPrefillAmount = ""
+                            showMultaModal = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
+                        shape = RoundedCornerShape(22.dp)
+                    ) { Text("Multa", fontSize = 12.sp, color = Color.White) }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(22.dp)) { Text("+ I-report") }
+                }
             }
             Spacer(Modifier.height(24.dp))
             when (val state = uiState) {
@@ -103,9 +124,40 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
             onSendToDriver = {
                 viewModel.sendIncidentToDriver(incident.id)
                 selectedIncident = null
+            },
+            onRecordPayment = {
+                multaPrefillPlate = incident.plateNumber
+                multaPrefillAmount = incident.penalty.filter { it.isDigit() }
+                selectedIncident = null
+                showMultaModal = true
             }
         )
     } }
+
+    /* Ang dating "+ Idagdag" ng Talaan: multa payment form. */
+    if (showMultaModal) {
+        ModalBottomSheet(
+            onDismissRequest = { showMultaModal = false },
+            sheetState = sheetState,
+            containerColor = Color.White
+        ) {
+            TerminalFeeFormContent(
+                drivers = ledgerDrivers,
+                initialAmount = multaPrefillAmount.ifBlank { "50" },
+                initialPlate = multaPrefillPlate,
+                onCancel = { showMultaModal = false },
+                onSubmit = { driver, amount, feeType ->
+                    ledgerViewModel.addCollection(
+                        driver.plateNumber,
+                        driver.driverName,
+                        amount,
+                        feeType
+                    )
+                    showMultaModal = false
+                }
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -255,11 +307,35 @@ fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
 }
 
 @Composable
-fun IncidentDetailsContent(incident: IncidentItem, onCancel: () -> Unit, onResolve: () -> Unit, onSendToDriver: () -> Unit = {}) {
+fun IncidentDetailsContent(
+    incident: IncidentItem,
+    onCancel: () -> Unit,
+    onResolve: () -> Unit,
+    onSendToDriver: () -> Unit = {},
+    onRecordPayment: (() -> Unit)? = null
+) {
     Column(Modifier.fillMaxWidth().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
         Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
         IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
+        /*
+         * "May incident -> nagbayad": kung may multa ang insidente,
+         * maaaring i-record dito ang bayad ng driver (Talaan ay wala na).
+         */
+        val penaltyDigits = incident.penalty.filter { it.isDigit() }
+        if (onRecordPayment != null && penaltyDigits.isNotEmpty() && (penaltyDigits.toIntOrNull() ?: 0) > 0) {
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onRecordPayment,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                PesoIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("I-record ang Bayad (Multa)", color = Color.White)
+            }
+        }
         if (incident.sentToDriver == "Hindi") {
             Spacer(Modifier.height(16.dp))
             Button(

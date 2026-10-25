@@ -30,7 +30,6 @@ import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
 import androidx.compose.ui.window.Dialog
 import com.mobile.enerjeep.ui.queue.QueueScreen
-import com.mobile.enerjeep.ui.ledger.LedgerScreen
 import com.mobile.enerjeep.ui.incident.IncidentScreen
 import com.mobile.enerjeep.ui.incident.IncidentReportFormScreen
 import com.mobile.enerjeep.ui.report.ReportScreen
@@ -47,7 +46,7 @@ import androidx.core.content.ContextCompat
 import com.mobile.enerjeep.ui.components.ToastFeedback
 
 enum class HomeTab {
-    Home, Pila, Talaan, Insidente, MgaUlat, Profile
+    Home, Pila, Insidente, MgaUlat, Profile
 }
 
 @Composable
@@ -71,7 +70,6 @@ fun HomeScreen(
         var selectedTab by remember { mutableStateOf(HomeTab.Home) }
         var showIncidentForm by remember { mutableStateOf(false) }
         var showEmergencyDialog by remember { mutableStateOf(false) }
-        var openLedgerForm by remember { mutableStateOf(false) }
 
         val activeJeeps by viewModel.activeJeepsCount
             .collectAsStateWithLifecycle()
@@ -127,20 +125,6 @@ fun HomeScreen(
                         },
                         label = {
                             Text("Pila", fontSize = 10.sp)
-                        }
-                    )
-
-                    NavigationBarItem(
-                        selected = selectedTab == HomeTab.Talaan,
-                        onClick = {
-                            selectedTab = HomeTab.Talaan
-                            showIncidentForm = false
-                        },
-                        icon = {
-                            DocumentIcon(modifier = Modifier.size(24.dp))
-                        },
-                        label = {
-                            Text("Talaan", fontSize = 10.sp)
                         }
                     )
 
@@ -222,7 +206,7 @@ fun HomeScreen(
 
                             // Stats are the quick access: tap = open tab.
                             onSalesClick = {
-                                selectedTab = HomeTab.Talaan
+                                selectedTab = HomeTab.MgaUlat
                             },
 
                             onActiveClick = {
@@ -245,15 +229,6 @@ fun HomeScreen(
 
                     HomeTab.Pila -> {
                         QueueScreen()
-                    }
-
-                    HomeTab.Talaan -> {
-                        LedgerScreen(
-                            shouldOpenForm = openLedgerForm,
-                            onFormHandled = {
-                                openLedgerForm = false
-                            }
-                        )
                     }
 
                     HomeTab.Insidente -> {

@@ -234,7 +234,7 @@ class LedgerViewModel @Inject constructor(
                 com.mobile.enerjeep.data.ActivityLogger.log(
                     firestore,
                     userSession,
-                    "Koleksyon sa Talaan",
+                    "Bayad ng Multa",
                     "$plateNumber • $feeType • ₱$amount"
                 )
             } catch (e: Exception) {
