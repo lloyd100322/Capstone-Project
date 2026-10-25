@@ -10,6 +10,7 @@ import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserRole
+import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.navigation.AppNavigator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +26,15 @@ import javax.inject.Inject
 @HiltViewModel
 class CreateAccountViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val appNavigator: AppNavigator
+    private val appNavigator: AppNavigator,
+    private val userSession: UserSession
 ) : ViewModel() {
+
+    /**
+     * Only a superadmin may create an admin account. An admin can
+     * create driver accounts only.
+     */
+    fun canCreateAdmin(): Boolean = userSession.isSuperadmin()
 
     private val _uiState =
         MutableStateFlow<CreateAccountUiState>(
@@ -54,6 +62,13 @@ class CreateAccountViewModel @Inject constructor(
         emergencyContactName: String = "",
         emergencyContactNumber: String = ""
     ) {
+        /*
+         * User-level rule: only a superadmin can create an admin.
+         * Everyone else can only create drivers.
+         */
+        val effectiveRole =
+            if (userSession.isSuperadmin()) role else UserRole.Driver
+
         val cleanFirstName = firstName.trim()
         val cleanLastName = lastName.trim()
         val cleanPhoneNumber = phoneNumber.trim()
@@ -86,7 +101,7 @@ class CreateAccountViewModel @Inject constructor(
             return
         }
 
-        if (role == UserRole.Driver) {
+        if (effectiveRole == UserRole.Driver) {
             // The plate number and the license number are checked before
             // anything is saved, so a wrong value never reaches Firestore.
             PhilippineIdentifiers.plateNumberError(cleanPlateNumber)
@@ -103,7 +118,7 @@ class CreateAccountViewModel @Inject constructor(
         }
 
         if (
-            role == UserRole.Driver &&
+            effectiveRole == UserRole.Driver &&
             !EmergencyContact.isValidName(cleanEmergencyName)
         ) {
             _uiState.value = CreateAccountUiState.Error(
@@ -114,7 +129,7 @@ class CreateAccountViewModel @Inject constructor(
         }
 
         if (
-            role == UserRole.Driver &&
+            effectiveRole == UserRole.Driver &&
             !EmergencyContact.isValidNumber(cleanEmergencyNumber)
         ) {
             _uiState.value = CreateAccountUiState.Error(
@@ -144,7 +159,7 @@ class CreateAccountViewModel @Inject constructor(
                     return@launch
                 }
 
-                if (role == UserRole.Driver) {
+                if (effectiveRole == UserRole.Driver) {
                     val duplicatePlate = users
                         .whereEqualTo("role", "driver")
                         .get()
@@ -176,12 +191,12 @@ class CreateAccountViewModel @Inject constructor(
                     "firstName" to cleanFirstName,
                     "lastName" to cleanLastName,
                     "phoneNumber" to cleanPhoneNumber,
-                    "role" to role.name.lowercase(Locale.ROOT),
+                    "role" to effectiveRole.name.lowercase(Locale.ROOT),
                     "status" to "active",
                     "createdAt" to FieldValue.serverTimestamp()
                 )
 
-                if (role == UserRole.Driver) {
+                if (effectiveRole == UserRole.Driver) {
                     userMap["licenseNumber"] =
                         cleanLicenseNumber
 
@@ -229,7 +244,7 @@ class CreateAccountViewModel @Inject constructor(
                     )
                 )
 
-                if (role == UserRole.Driver) {
+                if (effectiveRole == UserRole.Driver) {
                     val queueSnapshot = firestore
                         .collection(FirestoreCollections.QUEUE)
                         .get()

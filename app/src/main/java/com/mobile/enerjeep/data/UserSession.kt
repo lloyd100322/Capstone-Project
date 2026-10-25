@@ -30,7 +30,18 @@ class UserSession @Inject constructor() {
         _userProfile.value = null
     }
 
-    fun isAdmin(): Boolean = userProfile?.role == UserRole.Admin
+    /*
+     * Superadmin and Admin share the admin dashboard. Only the
+     * superadmin may create admin accounts and manage the emergency
+     * contact list (see CreateAccountScreen).
+     */
+    fun isAdmin(): Boolean =
+        userProfile?.role == UserRole.Admin ||
+                userProfile?.role == UserRole.Superadmin
+
+    fun isSuperadmin(): Boolean =
+        userProfile?.role == UserRole.Superadmin
+
     fun isDriver(): Boolean = userProfile?.role == UserRole.Driver
 }
 

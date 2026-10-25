@@ -49,7 +49,17 @@ fun CreateAccountScreen(
     var emergencyContactNumber by remember { mutableStateOf("") }
 
     var expanded by remember { mutableStateOf(false) }
-    val roles = UserRole.entries
+
+    /*
+     * User levels: only a superadmin can create an admin. An admin can
+     * create driver accounts only.
+     */
+    val roles =
+        if (viewModel.canCreateAdmin()) {
+            listOf(UserRole.Admin, UserRole.Driver)
+        } else {
+            listOf(UserRole.Driver)
+        }
 
     LaunchedEffect(uiState) {
         if (uiState is CreateAccountUiState.Success) {
