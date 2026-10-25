@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DirectionsBus
@@ -24,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,8 @@ import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.WarningOrange
 import com.mobile.enerjeep.ui.theme.WarningOrangeLight
+import android.content.Intent
+import android.net.Uri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +102,13 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             }
         }
     }
-    uiState.selectedIncident?.let { selected -> IncidentDetailBottomSheet(selected) { viewModel.clearSelectedIncident() } }
+    uiState.selectedIncident?.let { selected ->
+        IncidentDetailBottomSheet(
+            selected,
+            officeName = uiState.officeName,
+            officePhone = uiState.officePhone
+        ) { viewModel.clearSelectedIncident() }
+    }
 }
 
 @Composable
@@ -153,7 +163,13 @@ fun DriverIncidentCard(incident: DriverIncident, onViewClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IncidentDetailBottomSheet(incident: DriverIncident, onDismiss: () -> Unit) {
+fun IncidentDetailBottomSheet(
+    incident: DriverIncident,
+    officeName: String = "",
+    officePhone: String = "",
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White, dragHandle = null) {
         Column(Modifier.fillMaxWidth().padding(24.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, "Close") } }
@@ -165,6 +181,53 @@ fun IncidentDetailBottomSheet(incident: DriverIncident, onDismiss: () -> Unit) {
             Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.CalendarToday, "Petsa at Oras", incident.date)
             Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.AccountBalanceWallet, "Multa", "₱${String.format("%,.0f", incident.multiya)}")
             Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.Description, "Naipadala sa Driver", if (incident.isSentToDriver) "Oo" else "Hindi")
+            /*
+             * Fase 6: tel: call button - tawagan ang opisina tungkol
+             * sa insidente. Naka-DIAL (hindi auto-call) para makita
+             * muna ng driver ang numero bago tumawag.
+             */
+            if (officePhone.isNotBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        val clean = officePhone.filter {
+                            it.isDigit() || it == '+'
+                        }
+                        if (clean.isNotBlank()) {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_DIAL,
+                                    Uri.parse("tel:$clean")
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SuccessGreen
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Call,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Tawagan ang Opisina" +
+                                if (officeName.isNotBlank()) {
+                                    " ($officeName)"
+                                } else {
+                                    ""
+                                },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
+                }
+            }
             Spacer(Modifier.height(32.dp)); OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(24.dp)) { Text("Isara", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black) }
             Spacer(Modifier.height(16.dp))
         }

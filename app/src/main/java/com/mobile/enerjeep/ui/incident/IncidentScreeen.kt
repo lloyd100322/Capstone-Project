@@ -29,6 +29,9 @@ import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.ledger.LedgerViewModel
 import com.mobile.enerjeep.ui.ledger.TerminalFeeFormContent
 import com.mobile.enerjeep.ui.theme.*
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +41,8 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
      * ng bayad ng multa ("may incident -> nagbayad"). */
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
     val ledgerDrivers by ledgerViewModel.driverOptions.collectAsStateWithLifecycle()
+    val driverPhones by viewModel.driverPhones.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
@@ -130,7 +135,24 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                 multaPrefillAmount = incident.penalty.filter { it.isDigit() }
                 selectedIncident = null
                 showMultaModal = true
-            }
+            },
+            onCallDriver = driverPhones[incident.plateNumber]
+                ?.takeIf { it.isNotBlank() }
+                ?.let { phone ->
+                    {
+                        val clean = phone.filter {
+                            it.isDigit() || it == '+'
+                        }
+                        if (clean.isNotBlank()) {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_DIAL,
+                                    Uri.parse("tel:$clean")
+                                )
+                            )
+                        }
+                    }
+                }
         )
     } }
 
@@ -178,8 +200,15 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }; Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
         Spacer(Modifier.height(24.dp)); Text("Plaka", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
         ExposedDropdownMenuBox(expanded = expandedDriver, onExpandedChange = { if (!submitted && driverOptions.isNotEmpty()) expandedDriver = !expandedDriver }) {
-            OutlinedTextField(value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" } ?: "Walang rehistradong jeep", onValueChange = {}, readOnly = true, enabled = !submitted && driverOptions.isNotEmpty(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) }, modifier = Modifier.fillMaxWidth().menuAnchor())
+            OutlinedTextField(value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" } ?: "Walang dispatched na jeep", onValueChange = {}, readOnly = true, enabled = !submitted && driverOptions.isNotEmpty(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) }, modifier = Modifier.fillMaxWidth().menuAnchor())
             ExposedDropdownMenu(expanded = expandedDriver, onDismissRequest = { expandedDriver = false }) { driverOptions.forEach { driver -> DropdownMenuItem(text = { Text("${driver.plateNumber} — ${driver.driverName}") }, onClick = { selectedDriver = driver; expandedDriver = false }) } }
+        }
+        if (driverOptions.isEmpty()) {
+            Text(
+                "Walang jeep na may dispatch record. Dispatch muna ang sasakyan bago mag-report ng insidente.",
+                color = Color.Gray,
+                fontSize = 12.sp
+            )
         }
         if (driverOptions.isEmpty()) Text("Walang driver account na may plaka.", color = Color.Red, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
@@ -312,12 +341,38 @@ fun IncidentDetailsContent(
     onCancel: () -> Unit,
     onResolve: () -> Unit,
     onSendToDriver: () -> Unit = {},
-    onRecordPayment: (() -> Unit)? = null
+    onRecordPayment: (() -> Unit)? = null,
+    onCallDriver: (() -> Unit)? = null
 ) {
     Column(Modifier.fillMaxWidth().padding(24.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
         Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
         IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
+        /*
+         * Fase 6: tel: call button - tawagan ang driver ng sasakyan
+         * (naka-DIAL para makita muna ang numero bago tumawag).
+         */
+        if (onCallDriver != null) {
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onCallDriver,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    SuccessGreen
+                )
+            ) {
+                Icon(
+                    Icons.Default.Call,
+                    contentDescription = null,
+                    tint = SuccessGreen,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Tawagan ang Driver", color = SuccessGreen)
+            }
+        }
         /*
          * "May incident -> nagbayad": kung may multa ang insidente,
          * maaaring i-record dito ang bayad ng driver (Talaan ay wala na).

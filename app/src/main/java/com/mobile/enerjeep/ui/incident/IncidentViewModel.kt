@@ -81,8 +81,30 @@ class IncidentViewModel @Inject constructor(
 
     val driverOptions = _driverOptions.asStateFlow()
 
+    /*
+     * Fase 6: ang dropdown ay "dispatched only" - mga jeep na may
+     * dispatch record lang (aktibong bumibiyahe). Kasama ang phone
+     * map para sa tel: call button ng admin.
+     */
+    private val _driverPhones =
+        MutableStateFlow<Map<String, String>>(emptyMap())
+
+    val driverPhones = _driverPhones.asStateFlow()
+
+    private var allDriverOptions: List<IncidentDriverOption> =
+        emptyList()
+
+    private var dispatchedPlates: Set<String> = emptySet()
+
+    private fun refreshDriverOptions() {
+        _driverOptions.value = allDriverOptions.filter {
+            it.plateNumber in dispatchedPlates
+        }
+    }
+
     private var incidentListener: ListenerRegistration? = null
     private var driverListener: ListenerRegistration? = null
+    private var queueListener: ListenerRegistration? = null
 
     init {
         startIncidentListener()
@@ -186,7 +208,7 @@ class IncidentViewModel @Inject constructor(
                         return@addSnapshotListener
                     }
 
-                    _driverOptions.value =
+                    allDriverOptions =
                         snapshot.documents
                             .mapNotNull {
                                 mapDriverOption(it)
@@ -194,6 +216,50 @@ class IncidentViewModel @Inject constructor(
                             .sortedBy {
                                 it.plateNumber.lowercase()
                             }
+
+                    _driverPhones.value = snapshot.documents
+                        .mapNotNull { document ->
+                            val plate =
+                                document.getString("plateNumber")
+                                    .orEmpty()
+                                    .trim()
+
+                            val phone = document.id.ifBlank {
+                                document.getString("phoneNumber")
+                                    .orEmpty()
+                            }
+
+                            if (plate.isBlank() ||
+                                phone.isBlank()
+                            ) {
+                                null
+                            } else {
+                                plate to phone
+                            }
+                        }
+                        .toMap()
+
+                    refreshDriverOptions()
+                }
+
+        /*
+         * "dispatched only": sinasala ng queue listener kung aling
+         * plaka ang may dispatch record (status = "dispatched").
+         */
+        queueListener =
+            firestore.collection(FirestoreCollections.QUEUE)
+                .whereEqualTo("status", "dispatched")
+                .addSnapshotListener { snapshot, _ ->
+                    dispatchedPlates = snapshot?.documents
+                        ?.mapNotNull {
+                            it.getString("plateNumber")
+                                ?.trim()
+                                ?.takeIf { plate -> plate.isNotBlank() }
+                        }
+                        ?.toSet()
+                        .orEmpty()
+
+                    refreshDriverOptions()
                 }
     }
 
@@ -587,6 +653,7 @@ class IncidentViewModel @Inject constructor(
     override fun onCleared() {
         incidentListener?.remove()
         driverListener?.remove()
+        queueListener?.remove()
         super.onCleared()
     }
 }

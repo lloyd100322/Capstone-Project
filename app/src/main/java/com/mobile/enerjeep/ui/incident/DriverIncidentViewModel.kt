@@ -42,7 +42,10 @@ data class DriverIncidentUiState(
     val filteredIncidents: List<DriverIncident> = emptyList(),
     val selectedIncident: DriverIncident? = null,
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // Fase 6: tel: button - numero ng opisina (emergency list ng superadmin).
+    val officePhone: String = "",
+    val officeName: String = ""
 )
 
 @HiltViewModel
@@ -54,9 +57,43 @@ class DriverIncidentViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DriverIncidentUiState())
     val uiState: StateFlow<DriverIncidentUiState> = _uiState.asStateFlow()
     private var listener: ListenerRegistration? = null
+    private var contactsListener: ListenerRegistration? = null
 
     init {
         startListener()
+        startContactsListener()
+    }
+
+    /*
+     * Fase 6: ang "Tawagan ang Opisina" button ay dumidial sa unang
+     * available na admin contact mula sa emergency list ng superadmin.
+     */
+    private fun startContactsListener() {
+        contactsListener?.remove()
+
+        contactsListener =
+            firestore.collection(FirestoreCollections.EMERGENCY_CONTACTS)
+                .addSnapshotListener { snapshot, _ ->
+                    val contacts = snapshot?.documents
+                        ?.map {
+                            Triple(
+                                it.getString("name").orEmpty(),
+                                it.getString("number").orEmpty(),
+                                it.getString("isActive") != false
+                            )
+                        }
+                        .orEmpty()
+                        .filter {
+                            it.third && it.second.isNotBlank()
+                        }
+                        .sortedBy { it.first.lowercase() }
+
+                    val first = contacts.firstOrNull()
+                    _uiState.value = _uiState.value.copy(
+                        officeName = first?.first.orEmpty(),
+                        officePhone = first?.second.orEmpty()
+                    )
+                }
     }
 
     /**
@@ -177,6 +214,7 @@ class DriverIncidentViewModel @Inject constructor(
 
     override fun onCleared() {
         listener?.remove()
+        contactsListener?.remove()
         super.onCleared()
     }
 }
