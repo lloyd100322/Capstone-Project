@@ -79,7 +79,7 @@ class DriverIncidentViewModel @Inject constructor(
                             Triple(
                                 it.getString("name").orEmpty(),
                                 it.getString("number").orEmpty(),
-                                it.getString("isActive") != false
+                                it.getBoolean("isActive") != false
                             )
                         }
                         .orEmpty()
