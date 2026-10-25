@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -37,6 +39,7 @@ data class HistoryVehicle(
     val id: String,
     val plateNumber: String,
     val driverName: String,
+    val route: String = "",
     val time: String,
     val status: String,
     val createdAtMillis: Long = 0L
@@ -75,11 +78,31 @@ class QueueViewModel @Inject constructor(
 
     companion object {
         private const val DEFAULT_ROUTE = "Monumento – Marilao"
+
+        const val ROUTE_MA = "Monumento – Marilao"
+        const val ROUTE_AM = "Marilao – Monumento"
+
+        /** 0 = Monumento -> Marilao, 1 = Marilao -> Monumento. */
+        fun routeKey(route: String?): Int =
+            if (route.orEmpty().trim()
+                    .startsWith("Marilao", ignoreCase = true)
+            ) 1 else 0
+
+        fun sameRoute(a: String?, b: String?): Boolean =
+            routeKey(a) == routeKey(b)
+
+        /**
+         * The route going BACK. A dispatched driver enters the pila of
+         * the opposite route at position #1.
+         */
+        fun oppositeRoute(route: String?): String =
+            if (routeKey(route) == 1) ROUTE_MA else ROUTE_AM
     }
 
     init {
         startQueueListener()
         healActiveRoster()
+        maybeRotateQueue()
     }
 
     /**
@@ -130,8 +153,14 @@ class QueueViewModel @Inject constructor(
                 }
 
                 var nextPosition = openEntries
+                    .filter {
+                        sameRoute(it.getString("route"), DEFAULT_ROUTE)
+                    }
                     .mapNotNull { it.getLong("position")?.toInt() }
                     .maxOrNull()
+                    ?: openEntries
+                        .mapNotNull { it.getLong("position")?.toInt() }
+                        .maxOrNull()
                     ?: 0
 
                 stranded.forEach { user ->
@@ -282,6 +311,11 @@ class QueueViewModel @Inject constructor(
                                 .getString("driverName")
                                 .orEmpty(),
 
+                            route = document
+                                .getString("route")
+                                .orEmpty()
+                                .ifBlank { DEFAULT_ROUTE },
+
                             time = formatTimestamp(timestamp).ifBlank {
                                 document.getString("time").orEmpty()
                             },
@@ -296,6 +330,7 @@ class QueueViewModel @Inject constructor(
                                     ?.lowercase(Locale.ROOT)
                             ) {
                                 "cancelled" -> "Nakansela"
+                                "completed" -> "Tapos Na"
                                 else -> "Na-Dispatch"
                             }
                         )
@@ -511,12 +546,41 @@ class QueueViewModel @Inject constructor(
                         )
                     )
 
-                // Renumber the existing active queue after dispatch.
-                remainingActive.forEachIndexed { index, document ->
+                /*
+                 * Positions are per route. The dispatched entry left its
+                 * route, so the drivers behind it in the SAME route move
+                 * up one spot.
+                 */
+                val currentRoute = currentDocument.getString("route")
+
+                val sameRouteRemaining = remainingActive.filter {
+                    sameRoute(it.getString("route"), currentRoute)
+                }
+
+                val oppositeRouteRemaining = remainingActive.filter {
+                    !sameRoute(it.getString("route"), currentRoute)
+                }
+
+                sameRouteRemaining.forEachIndexed { index, document ->
                     transaction.update(
                         document.reference,
                         mapOf(
                             "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+
+                /*
+                 * The dispatched driver travels to the other terminal and
+                 * enters the OPPOSITE route at position #1. The drivers
+                 * already in that pila move one spot behind him.
+                 */
+                oppositeRouteRemaining.forEachIndexed { index, document ->
+                    transaction.update(
+                        document.reference,
+                        mapOf(
+                            "position" to index + 2,
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
@@ -536,10 +600,14 @@ class QueueViewModel @Inject constructor(
                         .collection(FirestoreCollections.QUEUE)
                         .document(requeueId)
 
-                    val route = currentDocument
-                        .getString("route")
-                        .orEmpty()
-                        .ifBlank { DEFAULT_ROUTE }
+                    /*
+                     * He enters the OPPOSITE route (the one going back)
+                     * at the FRONT: "when the first driver of one route
+                     * is dispatched he becomes #1 of the other route".
+                     */
+                    val route = oppositeRoute(
+                        currentDocument.getString("route")
+                    )
 
                     val requeueData = mapOf<String, Any>(
                         "id" to requeueId,
@@ -547,7 +615,7 @@ class QueueViewModel @Inject constructor(
                         "driverName" to driverName,
                         "plateNumber" to plateNumber,
                         "route" to route,
-                        "position" to remainingActive.size + 1,
+                        "position" to 1,
                         "status" to "Nakapila",
                         "time" to SimpleDateFormat(
                             "hh:mm a",
@@ -643,10 +711,16 @@ class QueueViewModel @Inject constructor(
                     )
                 }
 
+                val targetRoute = target.getString("route")
+
                 val remaining = queueSnapshot.documents
                     .filter {
                         it.id != vehicleId &&
-                                isActiveStatus(it.getString("status"))
+                                isActiveStatus(it.getString("status")) &&
+                                sameRoute(
+                                    it.getString("route"),
+                                    targetRoute
+                                )
                     }
                     .sortedWith(
                         compareBy<DocumentSnapshot> {
@@ -738,10 +812,16 @@ class QueueViewModel @Inject constructor(
                     )
                 }
 
+                val targetRoute = target.getString("route")
+
                 val remaining = queueSnapshot.documents
                     .filter {
                         it.id != vehicleId &&
-                                isActiveStatus(it.getString("status"))
+                                isActiveStatus(it.getString("status")) &&
+                                sameRoute(
+                                    it.getString("route"),
+                                    targetRoute
+                                )
                     }
                     .sortedWith(
                         compareBy<DocumentSnapshot> {
@@ -811,7 +891,17 @@ class QueueViewModel @Inject constructor(
             _uiState.value as? QueueUiState.Success
                 ?: return
 
-        val active = currentState.activeQueue.toMutableList()
+        val targetVehicle = currentState.activeQueue.firstOrNull {
+            it.id == vehicleId
+        } ?: return
+
+        /*
+         * Positions are per route: only the vehicles of the SAME route
+         * are renumbered when one of them changes its spot.
+         */
+        val active = currentState.activeQueue.filter {
+            sameRoute(it.route, targetVehicle.route)
+        }.toMutableList()
 
         val currentIndex = active.indexOfFirst {
             it.id == vehicleId
@@ -850,6 +940,214 @@ class QueueViewModel @Inject constructor(
             } catch (e: Exception) {
                 ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang posisyon"
+                )
+            }
+        }
+    }
+
+    /*
+     * -----------------------------
+     * DAILY RESET ("reset ng pila")
+     * -----------------------------
+     * The terminal's last trip is around 11:00 PM. When the cut-off
+     * passes, every pila rotates: today's #1 goes to the LAST spot and
+     * everyone else moves up one - so the #2 of today leads tomorrow.
+     * The reset lives here in the queue tab (no separate module).
+     */
+
+    private fun rotationMetaReference() =
+        firestore
+            .collection(FirestoreCollections.SETTINGS)
+            .document("queueRotation")
+
+    /**
+     * The queue "day" flips at 11:00 PM (23:00) - after the cut-off the
+     * queue already belongs to the next operating day.
+     */
+    fun queueDayId(now: Date = Date()): String {
+        val calendar = Calendar.getInstance()
+        calendar.time = now
+        if (calendar.get(Calendar.HOUR_OF_DAY) >= 23) {
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return SimpleDateFormat(
+            "yyyyMMdd",
+            Locale.US
+        ).format(calendar.time)
+    }
+
+    /** Automatic check - runs whenever the queue opens. */
+    private fun maybeRotateQueue() {
+        if (!userSession.isAdmin()) return
+        viewModelScope.launch {
+            try {
+                rotateQueueIfNeeded(force = false)
+            } catch (_: Exception) {
+                // Best effort: the manual button can always rotate.
+            }
+        }
+    }
+
+    /** Manual button in the queue tab: "I-reset Ngayon". */
+    fun forceRotateQueue() {
+        if (!userSession.isAdmin()) return
+        viewModelScope.launch {
+            try {
+                rotateQueueIfNeeded(force = true)
+                ToastFeedback.show(
+                    "Na-reset na ang pila: ang dating #1 ay nasa huli na."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi ma-reset ang pila."
+                )
+            }
+        }
+    }
+
+    private suspend fun rotateQueueIfNeeded(force: Boolean) {
+        val queueSnapshot = firestore
+            .collection(FirestoreCollections.QUEUE)
+            .get()
+            .await()
+
+        val today = queueDayId()
+
+        firestore.runTransaction { transaction ->
+            val metaReference = rotationMetaReference()
+            val meta = transaction.get(metaReference)
+            val lastReset = meta.getString("lastQueueDay")
+
+            if (!force && lastReset == today) {
+                return@runTransaction false
+            }
+
+            listOf(ROUTE_MA, ROUTE_AM).forEach { route ->
+                val active = queueSnapshot.documents
+                    .filter {
+                        isActiveStatus(it.getString("status")) &&
+                                it.getBoolean("isCancelled") != true &&
+                                sameRoute(it.getString("route"), route)
+                    }
+                    .sortedBy {
+                        it.getLong("position") ?: Long.MAX_VALUE
+                    }
+
+                if (active.size > 1) {
+                    /*
+                     * Rotation: today's first goes to the last spot,
+                     * everyone else moves up one position.
+                     */
+                    val rotated = active.drop(1) + active.first()
+                    rotated.forEachIndexed { index, document ->
+                        transaction.update(
+                            document.reference,
+                            mapOf(
+                                "position" to index + 1,
+                                "updatedAt" to
+                                        FieldValue.serverTimestamp()
+                            )
+                        )
+                    }
+                }
+            }
+
+            transaction.set(
+                metaReference,
+                mapOf(
+                    "lastQueueDay" to today,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            true
+        }.await()
+    }
+
+    /**
+     * "Tapos Na" (driver side): ends today's travel and leaves the pila
+     * completely - the entry moves to the Kasaysayan tab.
+     */
+    fun endTravel(vehicleId: String) {
+        viewModelScope.launch {
+            try {
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
+
+                val target = queueSnapshot.documents
+                    .firstOrNull { it.id == vehicleId }
+                    ?: throw IllegalStateException(
+                        "Hindi makita ang sasakyan sa pila."
+                    )
+
+                if (!isActiveStatus(target.getString("status"))) {
+                    throw IllegalStateException(
+                        "Wala na sa pila ang sasakyang ito."
+                    )
+                }
+
+                val route = target.getString("route")
+
+                val remaining = queueSnapshot.documents
+                    .filter {
+                        it.id != vehicleId &&
+                                isActiveStatus(it.getString("status")) &&
+                                sameRoute(it.getString("route"), route)
+                    }
+                    .sortedWith(
+                        compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
+                            it.getLong("position") ?: Long.MAX_VALUE
+                        }.thenBy {
+                            it.safeTimestamp("createdAt")?.seconds
+                                ?: Long.MAX_VALUE
+                        }
+                    )
+
+                firestore.runTransaction { transaction ->
+                    val freshEntry = transaction.get(target.reference)
+
+                    if (!freshEntry.exists() ||
+                        !isActiveStatus(freshEntry.getString("status"))
+                    ) {
+                        throw IllegalStateException(
+                            "Wala na sa pila ang sasakyang ito."
+                        )
+                    }
+
+                    transaction.update(
+                        target.reference,
+                        mapOf(
+                            "status" to "completed",
+                            "endTravelAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp(),
+                            "position" to 0
+                        )
+                    )
+
+                    remaining.forEachIndexed { index, document ->
+                        transaction.update(
+                            document.reference,
+                            mapOf(
+                                "position" to index + 1,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        )
+                    }
+
+                    true
+                }.await()
+
+                ToastFeedback.show(
+                    "Tapos na ang biyahe. Wala na sa pila ang " +
+                            target.getString("plateNumber").orEmpty() + "."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi matapos ang biyahe."
                 )
             }
         }

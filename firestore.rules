@@ -37,11 +37,15 @@ service cloud.firestore {
     }
 
     function isMember() {
-      return ownRole() in ['admin', 'driver'];
+      return ownRole() in ['superadmin', 'admin', 'driver'];
     }
 
     function isAdmin() {
-      return ownRole() == 'admin';
+      return ownRole() in ['admin', 'superadmin'];
+    }
+
+    function isSuperadmin() {
+      return ownRole() == 'superadmin';
     }
 
     function isOwner(phone) {
@@ -77,8 +81,16 @@ service cloud.firestore {
 
       // An admin creates accounts; a signed-in user may create their own
       // document during first-login migration.
-      allow create: if (isAdmin() || (isMember() && isOwner(phone)))
-                    && hasNoPasswordField();
+      //
+      // User levels: only a superadmin may create an ADMIN account. An
+      // admin may create driver accounts only (the app enforces this
+      // too - here it is the safety net).
+      allow create: if (isAdmin()
+                        && hasNoPasswordField()
+                        && (isSuperadmin()
+                            || request.resource.data.role == 'driver'))
+                    || (isMember() && isOwner(phone)
+                        && hasNoPasswordField());
 
       // A user edits their own profile; an admin edits any profile
       // (activate/deactivate). Never accept a plaintext password, but
@@ -108,7 +120,25 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     match /queue/{entryId} {
       allow read: if isMember();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+
+      // Admins manage the pila. A driver may also end his OWN travel
+      // ("Tapos Na") - only the status/position fields can change.
+      allow update: if isAdmin()
+        || (isMember()
+            && resource.data.driverId ==
+               get(/databases/$(database)/documents/users/$(authPhone())).data.userId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'position', 'endTravelAt',
+                           'updatedAt']));
+    }
+
+    // ------------------------------------------------------------------
+    // /settings - app settings (queue rotation cutoff, deduction tiers)
+    // ------------------------------------------------------------------
+    match /settings/{docId} {
+      allow read: if isMember();
+      allow write: if isAdmin();
     }
 
     // ------------------------------------------------------------------

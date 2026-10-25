@@ -48,8 +48,13 @@ fun QueueScreen(
 
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableStateOf(0) } // 0: Ngayon (aktibong pila), 1: Kasaysayan
+
+    // 0: Monumento -> Marilao, 1: Marilao -> Monumento, 2: Kasaysayan
+    var selectedTab by remember { mutableStateOf(0) }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
+
+    // "Zoom out": smaller boxes so a long pila scrolls faster.
+    var compactView by remember { mutableStateOf(false) }
 
     // Instead of just a boolean, hold the actual vehicle being dispatched so the modal knows what to show
     var vehicleToDispatch by remember { mutableStateOf<QueueVehicle?>(null) }
@@ -83,7 +88,7 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            Text(text = "Rotational na dispatch • Monumento – Marilao", fontSize = 14.sp, color = Color.Gray)
+            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset 11:00 PM", fontSize = 14.sp, color = Color.Gray)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -104,7 +109,54 @@ fun QueueScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            /*
+             * Daily reset of the pila - the control lives here in the
+             * queue tab so no separate module is needed. The automatic
+             * cut-off is 11:00 PM (the terminal's last trip).
+             */
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Reset ng Pila • Cut-off 11:00 PM",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Ang #1 ngayon ay huli na bukas; ang kasunod ang mauuna.",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.forceRotateQueue() },
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            FieldBorderColor
+                        )
+                    ) {
+                        Text(
+                            "I-reset Ngayon",
+                            fontSize = 11.sp,
+                            color = Color.Black
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Handle UI States
             when (val state = uiState) {
@@ -138,11 +190,63 @@ fun QueueScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Tabs
+                    // Tabs: 2 routes + Kasaysayan
                     Row(modifier = Modifier.fillMaxWidth().height(48.dp)) {
-                        TabButton(modifier = Modifier.weight(1f), text = "Ngayon" +
-                                "", isSelected = selectedTab == 0, onClick = { selectedTab = 0 })
-                        TabButton(modifier = Modifier.weight(1f), text = "Kasaysayan", isSelected = selectedTab == 1, onClick = { selectedTab = 1 })
+                        TabButton(
+                            modifier = Modifier.weight(1f),
+                            text = "Monumento–Marilao",
+                            isSelected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            fontSize = 10.sp
+                        )
+                        TabButton(
+                            modifier = Modifier.weight(1f),
+                            text = "Marilao–Monumento",
+                            isSelected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            fontSize = 10.sp
+                        )
+                        TabButton(
+                            modifier = Modifier.weight(1f),
+                            text = "Kasaysayan",
+                            isSelected = selectedTab == 2,
+                            onClick = { selectedTab = 2 },
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // "Zoom out" of the queue list - smaller boxes.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Laki ng box:",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = { compactView = !compactView },
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                FieldBorderColor
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp)
+                        ) {
+                            Text(
+                                text = if (compactView) {
+                                    "Normal na laki"
+                                } else {
+                                    "I-zoom out (maliit)"
+                                },
+                                fontSize = 11.sp,
+                                color = Color.Black
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -161,9 +265,20 @@ fun QueueScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    if (selectedTab == 0) {
+                    if (selectedTab == 0 || selectedTab == 1) {
+                        /*
+                         * Each route tab shows only the pila of that
+                         * route. Tab 0 = Monumento -> Marilao, tab 1 =
+                         * Marilao -> Monumento.
+                         */
+                        val onThisRoute = { vehicle: QueueVehicle ->
+                            val marilaoFirst = vehicle.route.trim()
+                                .startsWith("Marilao", ignoreCase = true)
+                            if (selectedTab == 0) !marilaoFirst else marilaoFirst
+                        }
                         val searchedQueue = state.activeQueue.filter { vehicle ->
-                            searchMatches(vehicle.plateNumber, vehicle.driverName)
+                            onThisRoute(vehicle) &&
+                                    searchMatches(vehicle.plateNumber, vehicle.driverName)
                         }
                         if (searchedQueue.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -180,6 +295,7 @@ fun QueueScreen(
                              * of the pila through "Ibalik sa Pila".
                              */
                             val frontOfLineId = state.activeQueue
+                                .filter { onThisRoute(it) }
                                 .firstOrNull { !it.isCancelled }
                                 ?.id
 
@@ -187,6 +303,7 @@ fun QueueScreen(
                                 QueueItem(
                                     vehicle = vehicle,
                                     displayPosition = vehicle.position,
+                                    compact = compactView,
                                     positionEditingEnabled = searchQuery.isBlank(),
                                     canDispatch = vehicle.id == frontOfLineId,
                                     onDispatchClick = { vehicleToDispatch = vehicle },
@@ -217,6 +334,7 @@ fun QueueScreen(
                         } else {
                             filteredHistory.forEach { history ->
                                 HistoryItem(history)
+
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
                         }
@@ -268,7 +386,13 @@ fun QueueStatCard(modifier: Modifier = Modifier, title: String, value: String, i
 }
 
 @Composable
-fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
+fun TabButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp
+) {
     val backgroundColor = if (isSelected) Color.White else Color.Transparent
     val textColor = if (isSelected) Color.Black else Color.Gray
     val elevation = if (isSelected) 2.dp else 0.dp
@@ -281,7 +405,7 @@ fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, 
         elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textColor)
+            Text(text = text, fontSize = fontSize, fontWeight = FontWeight.Medium, color = textColor)
         }
     }
 }
@@ -290,6 +414,7 @@ fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, 
 fun QueueItem(
     vehicle: QueueVehicle,
     displayPosition: Int,
+    compact: Boolean = false,
     positionEditingEnabled: Boolean = true,
     canDispatch: Boolean = true,
     onDispatchClick: () -> Unit,
@@ -331,27 +456,91 @@ fun QueueItem(
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(modifier = Modifier.size(40.dp), shape = RoundedCornerShape(12.dp), color = EnerjeepBlue) {
-                    Box(contentAlignment = Alignment.Center) { Text(text = displayPosition.toString(), color = Color.White, fontWeight = FontWeight.Bold) }
+        Column(modifier = Modifier.padding(if (compact) 12.dp else 20.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Surface(
+                    modifier = Modifier.size(if (compact) 32.dp else 40.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = EnerjeepBlue
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = displayPosition.toString(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = if (compact) 12.sp else 14.sp
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         WorldIcon(modifier = Modifier.size(16.dp), color = Color.Black)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = vehicle.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(
+                            text = vehicle.plateNumber,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = if (compact) 13.sp else 16.sp
+                        )
                         Spacer(modifier = Modifier.weight(1f))
-                        StatusBadge(text = if (vehicle.isCancelled) "Nakansela" else vehicle.status, backgroundColor = statusBg, textColor = statusColor)
+                        StatusBadge(
+                            text = if (vehicle.isCancelled) "Nakansela" else vehicle.status,
+                            backgroundColor = statusBg,
+                            textColor = statusColor
+                        )
                     }
-                    Text(text = vehicle.driverName, fontSize = 14.sp, color = Color.Gray)
-                    Text(text = vehicle.route, fontSize = 12.sp, color = Color.Gray)
-                    Text(text = "Posisyon #${displayPosition} • Sumali: ${vehicle.time}", fontSize = 12.sp, color = Color.Gray)
+                    Text(
+                        text = vehicle.driverName,
+                        fontSize = if (compact) 12.sp else 14.sp,
+                        color = Color.Gray
+                    )
+                    if (!compact) {
+                        Text(text = vehicle.route, fontSize = 12.sp, color = Color.Gray)
+                    }
+
+                    /*
+                     * The "Posisyon" BUTTON is gone: tapping the position
+                     * line opens the position editor instead.
+                     */
+                    Text(
+                        text = "Posisyon #${displayPosition} • Sumali: ${vehicle.time}" +
+                                if (positionEditingEnabled && !compact) {
+                                    "  (pindutin para baguhin)"
+                                } else {
+                                    ""
+                                },
+                        fontSize = if (compact) 11.sp else 12.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.clickable(enabled = positionEditingEnabled) {
+                            newPositionInput = displayPosition.toString()
+                            isEditingPosition = true
+                        }
+                    )
+                }
+
+                /*
+                 * Kanselahin / Ibalik sa Pila lives in the CORNER of the
+                 * box so the row stays clean even in a long pila.
+                 */
+                TextButton(
+                    onClick = {
+                        if (vehicle.isCancelled) {
+                            onRestoreClick()
+                        } else {
+                            showCancelConfirm = true
+                        }
+                    },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = if (vehicle.isCancelled) "Ibalik sa Pila" else "Kanselahin",
+                        fontSize = 11.sp,
+                        color = if (vehicle.isCancelled) SuccessGreen else ErrorRed
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(if (compact) 8.dp else 20.dp))
 
             if (isEditingPosition) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -435,24 +624,29 @@ fun QueueItem(
                     ) { Text("Bawi", fontSize = 14.sp, color = Color.Black) }
                 }
             } else {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    if (canDispatch) {
-                        Button(
-                            onClick = onDispatchClick,
-                            modifier = Modifier.weight(1f).height(44.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
-                            shape = RoundedCornerShape(22.dp)
-                        ) {
-                            NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("I-dispatch", fontSize = 14.sp)
-                        }
+                if (canDispatch) {
+                    Button(
+                        onClick = onDispatchClick,
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                        shape = RoundedCornerShape(22.dp)
+                    ) {
+                        NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("I-dispatch", fontSize = 14.sp)
                     }
-                    if (positionEditingEnabled) {
-                        if (canDispatch) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        // UP ARROW: Decreases position number (moves closer to 1)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                /*
+                 * Position arrows stay for fine tuning who goes first -
+                 * hidden in compact mode and while searching.
+                 */
+                if (positionEditingEnabled && !compact) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
                         ActionButton(
                             icon = { ArrowUpIcon(modifier = Modifier.size(16.dp)) },
                             onClick = {
@@ -462,41 +656,11 @@ fun QueueItem(
                             }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        // DOWN ARROW: Increases position number (moves further back)
                         ActionButton(
                             icon = { ArrowDownIcon(modifier = Modifier.size(16.dp)) },
                             onClick = {
                                 onPositionUpdate(displayPosition + 1)
                             }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    if (positionEditingEnabled) {
-                        ActionButton(
-                            modifier = Modifier.weight(1f),
-                            text = "Posisyon",
-                            icon = { Text("#", fontWeight = FontWeight.Bold) },
-                            onClick = { isEditingPosition = true }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    if (vehicle.isCancelled) {
-                        ActionButton(
-                            modifier = Modifier.weight(1f),
-                            text = "Ibalik sa Pila",
-                            icon = { NavigationIcon(modifier = Modifier.size(16.dp), color = SuccessGreen) },
-                            textColor = SuccessGreen,
-                            onClick = onRestoreClick
-                        )
-                    } else {
-                        ActionButton(
-                            modifier = Modifier.weight(1f),
-                            text = "Kanselahin",
-                            icon = { CancelIcon(modifier = Modifier.size(16.dp), color = ErrorRed) },
-                            textColor = ErrorRed,
-                            onClick = { showCancelConfirm = true }
                         )
                     }
                 }
@@ -507,9 +671,15 @@ fun QueueItem(
 
 @Composable
 fun HistoryItem(history: HistoryVehicle) {
+    /*
+     * History statuses are LABELS, not buttons. "Dispatch" used to be a
+     * solid blue chip that looked clickable - it is now a plain muted
+     * label like every other status.
+     */
     val (statusBg, statusColor) = when (history.status.lowercase()) {
         "nakansela" -> Pair(ErrorRedLight, ErrorRed)
-        else -> Pair(EnerjeepBlue, Color.White)
+        "tapos na" -> Pair(SuccessGreenLight, SuccessGreen)
+        else -> Pair(Color(0xFFECEFF3), Color(0xFF5A6472))
     }
 
     Card(
@@ -526,6 +696,7 @@ fun HistoryItem(history: HistoryVehicle) {
                     Text(text = history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
                 Text(text = history.driverName, fontSize = 12.sp, color = Color.Gray)
+                Text(text = history.route, fontSize = 11.sp, color = Color.Gray)
                 Text(text = "Sumali: ${history.time}", fontSize = 11.sp, color = Color.Gray)
             }
             StatusBadge(text = history.status, backgroundColor = statusBg, textColor = statusColor)
@@ -535,8 +706,15 @@ fun HistoryItem(history: HistoryVehicle) {
 
 @Composable
 fun StatusBadge(text: String, backgroundColor: Color, textColor: Color) {
-    Surface(color = backgroundColor, shape = RoundedCornerShape(12.dp)) {
-        Text(text = text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor)
+    // A plain label chip - it must never look like a clickable button.
+    Surface(color = backgroundColor, shape = RoundedCornerShape(8.dp)) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = textColor
+        )
     }
 }
 

@@ -17,6 +17,9 @@ object FirestoreCollections {
     const val LEDGER = "ledger"
     const val KITA = "kita"
     const val DONATIONS = "donations"
+
+    /** App settings (queue rotation cutoff, deduction tiers, ...). */
+    const val SETTINGS = "settings"
 }
 
 object FirestoreIds {
