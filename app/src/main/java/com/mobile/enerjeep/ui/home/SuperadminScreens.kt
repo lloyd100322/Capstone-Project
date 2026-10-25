@@ -6,7 +6,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,7 +51,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         )
         Text(
             "Ang mga admin dito ang makikita ng mga driver sa Emergency " +
-                    "button. Idagdag lang ang mga "available" na tatawagan.",
+                    "button. Idagdag lang ang mga \"available\" na tatawagan.",
             fontSize = 12.sp,
             color = Color.Gray
         )
