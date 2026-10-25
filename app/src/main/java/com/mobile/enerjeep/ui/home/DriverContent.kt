@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -505,7 +506,9 @@ fun DriverDashboardContent(
                         },
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = Color.Black
+                        color = Color.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -532,7 +535,10 @@ fun DriverDashboardContent(
                             ).filter { it.isNotBlank() }
                                 .joinToString(" • "),
                             fontSize = 14.sp,
-                            color = Color.Black
+                            color = Color.Black,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     if (queueNextName.isNotBlank() ||
@@ -563,7 +569,10 @@ fun DriverDashboardContent(
                                 ).filter { it.isNotBlank() }
                                     .joinToString(" • "),
                                 fontSize = 14.sp,
-                                color = Color.Gray
+                                color = Color.Gray,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -581,11 +590,36 @@ fun DriverDashboardContent(
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Aktibong Insidente",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.Black
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Surface(
+                            color = WarningOrangeLight,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "$openIncidentCount bukas",
+                                modifier = Modifier.padding(
+                                    horizontal = 12.dp,
+                                    vertical = 6.dp
+                                ),
+                                color = WarningOrange,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.Top) {
                         Surface(
                             modifier = Modifier.size(40.dp),
@@ -602,12 +636,14 @@ fun DriverDashboardContent(
                             }
                         }
                         Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = activeIncidentTitle ?: "Insidente",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = Color.Black
+                                fontSize = 15.sp,
+                                color = Color.Black,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -615,11 +651,14 @@ fun DriverDashboardContent(
                                 // so the plate of the incident is shown.
                                 // The plate of the signed-in driver is used
                                 // when the record has no plate.
-                                text = "Plaka ${activeIncidentPlate?.takeIf { it.isNotBlank() } ?: plateNumber}",
-                                fontSize = 14.sp,
-                                color = Color.Gray
+                                text = "Plaka " + (activeIncidentPlate?.takeIf { it.isNotBlank() }
+                                    ?: plateNumber),
+                                fontSize = 13.sp,
+                                color = Color.Gray,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.AccessTime,
@@ -631,22 +670,12 @@ fun DriverDashboardContent(
                                 Text(
                                     text = activeIncidentDate ?: "",
                                     fontSize = 12.sp,
-                                    color = Color.Gray
+                                    color = Color.Gray,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                    }
-                    Surface(
-                        color = WarningOrangeLight,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "$openIncidentCount ka open na incident.",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            color = WarningOrange,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
             }

@@ -236,8 +236,17 @@ fun IncidentDetailBottomSheet(
 
 @Composable
 fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(label, color = Color.Gray, fontSize = 14.sp) }
-        Text(value, color = Color.Black, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+    /*
+     * Mas malinis na layout: naka-STACK (label sa itaas, value sa ibaba)
+     * kaya hindi na nagpipisikan ang mahahabang text (hal. Deskripsyon).
+     */
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, color = Color.Gray, fontSize = 12.sp)
+            Spacer(Modifier.height(2.dp))
+            Text(value, color = Color.Black, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+        }
     }
 }

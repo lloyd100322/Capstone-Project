@@ -189,6 +189,23 @@ fun UlatNgInsidenteScreen(currentIncidents: List<ReportIncidentItem>, allInciden
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Kabuuang Multa mula sa Insidente", color = Color.White); Spacer(Modifier.height(8.dp)); Text(formatCurrency(totalPenalty).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White) }
         }
+        Spacer(Modifier.height(24.dp))
+        /*
+         * Modern chart UI - narito dapat ang charts/statistics (hindi sa
+         * driver Kita). Buong kasaysayan ang gamit ng chart.
+         */
+        val incidentBars = remember(allIncidents) {
+            allIncidents
+                .groupBy { it.plateNumber.ifBlank { "Walang plaka" } }
+                .map { (plate, items) -> plate to items.size.toDouble() }
+                .sortedByDescending { it.second }
+                .take(7)
+        }
+        LabeledBarChart(
+            title = "Bilang ng Insidente kada Plaka",
+            bars = incidentBars,
+            barColor = Color(0xFFB45309)
+        )
         Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa uri, plaka, o lokasyon")
         Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -212,6 +229,19 @@ fun UlatNgMultiyaScreen(currentMultiya: List<ReportMultiyaItem>, allMultiya: Lis
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Multa Ngayon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(multiyaNgayon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Kabuuang: ${formatCurrency(kabuuangMultiya).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
         }
+        Spacer(Modifier.height(24.dp))
+        val multiyaBars = remember(allMultiya) {
+            allMultiya
+                .groupBy { it.plateNumber.ifBlank { "Walang plaka" } }
+                .map { (plate, items) -> plate to items.sumOf { it.amount } }
+                .sortedByDescending { it.second }
+                .take(7)
+        }
+        LabeledBarChart(
+            title = "Multa kada Plaka",
+            bars = multiyaBars,
+            barColor = Color(0xFFB91C1C)
+        )
         Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
@@ -243,6 +273,19 @@ fun DonasyonNgKoopScreen(currentDonasyon: List<DonasyonItem>, allDonasyon: List<
             Column(Modifier.padding(24.dp)) { Text("Kabuuang Donasyon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(kabuuangDonasyon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Ngayon: ${formatCurrency(donasyonNgayon).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
         }
         Spacer(Modifier.height(16.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(onClick = { showAddModal = true }, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("+ Idagdag") } }
+        Spacer(Modifier.height(16.dp))
+        val sourceBars = remember(allDonasyon) {
+            allDonasyon
+                .groupBy { it.source.ifBlank { "Iba" } }
+                .map { (source, items) -> source to items.sumOf { it.amount } }
+                .sortedByDescending { it.second }
+                .take(7)
+        }
+        LabeledBarChart(
+            title = "Donasyon kada Source",
+            bars = sourceBars,
+            barColor = Color(0xFFBE185D)
+        )
         Spacer(Modifier.height(16.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa donor o source"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))

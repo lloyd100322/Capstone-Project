@@ -22,7 +22,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
-import com.mobile.enerjeep.ui.components.LabeledBarChart
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
@@ -79,41 +78,9 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(24.dp))
 
         /*
-         * Fase 5: "driver Ulat = view-only scrollable labeled charts".
-         * Buod ng kita bilang labeled bars + kita kada araw.
+         * Ang charts/statistics ay inilipat sa Mga Ulat ng ADMIN.
+         * Dito sa driver Kita: simpleng summary + listahan ng records.
          */
-        LabeledBarChart(
-            title = "Buod (Kita, Bayad, Multa, Bawas)",
-            bars = listOf(
-                "Kita" to uiState.totalKita,
-                "Bayad" to uiState.totalBayad,
-                "Multa" to uiState.totalMultiya,
-                "Bawas" to uiState.totalBawas
-            )
-        )
-        Spacer(Modifier.height(16.dp))
-        val dailyBars = remember(uiState.records) {
-            uiState.records
-                .filter { it.type == "Kita" }
-                .groupBy { it.date }
-                .map { (day, records) ->
-                    Triple(
-                        day,
-                        records.sumOf { it.amount },
-                        records.maxOf { it.createdAtMillis }
-                    )
-                }
-                .sortedByDescending { it.third }
-                .take(7)
-                .sortedBy { it.third }
-                .map { it.first to it.second }
-        }
-        LabeledBarChart(
-            title = "Kita kada Araw (huling 7)",
-            bars = dailyBars,
-            barColor = Color(0xFF16A34A)
-        )
-
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             KitaTabButton(Modifier.weight(1f), "Ngayon", uiState.selectedTab == KitaTabType.NGAYON) { viewModel.onTabSelected(KitaTabType.NGAYON) }
