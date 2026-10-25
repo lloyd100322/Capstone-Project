@@ -498,7 +498,11 @@ fun DriverDashboardContent(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        text = "Pila Ngayon ($route)",
+                        text = if (route.isNotBlank()) {
+                            "Pila Ngayon ($route)"
+                        } else {
+                            "Pila Ngayon"
+                        },
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = Color.Black
@@ -665,7 +669,7 @@ fun DriverDashboardContent(
                         modifier = Modifier.size(32.dp)
                     )
                     Text(
-                        text = "Wala sa crash.",
+                        text = "Walang bukas na insidente.",
                         fontWeight = FontWeight.Medium,
                         fontSize = 15.sp,
                         color = WarningOrange
@@ -706,7 +710,7 @@ fun DriverDashboardContent(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         /*
          * Emergency button: opens the dialog with 911 and the emergency
