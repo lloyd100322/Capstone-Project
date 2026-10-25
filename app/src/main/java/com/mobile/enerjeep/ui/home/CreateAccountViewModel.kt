@@ -216,7 +216,10 @@ class CreateAccountViewModel @Inject constructor(
 
                     // Seats of the jeep: the dispatch deduction is
                     // computed from this number.
-                    userMap["seater"] = seaterCount
+                    // seaterCount is Int? (toIntOrNull) - the early
+                    // return above already rejects null, but the map
+                    // needs a non-null value so the compiler is happy.
+                    userMap["seater"] = seaterCount ?: 0
 
                     // The two emergency contact values are saved in their
                     // own fields. The old combined field is kept in sync
