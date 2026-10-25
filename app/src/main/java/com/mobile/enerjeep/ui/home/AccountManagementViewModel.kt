@@ -361,6 +361,14 @@ class AccountManagementViewModel @Inject constructor(
                         )
                         .await()
                 }
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    if (newIsActive) "Ibalik sa Serbisyo"
+                    else "Alisin sa Serbisyo",
+                    account.name
+                )
             } catch (e: Exception) {
                 setError(
                     e.message ?: "Hindi na-update ang status."
@@ -549,14 +557,6 @@ class AccountManagementViewModel @Inject constructor(
         }
 
         batch.commit().await()
-
-                ActivityLogger.log(
-                    firestore,
-                    userSession,
-                    if (newIsActive) "Ibalik sa Serbisyo"
-                    else "Alisin sa Serbisyo",
-                    account.name
-                )
     }
 
     fun deleteAccount(accountId: String) {
