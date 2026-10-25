@@ -34,7 +34,9 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
     val adminAccounts by viewModel.adminAccounts.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
 
-    var selectedAdmin by remember { mutableStateOf<String?>(null) }
+    var selectedAdmin by remember {
+        mutableStateOf<Pair<String, String>?>(null)
+    }
     var manualName by remember { mutableStateOf("") }
     var manualNumber by remember { mutableStateOf("") }
 

@@ -654,7 +654,7 @@ class ReportViewModel @Inject constructor(
                     firestore,
                     userSession,
                     "Donasyon",
-                    "₱" + (donasyon.amount ?: 0.0).toString()
+                    "₱" + donasyon.amount.toString()
                 )
 
             } catch (e: Exception) {
