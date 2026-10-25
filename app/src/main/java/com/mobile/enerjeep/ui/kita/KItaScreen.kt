@@ -72,6 +72,8 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                 SummaryMoneyRow("Bayad", uiState.totalBayad)
                 Spacer(Modifier.height(8.dp))
                 SummaryMoneyRow("Multa", uiState.totalMultiya)
+                Spacer(Modifier.height(8.dp))
+                SummaryMoneyRow("Donasyon (Bawas)", uiState.totalBawas)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -81,11 +83,12 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
          * Buod ng kita bilang labeled bars + kita kada araw.
          */
         LabeledBarChart(
-            title = "Buod (Kita, Bayad, Multa)",
+            title = "Buod (Kita, Bayad, Multa, Bawas)",
             bars = listOf(
                 "Kita" to uiState.totalKita,
                 "Bayad" to uiState.totalBayad,
-                "Multa" to uiState.totalMultiya
+                "Multa" to uiState.totalMultiya,
+                "Bawas" to uiState.totalBawas
             )
         )
         Spacer(Modifier.height(16.dp))

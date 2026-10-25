@@ -358,10 +358,11 @@ fun AddDonasyonFormContent(onCancel: () -> Unit, onSubmit: (DonasyonItem) -> Uni
     var donor by remember { mutableStateOf("") }; var amount by remember { mutableStateOf("") }; var source by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
     val today = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date()); var date by remember { mutableStateOf(today) }
     Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 32.dp)) {
-        Text("Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(20.dp))
+        Text("Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
+        Text("Ang donasyon ay itinatala bilang BAWAS sa netong kita.", fontSize = 12.sp, color = Color.Gray); Spacer(Modifier.height(12.dp))
         Text("Donor", fontWeight = FontWeight.Medium); OutlinedTextField(donor, { donor = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Pangalan ng donor") })
         Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f)) { Text("Halaga", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
+            Column(Modifier.weight(1f)) { Text("Halaga (Bawas sa kita)", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
             Column(Modifier.weight(1f)) { Text("Petsa", fontWeight = FontWeight.Medium); OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("MMM dd, yyyy") }) }
         }
         Spacer(Modifier.height(12.dp)); Text("Source", fontWeight = FontWeight.Medium); OutlinedTextField(source, { source = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hal: byahe, LGU, etc.") })

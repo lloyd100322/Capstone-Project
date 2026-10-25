@@ -657,6 +657,35 @@ class ReportViewModel @Inject constructor(
                     "₱" + donasyon.amount.toString()
                 )
 
+                /*
+                 * Fase 8: ang donasyon ay "Bawas" - may katumbas na
+                 * record sa kita collection (type "Bawas") para
+                 * ibinabawas ito sa netong kita. Deterministic ang id
+                 * para hindi doble kapag inulit.
+                 */
+                val bawasId = "bawas_$id"
+                firestore
+                    .collection(
+                        com.mobile.enerjeep.data.FirestoreCollections
+                            .KITA
+                    )
+                    .document(bawasId)
+                    .set(
+                        mapOf(
+                            "id" to bawasId,
+                            "title" to "Donasyon • " +
+                                    donasyon.donor.trim(),
+                            "amount" to donasyon.amount,
+                            "type" to "Bawas",
+                            "date" to donasyon.date,
+                            "isHistory" to false,
+                            "sourceId" to id,
+                            "createdAt" to FieldValue
+                                .serverTimestamp()
+                        )
+                    )
+                    .await()
+
             } catch (e: Exception) {
 
                 _uiState.value =
