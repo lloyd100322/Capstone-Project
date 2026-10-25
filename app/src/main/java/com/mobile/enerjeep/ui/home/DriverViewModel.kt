@@ -3,15 +3,21 @@ package com.mobile.enerjeep.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.ui.components.ToastFeedback
+import com.mobile.enerjeep.ui.queue.QueueViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 
@@ -29,7 +35,17 @@ data class DriverDashboardUiState(
     // of the whole cooperative.
     val activeIncidentPlate: String? = null,
     // How many incidents are still open.
-    val openIncidentCount: Int = 0
+    val openIncidentCount: Int = 0,
+    // Fase 4B: posisyon BUKAS (rotation: #1 -> hulihan, iba -> bawas 1).
+    val posisyonBukas: Int = 0,
+    // Sino ang #1 at sino ang kasunod sa pila ng ruta ng driver.
+    val queueLeadName: String = "",
+    val queueLeadPlate: String = "",
+    val queueNextName: String = "",
+    val queueNextPlate: String = "",
+    // The doc id of the driver's own active queue entry ("Tapos Na").
+    val activeQueueDocId: String = "",
+    val isCancelledInQueue: Boolean = false
 )
 
 @HiltViewModel
@@ -94,13 +110,157 @@ class DriverViewModel @Inject constructor(
         val active = driverDocs.filter { isActiveQueueStatus(it.getString("status")) }
             .sortedBy { it.getLong("position") ?: Int.MAX_VALUE.toLong() }
 
-        val own = active.firstOrNull()
+        // Ang sariling entry: unahin ang hindi nakansela.
+        val own = active.firstOrNull { it.getBoolean("isCancelled") != true }
+            ?: active.firstOrNull()
+        val ownRoute = own?.getString("route") ?: _uiState.value.route
+
+        /*
+         * Ang pila ay PER ROUTE (magkaiba ang bilang at posisyon bawat
+         * ruta), kaya ang "ng X sa pila" at ang "#1 & kasunod" ay
+         * kinukuha sa ruta ng driver lang.
+         */
+        val routeFront = documents.filter {
+            isActiveQueueStatus(it.getString("status")) &&
+                    it.getBoolean("isCancelled") != true &&
+                    QueueViewModel.sameRoute(it.getString("route"), ownRoute)
+        }.sortedBy { it.getLong("position") ?: Int.MAX_VALUE.toLong() }
+
+        val lead = routeFront.getOrNull(0)
+        val next = routeFront.getOrNull(1)
+
+        val position = own?.getLong("position")?.toInt() ?: 0
+        val total = routeFront.size
+
+        /*
+         * Posisyon BUKAS: sa rotation ng cut-off, ang #1 ngayon ay
+         * mapupunta sa hulihan at ang lahat ay uusad ng isa. Kaya kung
+         * #1 ka ngayon -> hulihan ka bukas; kung hindi -> bawas 1.
+         */
+        val bukas = when {
+            own == null || own.getBoolean("isCancelled") == true -> 0
+            total <= 1 -> 1
+            position == 1 -> total
+            position > 1 -> position - 1
+            else -> 0
+        }
+
         _uiState.value = _uiState.value.copy(
-            queuePosition = own?.getLong("position")?.toInt() ?: 0,
-            totalInQueue = documents.count { isActiveQueueStatus(it.getString("status")) },
+            queuePosition = position,
+            totalInQueue = total,
             queueStatus = own?.getString("status").orEmpty(),
-            route = own?.getString("route") ?: _uiState.value.route
+            route = ownRoute,
+            posisyonBukas = bukas,
+            queueLeadName = lead?.getString("driverName").orEmpty(),
+            queueLeadPlate = lead?.getString("plateNumber").orEmpty(),
+            queueNextName = next?.getString("driverName").orEmpty(),
+            queueNextPlate = next?.getString("plateNumber").orEmpty(),
+            activeQueueDocId = own?.id.orEmpty(),
+            isCancelledInQueue = own?.getBoolean("isCancelled") == true
         )
+    }
+
+    /**
+     * "Tapos Na": ang driver ay aalis sa pila (status "completed" ->
+     * Kasaysayan) at ang nasa likod niya ay uusad.
+     */
+    fun endTravel() {
+        val docId = _uiState.value.activeQueueDocId
+        if (docId.isBlank()) {
+            ToastFeedback.show("Wala ka sa pila ngayon.")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val target = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .document(docId)
+                    .get()
+                    .await()
+
+                if (!target.exists() ||
+                    !isActiveQueueStatus(target.getString("status"))
+                ) {
+                    throw IllegalStateException(
+                        "Wala na sa pila ang sasakyang ito."
+                    )
+                }
+
+                val route = target.getString("route")
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
+
+                val remaining = queueSnapshot.documents
+                    .filter {
+                        it.id != docId &&
+                                isActiveQueueStatus(it.getString("status")) &&
+                                QueueViewModel.sameRoute(
+                                    it.getString("route"), route
+                                )
+                    }
+                    .sortedWith(
+                        compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
+                            it.getLong("position") ?: Long.MAX_VALUE
+                        }.thenBy {
+                            it.safeTimestamp("createdAt")?.seconds
+                                ?: Long.MAX_VALUE
+                        }
+                    )
+
+                firestore.runTransaction { transaction ->
+                    val fresh = transaction.get(target.reference)
+                    if (!fresh.exists() ||
+                        !isActiveQueueStatus(fresh.getString("status"))
+                    ) {
+                        throw IllegalStateException(
+                            "Wala na sa pila ang sasakyang ito."
+                        )
+                    }
+
+                    transaction.update(
+                        target.reference,
+                        mapOf(
+                            "status" to "completed",
+                            "endTravelAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp(),
+                            "position" to 0
+                        )
+                    )
+
+                    remaining.forEachIndexed { index, document ->
+                        transaction.update(
+                            document.reference,
+                            mapOf(
+                                "position" to index + 1,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        )
+                    }
+
+                    true
+                }.await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Tapos Na",
+                    target.getString("plateNumber").orEmpty()
+                )
+
+                ToastFeedback.show(
+                    "Tapos na ang biyahe. Wala ka na sa pila."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi matapos ang biyahe."
+                )
+            }
+        }
     }
 
     private fun updateIncidentState(documents: List<DocumentSnapshot>) {

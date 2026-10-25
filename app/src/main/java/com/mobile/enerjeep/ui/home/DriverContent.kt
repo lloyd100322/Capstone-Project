@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
@@ -139,6 +140,16 @@ fun DriverContent(
                         activeIncidentDate = uiState.activeIncidentDate,
                         activeIncidentPlate = uiState.activeIncidentPlate,
                         openIncidentCount = uiState.openIncidentCount,
+                        posisyonBukas = uiState.posisyonBukas,
+                        queueLeadName = uiState.queueLeadName,
+                        queueLeadPlate = uiState.queueLeadPlate,
+                        queueNextName = uiState.queueNextName,
+                        queueNextPlate = uiState.queueNextPlate,
+                        isInQueue = uiState.activeQueueDocId.isNotBlank() &&
+                                !uiState.isCancelledInQueue,
+                        onTaposNa = {
+                            viewModel.endTravel()
+                        },
                         onEmergencyClick = {
                             showEmergencyDialog = true
                         }
@@ -185,8 +196,40 @@ fun DriverDashboardContent(
     activeIncidentDate: String?,
     activeIncidentPlate: String?,
     openIncidentCount: Int,
+    posisyonBukas: Int = 0,
+    queueLeadName: String = "",
+    queueLeadPlate: String = "",
+    queueNextName: String = "",
+    queueNextPlate: String = "",
+    isInQueue: Boolean = false,
+    onTaposNa: () -> Unit = {},
     onEmergencyClick: () -> Unit = {}
 ) {
+    var showTaposConfirm by remember { mutableStateOf(false) }
+
+    if (showTaposConfirm) {
+        AlertDialog(
+            onDismissRequest = { showTaposConfirm = false },
+            title = { Text("Tapos na ang biyahe?") },
+            text = {
+                Text(
+                    "Aalisin ka sa pila ngayon at mapupunta sa Kasaysayan. " +
+                            "Maaari kang bumalik bukas ayon sa inyong pila."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTaposConfirm = false
+                    onTaposNa()
+                }) { Text("Oo, tapos na", color = SuccessGreen) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTaposConfirm = false }) {
+                    Text("Hindi pa")
+                }
+            }
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -295,6 +338,108 @@ fun DriverDashboardContent(
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 14.sp
                         )
+                        if (posisyonBukas > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = Color.White.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Posisyon BUKAS: #$posisyonBukas",
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 6.dp
+                                    ),
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        /*
+         * Fase 4B: sino ang #1 at sino ang kasunod sa pila ng ruta -
+         * para alam ng driver kung sino ang mauuna at sino ang sumusunod.
+         */
+        if (queueLeadName.isNotBlank() || queueLeadPlate.isNotBlank()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = "Pila Ngayon ($route)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.Black
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = EnerjeepBlue,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = "#1",
+                                modifier = Modifier.padding(
+                                    horizontal = 10.dp,
+                                    vertical = 4.dp
+                                ),
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = listOf(
+                                queueLeadName,
+                                queueLeadPlate
+                            ).filter { it.isNotBlank() }
+                                .joinToString(" • "),
+                            fontSize = 14.sp,
+                            color = Color.Black
+                        )
+                    }
+                    if (queueNextName.isNotBlank() ||
+                        queueNextPlate.isNotBlank()
+                    ) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = Color(0xFFECEFF3),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = "Kasunod",
+                                    modifier = Modifier.padding(
+                                        horizontal = 10.dp,
+                                        vertical = 4.dp
+                                    ),
+                                    color = Color(0xFF5A6472),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = listOf(
+                                    queueNextName,
+                                    queueNextPlate
+                                ).filter { it.isNotBlank() }
+                                    .joinToString(" • "),
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        }
                     }
                 }
             }
@@ -405,6 +550,38 @@ fun DriverDashboardContent(
                     )
                 }
             }
+        }
+
+        /*
+         * Fase 4B: "Tapos Na" - aalis ang driver sa pila (Kasaysayan).
+         * May confirm para walang aksidenteng pindot.
+         */
+        if (isInQueue) {
+            Button(
+                onClick = { showTaposConfirm = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SuccessGreen
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Tapos Na",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
