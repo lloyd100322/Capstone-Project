@@ -573,6 +573,7 @@ fun DriverEditProfileContent(
                                 )
                             },
                             singleLine = true,
+                            enabled = false,
                             shape =
                                 RoundedCornerShape(
                                     12.dp
@@ -603,6 +604,7 @@ fun DriverEditProfileContent(
                                 )
                             },
                             singleLine = true,
+                            enabled = false,
                             shape =
                                 RoundedCornerShape(
                                     12.dp
@@ -634,6 +636,7 @@ fun DriverEditProfileContent(
                         Text("+63 ")
                     },
                     singleLine = true,
+                    enabled = false,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -674,6 +677,7 @@ fun DriverEditProfileContent(
                         Text("License Number")
                     },
                     singleLine = true,
+                    enabled = false,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -703,8 +707,19 @@ fun DriverEditProfileContent(
                         Text("Plate Number")
                     },
                     singleLine = true,
+                    enabled = false,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text = "Naka-lock ang pangalan, numero, license at plaka. Ang emergency contact lang ang maaaring i-edit.",
+                    color = Color.Gray,
+                    fontSize = 12.sp
                 )
 
                 Spacer(

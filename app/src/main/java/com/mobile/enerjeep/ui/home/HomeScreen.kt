@@ -212,18 +212,21 @@ fun HomeScreen(
                                 )
                             },
 
-                            onTerminalFeeClick = {
+                            // Stats are the quick access: tap = open tab.
+                            onSalesClick = {
                                 selectedTab = HomeTab.Talaan
-                                openLedgerForm = true
                             },
 
-                            onReportIncidentClick = {
-                                selectedTab = HomeTab.Insidente
-                                showIncidentForm = true
-                            },
-
-                            onViewQueueClick = {
+                            onActiveClick = {
                                 selectedTab = HomeTab.Pila
+                            },
+
+                            onIncidentClick = {
+                                selectedTab = HomeTab.Insidente
+                            },
+
+                            onDonasyonClick = {
+                                selectedTab = HomeTab.MgaUlat
                             },
 
                             onEmergencyClick = {
@@ -302,9 +305,10 @@ fun HomeContent(
     totalSales: Double,
     openIncidentCount: Int,
     onCreateAccountClick: () -> Unit,
-    onTerminalFeeClick: () -> Unit,
-    onReportIncidentClick: () -> Unit,
-    onViewQueueClick: () -> Unit,
+    onSalesClick: () -> Unit,
+    onActiveClick: () -> Unit,
+    onIncidentClick: () -> Unit,
+    onDonasyonClick: () -> Unit,
     onEmergencyClick: () -> Unit
 ) {
     Column(
@@ -353,6 +357,10 @@ fun HomeContent(
         Row(
             modifier = Modifier.fillMaxWidth()
         ) {
+            /*
+             * The dashboard statistics ARE the quick access: tapping a
+             * card opens the tab behind the number.
+             */
             SummaryCard(
                 modifier = Modifier.weight(1f),
                 title = "Kabuuang Benta",
@@ -363,7 +371,8 @@ fun HomeContent(
                         color = EnerjeepBlue
                     )
                 },
-                iconBackground = Color.White
+                iconBackground = Color.White,
+                onClick = onSalesClick
             )
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -378,7 +387,8 @@ fun HomeContent(
                         color = SuccessGreen
                     )
                 },
-                iconBackground = SuccessGreenLight
+                iconBackground = SuccessGreenLight,
+                onClick = onActiveClick
             )
         }
 
@@ -394,7 +404,8 @@ fun HomeContent(
                     color = WarningOrange
                 )
             },
-            iconBackground = WarningOrangeLight
+            iconBackground = WarningOrangeLight,
+            onClick = onIncidentClick
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -465,6 +476,12 @@ fun HomeContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        /*
+         * Only the actions that are NOT covered by the stat cards stay
+         * here: account creation, donations and emergency. The rest of
+         * the old quick actions were removed because the statistics
+         * already open their tabs.
+         */
         Row(modifier = Modifier.fillMaxWidth()) {
             QuickActionButton(
                 modifier = Modifier.weight(1f),
@@ -486,7 +503,7 @@ fun HomeContent(
 
             QuickActionButton(
                 modifier = Modifier.weight(1f),
-                text = "Itala ang Terminal Fee",
+                text = "Donasyon ng Koop",
                 icon = {
                     DocumentIcon(
                         modifier = Modifier.size(20.dp),
@@ -495,41 +512,7 @@ fun HomeContent(
                 },
                 backgroundColor = Color.White,
                 contentColor = Color.Black,
-                onClick = onTerminalFeeClick
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            QuickActionButton(
-                modifier = Modifier.weight(1f),
-                text = "I-report ang Insidente",
-                icon = {
-                    WarningIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.Black
-                    )
-                },
-                backgroundColor = Color.White,
-                contentColor = Color.Black,
-                onClick = onReportIncidentClick
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            QuickActionButton(
-                modifier = Modifier.weight(1f),
-                text = "Tingnan ang Pila",
-                icon = {
-                    ListIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.Black
-                    )
-                },
-                backgroundColor = Color.White,
-                contentColor = Color.Black,
-                onClick = onViewQueueClick
+                onClick = onDonasyonClick
             )
         }
 

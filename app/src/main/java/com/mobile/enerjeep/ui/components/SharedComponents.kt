@@ -33,12 +33,20 @@ fun SummaryCard(
     title: String,
     value: String,
     icon: @Composable () -> Unit,
-    iconBackground: Color
+    iconBackground: Color,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(140.dp),
+            .height(140.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable { onClick() }
+                } else {
+                    Modifier
+                }
+            ),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -67,11 +75,22 @@ fun SummaryCard(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
-                Text(
-                    text = title,
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    if (onClick != null) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "›",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
         }
     }

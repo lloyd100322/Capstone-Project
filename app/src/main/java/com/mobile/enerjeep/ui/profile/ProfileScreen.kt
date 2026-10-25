@@ -628,7 +628,8 @@ fun EditProfileContent(
                         label = {
                             Text("Pangalan")
                         },
-                        singleLine = true
+                        singleLine = true,
+                        enabled = false
                     )
 
                     OutlinedTextField(
@@ -642,7 +643,8 @@ fun EditProfileContent(
                         label = {
                             Text("Apelyido")
                         },
-                        singleLine = true
+                        singleLine = true,
+                        enabled = false
                     )
                 }
 
@@ -687,7 +689,7 @@ fun EditProfileContent(
 
                 Text(
                     text =
-                        "Ang phone number ay naka-lock dahil ginagamit ito ng Firebase Phone Authentication.",
+                        "Naka-lock ang pangalan, apelyido at phone number (ginagamit ito ng Firebase Phone Authentication). Ang emergency contact lang ang maaaring i-edit.",
                     color =
                         Color.Gray,
                     fontSize =
