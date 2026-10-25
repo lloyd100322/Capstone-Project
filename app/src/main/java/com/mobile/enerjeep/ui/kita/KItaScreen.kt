@@ -22,6 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.LabeledBarChart
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
@@ -32,6 +33,8 @@ import com.mobile.enerjeep.ui.theme.LightGrayBackground
 fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
+    // Fase 5: plate filter (kapalit ng nawalang search box)
+    var plateFilter by remember { mutableStateOf("") }
     // Make sure the listeners belong to the driver who is signed in right now.
     LaunchedEffect(Unit) { viewModel.refreshIdentity() }
     val isHistory = uiState.selectedTab == KitaTabType.KASAYSAYAN
@@ -41,6 +44,10 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         filter = historyFilter,
         createdAtMillis = { it.createdAtMillis.takeIf { value -> value > 0L } }
     ) else uiState.filteredRecords
+    val finalRecords = visibleRecords.filter {
+        plateFilter.isBlank() ||
+                it.title.contains(plateFilter, ignoreCase = true)
+    }
 
     Column(Modifier.fillMaxSize().background(LightGrayBackground).padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(24.dp))
@@ -68,31 +75,112 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
             }
         }
         Spacer(Modifier.height(24.dp))
+
+        /*
+         * Fase 5: "driver Ulat = view-only scrollable labeled charts".
+         * Buod ng kita bilang labeled bars + kita kada araw.
+         */
+        LabeledBarChart(
+            title = "Buod (Kita, Bayad, Multa)",
+            bars = listOf(
+                "Kita" to uiState.totalKita,
+                "Bayad" to uiState.totalBayad,
+                "Multa" to uiState.totalMultiya
+            )
+        )
+        Spacer(Modifier.height(16.dp))
+        val dailyBars = remember(uiState.records) {
+            uiState.records
+                .filter { it.type == "Kita" }
+                .groupBy { it.date }
+                .map { (day, records) ->
+                    Triple(
+                        day,
+                        records.sumOf { it.amount },
+                        records.maxOf { it.createdAtMillis }
+                    )
+                }
+                .sortedByDescending { it.third }
+                .take(7)
+                .sortedBy { it.third }
+                .map { it.first to it.second }
+        }
+        LabeledBarChart(
+            title = "Kita kada Araw (huling 7)",
+            bars = dailyBars,
+            barColor = Color(0xFF16A34A)
+        )
+
+        Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             KitaTabButton(Modifier.weight(1f), "Ngayon", uiState.selectedTab == KitaTabType.NGAYON) { viewModel.onTabSelected(KitaTabType.NGAYON) }
             KitaTabButton(Modifier.weight(1f), "Kasaysayan", isHistory) { viewModel.onTabSelected(KitaTabType.KASAYSAYAN) }
         }
         if (isHistory) {
+            /*
+             * Fase 5: tanggal ang SEARCH BOX - plate filter + date filter
+             * na lang (parehong logic sa Ulat ng Kita).
+             */
             Spacer(Modifier.height(16.dp))
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = viewModel::onSearchQueryChanged,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Hanapin ayon sa plaka o driver", color = Color.Gray, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
-                shape = RoundedCornerShape(24.dp), singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, unfocusedBorderColor = Color.LightGray, focusedBorderColor = EnerjeepBlue)
-            )
-            HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
+            val plateOptions = remember(uiState.records) {
+                uiState.records
+                    .map { it.title.substringAfter("•", "").trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .sorted()
+            }
+            var expandedPlate by remember { mutableStateOf(false) }
+            if (plateOptions.size > 1) {
+                ExposedDropdownMenuBox(
+                    expanded = expandedPlate,
+                    onExpandedChange = { expandedPlate = !expandedPlate }
+                ) {
+                    OutlinedTextField(
+                        value = plateFilter.ifBlank { "Lahat ng plaka" },
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                expanded = expandedPlate
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        singleLine = true
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expandedPlate,
+                        onDismissRequest = { expandedPlate = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Lahat ng plaka") },
+                            onClick = {
+                                plateFilter = ""
+                                expandedPlate = false
+                            }
+                        )
+                        plateOptions.forEach { plate ->
+                            DropdownMenuItem(
+                                text = { Text(plate) },
+                                onClick = {
+                                    plateFilter = plate
+                                    expandedPlate = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(16.dp))
-        if (visibleRecords.isEmpty()) {
+        if (finalRecords.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text(if (!isHistory) "Wala pang kita ngayon." else "Walang record sa napiling filter.", color = Color.Gray, fontSize = 14.sp)
             }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(visibleRecords, key = { it.id }) { record ->
+                items(finalRecords, key = { it.id }) { record ->
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(1.dp)) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {

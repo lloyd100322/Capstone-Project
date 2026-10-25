@@ -25,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.LabeledBarChart
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
@@ -99,36 +100,82 @@ private fun HeaderRow() {
 
 @Composable
 fun UlatNgKitaScreen(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIncome>, historyData: List<IncomeHistory>, onBack: () -> Unit) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var searchQuery by remember { mutableStateOf("") }
+    /*
+     * Fase 5: ang dating Buwanang/Taunang LISTA ay naging LABELED
+     * CHARTS (view-only), at ang tab/search ay pinalitan ng isang
+     * "Kasaysayan" na may PLATE filter at date filter.
+     */
+    var plateFilter by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
+    val plateOptions = remember(historyData) {
+        historyData.map { it.plateNumber }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
     ReportPage("Ulat ng Kita", onBack) {
-        ReportTabs(selectedTab) { selectedTab = it }
+        LabeledBarChart(
+            title = "Buwanang Kita",
+            bars = monthlyData.map { it.period to it.amount }
+        )
         Spacer(Modifier.height(24.dp))
-        if (selectedTab == 0) {
-            Text("Buwanang Kita", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(Modifier.height(12.dp))
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                Column {
-                    if (monthlyData.isEmpty()) Text("Walang datos.", Modifier.padding(24.dp), color = Color.Gray)
-                    else monthlyData.forEach { MonthlyIncomeRow(it); HorizontalDivider(color = FieldBorderColor) }
+        LabeledBarChart(
+            title = "Taunang Kita",
+            bars = yearlyData.map { it.year to it.amount },
+            barColor = Color(0xFF16A34A)
+        )
+        Spacer(Modifier.height(28.dp))
+        Text("Kasaysayan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Spacer(Modifier.height(12.dp))
+        if (plateOptions.size > 1) {
+            var expandedPlate by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = expandedPlate,
+                onExpandedChange = { expandedPlate = !expandedPlate }
+            ) {
+                OutlinedTextField(
+                    value = plateFilter.ifBlank { "Lahat ng plaka" },
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(
+                            expanded = expandedPlate
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    singleLine = true
+                )
+                ExposedDropdownMenu(
+                    expanded = expandedPlate,
+                    onDismissRequest = { expandedPlate = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Lahat ng plaka") },
+                        onClick = {
+                            plateFilter = ""
+                            expandedPlate = false
+                        }
+                    )
+                    plateOptions.forEach { plate ->
+                        DropdownMenuItem(
+                            text = { Text(plate) },
+                            onClick = {
+                                plateFilter = plate
+                                expandedPlate = false
+                            }
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(24.dp)); Text("Taunang Kita", fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(12.dp))
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                Column {
-                    if (yearlyData.isEmpty()) Text("Walang datos.", Modifier.padding(24.dp), color = Color.Gray)
-                    else yearlyData.forEach { YearlyIncomeRow(it); HorizontalDivider(color = FieldBorderColor) }
-                }
-            }
-        } else {
-            SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka")
-            HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
-            val searched = historyData.filter { it.plateNumber.contains(searchQuery, true) }
-            val history = filterHistoryRecords(searched, { it.date }, historyFilter)
-            Spacer(Modifier.height(12.dp))
-            if (history.isEmpty()) EmptyHistory() else history.forEach { IncomeHistoryCard(it); Spacer(Modifier.height(12.dp)) }
+            Spacer(Modifier.height(8.dp))
         }
+        HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
+        val filteredPlates = historyData.filter {
+            plateFilter.isBlank() || it.plateNumber == plateFilter
+        }
+        val history = filterHistoryRecords(filteredPlates, { it.date }, historyFilter)
+        Spacer(Modifier.height(12.dp))
+        if (history.isEmpty()) EmptyHistory() else history.forEach { IncomeHistoryCard(it); Spacer(Modifier.height(12.dp)) }
     }
 }
 
