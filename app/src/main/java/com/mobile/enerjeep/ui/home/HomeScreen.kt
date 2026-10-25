@@ -59,6 +59,14 @@ fun HomeScreen(
     val userProfile by viewModel.userProfileFlow
         .collectAsStateWithLifecycle()
 
+    /*
+     * The superadmin-managed "available admin" list. Loaded OUTSIDE
+     * the admin/driver branch because the DRIVER side uses it in the
+     * Emergency dialog.
+     */
+    val emergencyContactsList by viewModel.emergencyContacts
+        .collectAsStateWithLifecycle()
+
     if (isAdmin) {
         var selectedTab by remember { mutableStateOf(HomeTab.Home) }
         var showIncidentForm by remember { mutableStateOf(false) }
@@ -75,8 +83,6 @@ fun HomeScreen(
             .collectAsStateWithLifecycle()
 
         val openIncidentCount by viewModel.openIncidentCount
-        val emergencyContactsList by viewModel.emergencyContacts
-            .collectAsStateWithLifecycle()
             .collectAsStateWithLifecycle()
 
         Scaffold(
