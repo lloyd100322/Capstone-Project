@@ -98,6 +98,7 @@ private fun HeaderRow() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UlatNgKitaScreen(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIncome>, historyData: List<IncomeHistory>, onBack: () -> Unit) {
     /*
