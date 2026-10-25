@@ -21,6 +21,18 @@ import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 
+/**
+ * Fase 7: in-app dispatch alert (sound + banner + bell). Walang push
+ * notification o Cloud Functions - habang bukas ang app, doon lang
+ * maririnig/makikita ang alert.
+ */
+data class DriverDispatchAlert(
+    val id: String = "",
+    val plateNumber: String = "",
+    val route: String = "",
+    val time: String = ""
+)
+
 data class DriverDashboardUiState(
     val firstName: String = "",
     val plateNumber: String = "",
@@ -57,6 +69,24 @@ class DriverViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DriverDashboardUiState())
     val uiState: StateFlow<DriverDashboardUiState> = _uiState.asStateFlow()
 
+    // Fase 7: dispatch alert state
+    private val _dispatchAlert =
+        MutableStateFlow<DriverDispatchAlert?>(null)
+    val dispatchAlert: StateFlow<DriverDispatchAlert?> =
+        _dispatchAlert.asStateFlow()
+
+    private val _recentAlerts =
+        MutableStateFlow<List<DriverDispatchAlert>>(emptyList())
+    val recentAlerts: StateFlow<List<DriverDispatchAlert>> =
+        _recentAlerts.asStateFlow()
+
+    private val _hasUnreadAlerts = MutableStateFlow(false)
+    val hasUnreadAlerts: StateFlow<Boolean> =
+        _hasUnreadAlerts.asStateFlow()
+
+    // Ids ng mga dispatch na nakita na (para sa "bago lang" detection).
+    private var seenDispatchedIds: MutableSet<String>? = null
+
     private var profileListener: ListenerRegistration? = null
     private var queueListener: ListenerRegistration? = null
     private var incidentListener: ListenerRegistration? = null
@@ -80,6 +110,7 @@ class DriverViewModel @Inject constructor(
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 updateQueueState(snapshot.documents)
+                checkDispatchAlerts(snapshot.documents)
             }
 
         incidentListener = firestore.collection(FirestoreCollections.INCIDENTS)
@@ -158,6 +189,58 @@ class DriverViewModel @Inject constructor(
             activeQueueDocId = own?.id.orEmpty(),
             isCancelledInQueue = own?.getBoolean("isCancelled") == true
         )
+    }
+
+    /*
+     * Fase 7: kapag ang sasakyan ng driver ay na-DISPATCH (status
+     * "dispatched"), mag-alert: sound (sa UI host), banner, at bell.
+     * Ang unang snapshot ay "seed" lang - walang alert sa pagbukas
+     * ng app para sa mga lumang dispatch.
+     */
+    private fun checkDispatchAlerts(
+        documents: List<DocumentSnapshot>
+    ) {
+        val dispatched = documents.filter {
+            it.getString("status") == "dispatched" &&
+                    matchesDriver(it)
+        }
+        val ids = dispatched.map { it.id }.toSet()
+
+        if (seenDispatchedIds == null) {
+            seenDispatchedIds = ids.toMutableSet()
+            return
+        }
+
+        val fresh = dispatched.filter { it.id !in seenDispatchedIds.orEmpty() }
+        seenDispatchedIds?.addAll(ids)
+
+        if (fresh.isEmpty()) return
+
+        fresh.forEach { document ->
+            val alert = DriverDispatchAlert(
+                id = document.id,
+                plateNumber =
+                    document.getString("plateNumber").orEmpty(),
+                route = document.getString("route").orEmpty(),
+                time = java.text.SimpleDateFormat(
+                    "hh:mm a",
+                    java.util.Locale.getDefault()
+                ).format(java.util.Date())
+            )
+
+            _recentAlerts.value =
+                (listOf(alert) + _recentAlerts.value).take(20)
+            _dispatchAlert.value = alert
+            _hasUnreadAlerts.value = true
+        }
+    }
+
+    fun dismissDispatchAlert() {
+        _dispatchAlert.value = null
+    }
+
+    fun markAlertsRead() {
+        _hasUnreadAlerts.value = false
     }
 
     /**

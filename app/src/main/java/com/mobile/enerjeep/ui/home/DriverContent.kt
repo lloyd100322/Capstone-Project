@@ -8,6 +8,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
@@ -30,6 +32,8 @@ import com.mobile.enerjeep.ui.schedule.ScheduleScreen
 import com.mobile.enerjeep.ui.incident.DriverIncidentScreen
 import com.mobile.enerjeep.ui.kita.KitaScreen
 import com.mobile.enerjeep.ui.profile.DriverProfileScreen
+import android.media.RingtoneManager
+import androidx.compose.ui.platform.LocalContext
 
 
 
@@ -50,8 +54,32 @@ fun DriverContent(
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
     var showIncidentForm by remember { mutableStateOf(false) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
+    var showAlertsSheet by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Fase 7: dispatch alert (banner + bell + sound)
+    val dispatchAlert by viewModel.dispatchAlert.collectAsStateWithLifecycle()
+    val recentAlerts by viewModel.recentAlerts.collectAsStateWithLifecycle()
+    val hasUnreadAlerts by viewModel.hasUnreadAlerts.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    /*
+     * Sound kapag may BAGONG dispatch alert - notification tone ng
+     * device (walang external audio file na kailangan).
+     */
+    LaunchedEffect(dispatchAlert?.id) {
+        if (dispatchAlert != null) {
+            try {
+                val uri = RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_NOTIFICATION
+                )
+                RingtoneManager.getRingtone(context, uri)?.play()
+            } catch (_: Exception) {
+                // Tahimik lang kung hindi available ang audio.
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -147,6 +175,15 @@ fun DriverContent(
                         queueNextPlate = uiState.queueNextPlate,
                         isInQueue = uiState.activeQueueDocId.isNotBlank() &&
                                 !uiState.isCancelledInQueue,
+                        dispatchAlert = dispatchAlert,
+                        hasUnreadAlerts = hasUnreadAlerts,
+                        onBellClick = {
+                            viewModel.markAlertsRead()
+                            showAlertsSheet = true
+                        },
+                        onDismissAlert = {
+                            viewModel.dismissDispatchAlert()
+                        },
                         onTaposNa = {
                             viewModel.endTravel()
                         },
@@ -179,6 +216,13 @@ fun DriverContent(
                     adminContacts = adminContacts
                 )
             }
+
+            if (showAlertsSheet) {
+                DispatchAlertsSheet(
+                    alerts = recentAlerts,
+                    onDismiss = { showAlertsSheet = false }
+                )
+            }
         }
     }
 }
@@ -202,6 +246,10 @@ fun DriverDashboardContent(
     queueNextName: String = "",
     queueNextPlate: String = "",
     isInQueue: Boolean = false,
+    dispatchAlert: DriverDispatchAlert? = null,
+    hasUnreadAlerts: Boolean = false,
+    onBellClick: () -> Unit = {},
+    onDismissAlert: () -> Unit = {},
     onTaposNa: () -> Unit = {},
     onEmergencyClick: () -> Unit = {}
 ) {
@@ -236,7 +284,7 @@ fun DriverDashboardContent(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        // Header
+        // Header (may bell para sa mga dispatch alert)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -253,6 +301,26 @@ fun DriverDashboardContent(
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onBellClick) {
+                Box {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Mga Alerto",
+                        tint = Color.Black,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    if (hasUnreadAlerts) {
+                        Surface(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .align(Alignment.TopEnd),
+                            shape = RoundedCornerShape(5.dp),
+                            color = ErrorRed
+                        ) {}
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -270,7 +338,61 @@ fun DriverDashboardContent(
             color = Color.Gray
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        /*
+         * Fase 7: banner ng dispatch alert - "Na-dispatch ka na!"
+         * kasama ang plaka at ruta. Maaaring isara.
+         */
+        dispatchAlert?.let { alert ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = EnerjeepBlue),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Na-dispatch ka na!",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = listOf(
+                                alert.plateNumber,
+                                alert.route,
+                                alert.time
+                            ).filter { it.isNotBlank() }
+                                .joinToString(" • "),
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 13.sp
+                        )
+                    }
+                    IconButton(onClick = onDismissAlert) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Isara",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Blue Status Card
         Card(
@@ -612,6 +734,94 @@ fun DriverDashboardContent(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+/*
+ * Fase 7: listahan ng mga dispatch alert (bell). In-memory lang -
+ * habang bukas ang app (walang push/Functions).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DispatchAlertsSheet(
+    alerts: List<DriverDispatchAlert>,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Mga Alerto",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Isara")
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            if (alerts.isEmpty()) {
+                Text(
+                    "Wala pang alerto. Ipapakita dito kapag na-dispatch ka.",
+                    color = Color.Gray,
+                    fontSize = 14.sp
+                )
+            } else {
+                alerts.forEach { alert ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = LightGrayBackground
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = EnerjeepBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Na-dispatch: " +
+                                            listOf(
+                                                alert.plateNumber,
+                                                alert.route
+                                            ).filter { it.isNotBlank() }
+                                                .joinToString(" • "),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    alert.time,
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
