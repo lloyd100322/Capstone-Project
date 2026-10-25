@@ -50,7 +50,8 @@ enum class HistoryPeriod(val label: String) {
 }
 
 data class HistoryFilterState(
-    val period: HistoryPeriod = HistoryPeriod.ALL,
+    // The system-wide default filter is "Ngayon", not "Lahat ng petsa".
+    val period: HistoryPeriod = HistoryPeriod.TODAY,
     val selectedDate: LocalDate? = null,
     val newestFirst: Boolean = true
 )

@@ -45,6 +45,7 @@ fun CreateAccountScreen(
     // Driver Details
     var licenseNumber by remember { mutableStateOf("") }
     var plateNumber by remember { mutableStateOf("") }
+    var seater by remember { mutableStateOf("") }
     var emergencyContactName by remember { mutableStateOf("") }
     var emergencyContactNumber by remember { mutableStateOf("") }
 
@@ -351,6 +352,25 @@ fun CreateAccountScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 Text(
+                                    "Bilang ng Upuan (Seater)",
+                                    fontSize = 14.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                CustomInputField(
+                                    value = seater,
+                                    onValueChange = {
+                                        if (it.isEmpty() || it.all { char -> char.isDigit() }) {
+                                            seater = it
+                                        }
+                                    },
+                                    placeholder = "Hal. 22"
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
                                     "Emergency Contact Name",
                                     fontSize = 14.sp
                                 )
@@ -434,7 +454,8 @@ fun CreateAccountScreen(
                                     licenseNumber,
                                     plateNumber,
                                     emergencyContactName,
-                                    emergencyContactNumber
+                                    emergencyContactNumber,
+                                    seater
                                 )
                             },
                             modifier = Modifier

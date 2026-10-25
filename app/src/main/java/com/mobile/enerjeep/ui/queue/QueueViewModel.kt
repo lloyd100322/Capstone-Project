@@ -97,6 +97,21 @@ class QueueViewModel @Inject constructor(
          */
         fun oppositeRoute(route: String?): String =
             if (routeKey(route) == 1) ROUTE_MA else ROUTE_AM
+
+        /**
+         * The dispatch deduction for a jeep comes from its number of
+         * seats (seater). Fixed tiers are stored in
+         * settings/deductionTiers ("16" -> 32, "22" -> 44). A jeep
+         * without a stored tier falls back to 2 pesos per seat.
+         */
+        fun tierFor(seater: Int, tiers: Map<String, Any?>?): Double {
+            if (seater <= 0) return 0.0
+            val stored = tiers
+                ?.get(seater.toString())
+                ?.let { it as? Number }
+                ?.toDouble()
+            return stored ?: (seater * 2.0)
+        }
     }
 
     init {
@@ -375,6 +390,35 @@ class QueueViewModel @Inject constructor(
     // Queue entries whose dispatch is currently being written.
     private val dispatchingIds = mutableSetOf<String>()
 
+    /**
+     * The automatic "bawas" shown in the dispatch modal: a fixed amount
+     * per seater from the settings. The admin may still change it at
+     * dispatch time.
+     */
+    suspend fun suggestedDeduction(driverId: String): Double {
+        val driverSnapshot = firestore
+            .collection(FirestoreCollections.USERS)
+            .whereEqualTo("userId", driverId)
+            .whereEqualTo("role", "driver")
+            .limit(1)
+            .get()
+            .await()
+
+        val seater = driverSnapshot.documents
+            .firstOrNull()
+            ?.getLong("seater")
+            ?.toInt()
+            ?: 0
+
+        val tiersSnapshot = firestore
+            .collection(FirestoreCollections.SETTINGS)
+            .document("deductionTiers")
+            .get()
+            .await()
+
+        return tierFor(seater, tiersSnapshot.data)
+    }
+
     fun dispatchVehicle(
         vehicleId: String,
         income: Double,
@@ -486,6 +530,25 @@ class QueueViewModel @Inject constructor(
                 }
 
                 val netAmount = income - otherFees
+
+                /*
+                 * Record how the automatic deduction was computed: the
+                 * number of seats of the jeep and its fixed tier amount.
+                 */
+                val seater = driverAccount
+                    .getLong("seater")
+                    ?.toInt()
+                    ?: 0
+
+                val tierDeduction = tierFor(
+                    seater,
+                    firestore
+                        .collection(FirestoreCollections.SETTINGS)
+                        .document("deductionTiers")
+                        .get()
+                        .await()
+                        .data
+                )
 
                 val remainingActive = queueSnapshot.documents
                     .filter {
@@ -656,6 +719,10 @@ class QueueViewModel @Inject constructor(
                         "grossAmount" to income,
                         "otherFees" to otherFees,
                         "netAmount" to netAmount,
+                        "seater" to seater,
+                        "seaterDeduction" to tierDeduction,
+                        "deductionCustomized" to
+                                (otherFees != tierDeduction),
                         "feeType" to "Dispatch",
                         "status" to "Bayad",
                         "source" to "queue_dispatch",

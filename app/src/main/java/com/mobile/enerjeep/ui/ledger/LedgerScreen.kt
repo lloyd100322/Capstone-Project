@@ -169,7 +169,11 @@ fun TerminalFeeFormContent(
     var expandedDriver by remember { mutableStateOf(false) }
     var selectedDriver by remember(drivers) { mutableStateOf(drivers.firstOrNull()) }
     var expandedFeeType by remember { mutableStateOf(false) }
-    val feeTypes = listOf("Terminal Fee", "Multa")
+    /*
+     * The terminal fee is gone: the dispatch deduction now comes from
+     * the number of seats of the jeep. Only "Multa" is left to record.
+     */
+    val feeTypes = listOf("Multa")
     var selectedFeeType by remember { mutableStateOf(feeTypes.first()) }
 
     Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 32.dp)) {

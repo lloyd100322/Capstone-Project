@@ -60,7 +60,8 @@ class CreateAccountViewModel @Inject constructor(
         licenseNumber: String = "",
         plateNumber: String = "",
         emergencyContactName: String = "",
-        emergencyContactNumber: String = ""
+        emergencyContactNumber: String = "",
+        seater: String = ""
     ) {
         /*
          * User-level rule: only a superadmin can create an admin.
@@ -81,6 +82,8 @@ class CreateAccountViewModel @Inject constructor(
 
         val cleanEmergencyName = emergencyContactName.trim()
         val cleanEmergencyNumber = emergencyContactNumber.trim()
+        val cleanSeater = seater.trim()
+        val seaterCount = cleanSeater.toIntOrNull()
 
         if (
             cleanFirstName.isBlank() ||
@@ -104,6 +107,13 @@ class CreateAccountViewModel @Inject constructor(
         if (effectiveRole == UserRole.Driver) {
             // The plate number and the license number are checked before
             // anything is saved, so a wrong value never reaches Firestore.
+            if (seaterCount == null || seaterCount < 1 || seaterCount > 60) {
+                _uiState.value = CreateAccountUiState.Error(
+                    "Ilagay ang bilang ng upuan ng jeep (1-60), hal. 22"
+                )
+                return
+            }
+
             PhilippineIdentifiers.plateNumberError(cleanPlateNumber)
                 ?.let { error ->
                     _uiState.value = CreateAccountUiState.Error(error)
@@ -202,6 +212,10 @@ class CreateAccountViewModel @Inject constructor(
 
                     userMap["plateNumber"] =
                         cleanPlateNumber
+
+                    // Seats of the jeep: the dispatch deduction is
+                    // computed from this number.
+                    userMap["seater"] = seaterCount
 
                     // The two emergency contact values are saved in their
                     // own fields. The old combined field is kept in sync

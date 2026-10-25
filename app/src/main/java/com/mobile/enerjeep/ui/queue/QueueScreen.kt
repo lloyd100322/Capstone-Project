@@ -356,6 +356,9 @@ fun QueueScreen(
                 plateNumber = vehicleToDispatch!!.plateNumber,
                 route = vehicleToDispatch!!.route,
                 driverName = vehicleToDispatch!!.driverName,
+                suggestedDeduction = {
+                    viewModel.suggestedDeduction(vehicleToDispatch!!.driverId)
+                },
                 onCancel = { vehicleToDispatch = null },
                 onDispatch = { income, otherFees ->
                     viewModel.dispatchVehicle(vehicleToDispatch!!.id, income, otherFees)
@@ -740,11 +743,25 @@ fun DispatchCollectionContent(
     plateNumber: String,
     route: String,
     driverName: String,
+    suggestedDeduction: suspend () -> Double = { 0.0 },
     onCancel: () -> Unit,
     onDispatch: (Double, Double) -> Unit
 ) {
     var income by remember { mutableStateOf("") }
     var otherFees by remember { mutableStateOf("") }
+
+    /*
+     * The "bawas" is filled in automatically from the number of seats
+     * of the jeep (fixed tier). The admin may still change it here.
+     */
+    LaunchedEffect(Unit) {
+        val suggested = suggestedDeduction()
+        if (otherFees.isBlank()) {
+            otherFees = suggested
+                .toInt()
+                .toString()
+        }
+    }
 
     val netValue = remember(income, otherFees) {
         val inc = income.toDoubleOrNull() ?: 0.0
@@ -780,7 +797,13 @@ fun DispatchCollectionContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(text = "Iba pang Bayad (Other Fees)", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(text = "Bawas (Awtomatiko batay sa Upuan)", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Awtomatiko itong kinakalkula mula sa bilang ng upuan ng jeep. Maaari itong baguhin dito.",
+            fontSize = 11.sp,
+            color = Color.Gray
+        )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = otherFees,
