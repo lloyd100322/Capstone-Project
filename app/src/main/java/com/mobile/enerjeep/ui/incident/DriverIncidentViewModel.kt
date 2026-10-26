@@ -43,7 +43,6 @@ data class DriverIncidentUiState(
     val selectedTab: IncidentTabType = IncidentTabType.DI_NAAYOS,
     val allIncidents: List<DriverIncident> = emptyList(),
     val filteredIncidents: List<DriverIncident> = emptyList(),
-    val selectedIncident: DriverIncident? = null,
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
     // Fase 6: tel: button - numero ng opisina (emergency list ng superadmin).
@@ -154,14 +153,6 @@ class DriverIncidentViewModel @Inject constructor(
     fun onTabSelected(tab: IncidentTabType) {
         _uiState.value = _uiState.value.copy(selectedTab = tab)
         applyFilters()
-    }
-
-    fun selectIncident(incident: DriverIncident) {
-        _uiState.value = _uiState.value.copy(selectedIncident = incident)
-    }
-
-    fun clearSelectedIncident() {
-        _uiState.value = _uiState.value.copy(selectedIncident = null)
     }
 
     private fun applyFilters() {

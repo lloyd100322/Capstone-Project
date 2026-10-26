@@ -11,6 +11,8 @@ import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
+import com.mobile.enerjeep.ui.kita.KitaHistory
+import com.mobile.enerjeep.ui.kita.KitaRecord
 import com.mobile.enerjeep.ui.queue.QueueViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +20,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 
@@ -57,7 +62,13 @@ data class DriverDashboardUiState(
     val queueNextPlate: String = "",
     // The doc id of the driver's own active queue entry ("Tapos Na").
     val activeQueueDocId: String = "",
-    val isCancelledInQueue: Boolean = false
+    val isCancelledInQueue: Boolean = false,
+    // "Tapos Na Bumyahe": tapos na ang biyahe NGAYON - pula ang button
+    // at lalabas sa ibaba ang buong kita sa araw.
+    val travelEndedToday: Boolean = false,
+    // Buong kita ng driver sa buong araw (neto, gaya ng Kita tab).
+    // Null habang hindi pa naloload.
+    val dailyEarnings: Double? = null
 )
 
 @HiltViewModel
@@ -189,6 +200,26 @@ class DriverViewModel @Inject constructor(
             activeQueueDocId = own?.id.orEmpty(),
             isCancelledInQueue = own?.getBoolean("isCancelled") == true
         )
+
+        /*
+         * "Tapos Na Bumyahe" state: kapag tapos na ang biyahe ngayon
+         * (completed + endTravelAt ngayong araw), pula ang button at
+         * lalabas ang buong kita ng araw - kahit i-reopen ang app.
+         */
+        val endedToday = driverDocs.any {
+            it.getString("status")
+                .equals("completed", ignoreCase = true) &&
+                    isToday(
+                        it.safeTimestamp("endTravelAt")?.toDate()?.time
+                            ?: 0L
+                    )
+        }
+        if (endedToday && !_uiState.value.travelEndedToday) {
+            _uiState.value = _uiState.value.copy(
+                travelEndedToday = true
+            )
+            loadDailyEarnings()
+        }
     }
 
     /*
@@ -335,6 +366,16 @@ class DriverViewModel @Inject constructor(
                     target.getString("plateNumber").orEmpty()
                 )
 
+                /*
+                 * "Tapos Na Bumyahe": pula ang button at lalabas sa
+                 * ibaba nito ang buong kita ng driver sa buong araw -
+                 * hindi na kailangang pumunta sa Kita tab.
+                 */
+                _uiState.value = _uiState.value.copy(
+                    travelEndedToday = true
+                )
+                loadDailyEarnings()
+
                 ToastFeedback.show(
                     "Tapos na ang biyahe. Wala ka na sa pila."
                 )
@@ -344,6 +385,209 @@ class DriverViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Buong kita ng driver sa buong araw (neto - kapareho ng "Netong
+     * Kita Ngayon" sa Kita tab). Ipinapakita sa ibaba ng "Tapos Na
+     * Bumyahe" button para hindi na kailangang pumunta sa Kita tab.
+     */
+    private fun loadDailyEarnings() {
+        val profile = userSession.userProfile ?: return
+        val userId = profile.userId?.trim().orEmpty()
+
+        viewModelScope.launch {
+            try {
+                val manualDocs = if (userId.isBlank()) {
+                    emptyList()
+                } else {
+                    firestore
+                        .collection(FirestoreCollections.KITA)
+                        .whereEqualTo("driverId", userId)
+                        .get()
+                        .await()
+                        .documents
+                }
+
+                val byDriver = if (userId.isBlank()) {
+                    emptyList()
+                } else {
+                    firestore
+                        .collection(FirestoreCollections.LEDGER)
+                        .whereEqualTo("driverId", userId)
+                        .get()
+                        .await()
+                        .documents
+                }
+
+                val plate = profile.plateNumber?.trim().orEmpty()
+                val byPlate = if (plate.isBlank()) {
+                    emptyList()
+                } else {
+                    firestore
+                        .collection(FirestoreCollections.LEDGER)
+                        .whereEqualTo("plateNumber", plate)
+                        .get()
+                        .await()
+                        .documents
+                }
+
+                val dispatchDocs = (byDriver + byPlate)
+                    .distinctBy { it.id }
+                    .filter { document ->
+                        val owner = document.getString("driverId")
+                            .orEmpty().trim()
+                        (owner.isBlank() || owner == userId) &&
+                                (
+                                        document.getString("source")
+                                            .orEmpty().trim()
+                                            .equals(
+                                                "queue_dispatch",
+                                                ignoreCase = true
+                                            ) ||
+                                                document.getString("feeType")
+                                                    .orEmpty().trim()
+                                                    .equals(
+                                                        "Dispatch",
+                                                        ignoreCase = true
+                                                    )
+                                        )
+                    }
+                    .distinctBy { document ->
+                        document.getString("queueId")?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                            ?: document.id
+                    }
+
+                val records = KitaHistory.merge(
+                    dispatchRecords = dispatchDocs
+                        .map { mapDispatchLedger(it) },
+                    manualRecords = manualDocs
+                        .map { mapKitaDocument(it) }
+                ).filter { !it.isHistory }
+
+                val totals = KitaHistory.totals(records)
+
+                _uiState.value = _uiState.value.copy(
+                    dailyEarnings = totals.net
+                )
+            } catch (_: Exception) {
+                // Best effort - 0 lang ang ipapakita kung hindi ma-load.
+                _uiState.value = _uiState.value.copy(
+                    dailyEarnings = _uiState.value.dailyEarnings ?: 0.0
+                )
+            }
+        }
+    }
+
+    private fun mapKitaDocument(document: DocumentSnapshot): KitaRecord {
+        val millis = getCreatedAtMillis(document)
+        return KitaRecord(
+            id = document.id,
+            title = document.getString("title") ?: "Record",
+            date = document.getString("date")?.takeIf { it.isNotBlank() }
+                ?: formatMillis(millis),
+            amount = getNumericValue(document, "amount") ?: 0.0,
+            type = document.getString("type")
+                ?.let {
+                    if (it.equals("Multiya", ignoreCase = true)) "Multa"
+                    else it
+                }
+                ?: "Kita",
+            isHistory = !isToday(millis),
+            createdAtMillis = millis,
+            sourceId = "kita:${document.id}"
+        )
+    }
+
+    private fun mapDispatchLedger(document: DocumentSnapshot): KitaRecord {
+        val millis = getCreatedAtMillis(document)
+        val plate = document.getString("plateNumber").orEmpty().trim()
+        val displayDate = document.getString("date")
+            ?.takeIf { it.isNotBlank() }
+            ?: formatMillis(millis)
+
+        val amount = getNumericValue(document, "netAmount")
+            ?: getNumericValue(document, "amount")
+            ?: 0.0
+
+        return KitaRecord(
+            id = "ledger_${document.id}",
+            title = if (plate.isBlank()) "Dispatch"
+            else "Dispatch • $plate",
+            date = displayDate,
+            amount = amount,
+            type = "Kita",
+            isHistory = !isToday(millis),
+            createdAtMillis = millis,
+            sourceId = "ledger:${document.id}"
+        )
+    }
+
+    private fun getCreatedAtMillis(document: DocumentSnapshot): Long {
+        document.safeTimestamp("createdAt")?.let {
+            return it.toDate().time
+        }
+
+        val rawCreatedAt = document.get("createdAt")
+        if (rawCreatedAt is Number) {
+            val rawValue = rawCreatedAt.toLong()
+            return if (rawValue in 1 until 100_000_000_000L) {
+                rawValue * 1000L
+            } else {
+                rawValue
+            }
+        }
+
+        val dateText = document.getString("date")?.trim().orEmpty()
+        if (dateText.isBlank()) return 0L
+
+        val patterns = listOf(
+            "MMM dd, yyyy",
+            "MMM d, yyyy",
+            "yyyy-MM-dd",
+            "MM/dd/yyyy"
+        )
+        for (pattern in patterns) {
+            try {
+                val parser = SimpleDateFormat(
+                    pattern,
+                    Locale.getDefault()
+                ).apply {
+                    isLenient = false
+                }
+                val parsed = parser.parse(dateText)
+                if (parsed != null) return parsed.time
+            } catch (_: Exception) {
+                // Susunod na format.
+            }
+        }
+
+        return 0L
+    }
+
+    private fun getNumericValue(
+        document: DocumentSnapshot,
+        field: String
+    ): Double? {
+        return (document.get(field) as? Number)?.toDouble()
+    }
+
+    private fun isToday(millis: Long): Boolean {
+        if (millis <= 0L) return false
+
+        val dayKey = SimpleDateFormat(
+            "yyyyMMdd",
+            Locale.getDefault()
+        )
+        return dayKey.format(Date()) == dayKey.format(Date(millis))
+    }
+
+    private fun formatMillis(millis: Long): String {
+        if (millis <= 0L) return ""
+
+        return SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+            .format(Date(millis))
     }
 
     private fun updateIncidentState(documents: List<DocumentSnapshot>) {

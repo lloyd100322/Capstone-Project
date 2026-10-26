@@ -29,7 +29,6 @@ import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mobile.enerjeep.ui.schedule.ScheduleScreen
 import com.mobile.enerjeep.ui.incident.DriverIncidentScreen
 import com.mobile.enerjeep.ui.kita.KitaScreen
 import com.mobile.enerjeep.ui.profile.DriverProfileScreen
@@ -40,7 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 
 // 1. Driver-Specific Tabs
 enum class DriverTab {
-    Home, Iskedyul, Insidente, Kita, Profile
+    Home, Insidente, Kita, Profile
 }
 
 // 2. Master Controller for the Driver Role
@@ -106,15 +105,6 @@ fun DriverContent(
                     )
                 )
                 NavigationBarItem(
-                    selected = selectedTab == DriverTab.Iskedyul,
-                    onClick = {
-                        selectedTab = DriverTab.Iskedyul
-                        showIncidentForm = false
-                    },
-                    icon = { DocumentIcon(modifier = Modifier.size(24.dp)) }, // Reusing custom icon
-                    label = { Text("Iskedyul", fontSize = 10.sp) }
-                )
-                NavigationBarItem(
                     selected = selectedTab == DriverTab.Insidente,
                     onClick = { selectedTab = DriverTab.Insidente },
                     icon = { WarningIcon(modifier = Modifier.size(24.dp)) },
@@ -163,7 +153,6 @@ fun DriverContent(
                         plateNumber = uiState.plateNumber,
                         route = uiState.route,
                         queuePosition = uiState.queuePosition,
-                        totalInQueue = uiState.totalInQueue,
                         queueStatus = uiState.queueStatus,
                         activeIncidentTitle = uiState.activeIncidentTitle,
                         activeIncidentDate = uiState.activeIncidentDate,
@@ -176,6 +165,8 @@ fun DriverContent(
                         queueNextPlate = uiState.queueNextPlate,
                         isInQueue = uiState.activeQueueDocId.isNotBlank() &&
                                 !uiState.isCancelledInQueue,
+                        travelEnded = uiState.travelEndedToday,
+                        dailyEarnings = uiState.dailyEarnings,
                         dispatchAlert = dispatchAlert,
                         hasUnreadAlerts = hasUnreadAlerts,
                         onBellClick = {
@@ -192,9 +183,6 @@ fun DriverContent(
                             showEmergencyDialog = true
                         }
                     )
-                }
-                DriverTab.Iskedyul -> {
-                    ScheduleScreen()
                 }
                 DriverTab.Insidente -> {
                     DriverIncidentScreen()
@@ -235,7 +223,6 @@ fun DriverDashboardContent(
     plateNumber: String,
     route: String,
     queuePosition: Int,
-    totalInQueue: Int,
     queueStatus: String,
     activeIncidentTitle: String?,
     activeIncidentDate: String?,
@@ -247,6 +234,8 @@ fun DriverDashboardContent(
     queueNextName: String = "",
     queueNextPlate: String = "",
     isInQueue: Boolean = false,
+    travelEnded: Boolean = false,
+    dailyEarnings: Double? = null,
     dispatchAlert: DriverDispatchAlert? = null,
     hasUnreadAlerts: Boolean = false,
     onBellClick: () -> Unit = {},
@@ -393,8 +382,6 @@ fun DriverDashboardContent(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
         // Blue Status Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -452,12 +439,6 @@ fun DriverDashboardContent(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = route,
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Posisyon $queuePosition ng $totalInQueue sa pila",
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 14.sp
                         )
@@ -708,18 +689,29 @@ fun DriverDashboardContent(
         }
 
         /*
-         * Fase 4B: "Tapos Na" - aalis ang driver sa pila (Kasaysayan).
-         * May confirm para walang aksidenteng pindot.
+         * "Tapos Na Bumyahe" - aalis ang driver sa pila (Kasaysayan).
+         * May confirm para walang aksidenteng pindot. Kapag tapos na
+         * ang biyahe ngayon, pula ang button at lalabas sa ibaba ang
+         * buong kita ng araw.
          */
-        if (isInQueue) {
+        if (isInQueue || travelEnded) {
+            val doneToday = travelEnded && !isInQueue
+
             Button(
-                onClick = { showTaposConfirm = true },
+                onClick = {
+                    if (!doneToday) {
+                        showTaposConfirm = true
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(24.dp),
+                enabled = !doneToday,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SuccessGreen
+                    containerColor = SuccessGreen,
+                    disabledContainerColor = ErrorRed,
+                    disabledContentColor = Color.White
                 )
             ) {
                 Icon(
@@ -730,16 +722,59 @@ fun DriverDashboardContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Tapos Na",
+                    text = "Tapos Na Bumyahe",
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            /*
+             * Pagkatapos pindutin ang "Tapos Na Bumyahe": lalabas dito
+             * ang buong kita ng driver sa buong araw - hindi na
+             * kailangang pumunta sa Kita tab.
+             */
+            if (travelEnded) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Buong Kita Ngayon",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "₱" + String.format(
+                                "%,.0f",
+                                dailyEarnings ?: 0.0
+                            ),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         /*
          * Emergency button: opens the dialog with 911 and the emergency

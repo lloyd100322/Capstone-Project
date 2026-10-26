@@ -9,15 +9,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material3.*
@@ -98,16 +92,14 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = Color.Gray, fontSize = 14.sp) }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                items(visibleIncidents, key = { it.id }) { incident -> DriverIncidentCard(incident) { viewModel.selectIncident(incident) } }
+                items(visibleIncidents, key = { it.id }) { incident ->
+                    DriverIncidentCard(
+                        incident = incident,
+                        fallbackPhone = uiState.officePhone
+                    )
+                }
             }
         }
-    }
-    uiState.selectedIncident?.let { selected ->
-        IncidentDetailBottomSheet(
-            selected,
-            officeName = uiState.officeName,
-            officePhone = uiState.officePhone
-        ) { viewModel.clearSelectedIncident() }
     }
 }
 
@@ -133,8 +125,17 @@ fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boo
 }
 
 @Composable
-fun DriverIncidentCard(incident: DriverIncident, onViewClick: () -> Unit) {
+fun DriverIncidentCard(
+    incident: DriverIncident,
+    fallbackPhone: String = ""
+) {
     val context = LocalContext.current
+    /*
+     * Ang buong detalye ay nasa mismong card na (walang hiwalay na
+     * sheet) kaya hindi na rin ito clickable. Ang button ay CALL lang
+     * (tawag sa numero ng driver; opisina kung walang numero).
+     */
+    val callNumber = incident.driverPhone.ifBlank { fallbackPhone }
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
@@ -156,74 +157,15 @@ fun DriverIncidentCard(incident: DriverIncident, onViewClick: () -> Unit) {
                     Text(if (incident.isResolved) "Naayos" else "Bukas", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            /*
-             * "Tingnan" + "Tawag" (katabi): ang Tawag ay dumidial sa
-             * numero ng naaksidente na driver - naka-DIAL (hindi
-             * auto-call) para makita muna ang numero bago tumawag.
-             * Ang button ay lumalabas lang kapag may naka-imbak na
-             * numero sa incident record.
-             */
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)) { Icon(Icons.Default.Visibility, null, tint = Color.Black, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("Tingnan", color = Color.Black, fontSize = 14.sp, maxLines = 1) }
-                if (incident.driverPhone.isNotBlank()) {
-                    OutlinedButton(
-                        onClick = {
-                            val clean = incident.driverPhone.filter {
-                                it.isDigit() || it == '+'
-                            }
-                            if (clean.isNotBlank()) {
-                                context.startActivity(
-                                    Intent(
-                                        Intent.ACTION_DIAL,
-                                        Uri.parse("tel:$clean")
-                                    )
-                                )
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(20.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
-                    ) { Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("Tawag", color = SuccessGreen, fontSize = 14.sp, maxLines = 1) }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun IncidentDetailBottomSheet(
-    incident: DriverIncident,
-    officeName: String = "",
-    officePhone: String = "",
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White, dragHandle = null) {
-        Column(Modifier.fillMaxWidth().padding(24.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, "Close") } }
-            Spacer(Modifier.height(24.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Surface(color = if (incident.isResolved) SuccessGreen.copy(alpha = .1f) else WarningOrangeLight, shape = RoundedCornerShape(8.dp)) { Text(if (incident.isResolved) "Naayos" else "Bukas", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold) } }
-            Spacer(Modifier.height(24.dp)); DetailRow(Icons.Default.DirectionsBus, "Plaka ng Sasakyan", incident.plateNumber)
-            Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.LocationOn, "Lokasyon", incident.location)
-            Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.Description, "Deskripsyon", incident.description)
-            Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.CalendarToday, "Petsa at Oras", incident.date)
-            Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.AccountBalanceWallet, "Multa", "₱${String.format("%,.0f", incident.multiya)}")
-            Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.Description, "Naipadala sa Driver", if (incident.isSentToDriver) "Oo" else "Hindi")
-            /*
-             * Fase 6: tel: call button - tawagan ang opisina tungkol
-             * sa insidente. Naka-DIAL (hindi auto-call) para makita
-             * muna ng driver ang numero bago tumawag.
-             */
-            if (officePhone.isNotBlank()) {
-                if (officeName.isNotBlank()) {
-                    Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.Phone, "Opisina", officeName)
-                }
+            if (callNumber.isNotBlank()) {
                 Spacer(Modifier.height(16.dp))
-                Button(
+                /*
+                 * Tawag: naka-DIAL (hindi auto-call) para makita muna
+                 * ang numero bago tumawag.
+                 */
+                OutlinedButton(
                     onClick = {
-                        val clean = officePhone.filter {
+                        val clean = callNumber.filter {
                             it.isDigit() || it == '+'
                         }
                         if (clean.isNotBlank()) {
@@ -235,47 +177,15 @@ fun IncidentDetailBottomSheet(
                             )
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SuccessGreen
-                    )
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
                 ) {
-                    Icon(
-                        Icons.Default.Call,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Tawagan",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White,
-                        maxLines = 1
-                    )
+                    Text("Tawag", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
-            Spacer(Modifier.height(32.dp)); OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(24.dp)) { Text("Isara", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black) }
-            Spacer(Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    /*
-     * Mas malinis na layout: naka-STACK (label sa itaas, value sa ibaba)
-     * kaya hindi na nagpipisikan ang mahahabang text (hal. Deskripsyon).
-     */
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, color = Color.Gray, fontSize = 12.sp)
-            Spacer(Modifier.height(2.dp))
-            Text(value, color = Color.Black, fontWeight = FontWeight.Medium, fontSize = 14.sp)
         }
     }
 }
