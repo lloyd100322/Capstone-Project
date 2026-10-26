@@ -134,7 +134,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Idagdag sa Listahan")
+                        Text("Idagdag", maxLines = 1)
                     }
                 }
 
@@ -431,7 +431,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Magdagdag ng Tier")
+                    Text("Magdagdag", maxLines = 1)
                 }
             }
         }
@@ -450,6 +450,6 @@ fun SettingsView(viewModel: SuperadminViewModel) {
             ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().height(52.dp)
-        ) { Text("I-save ang Settings") }
+        ) { Text("I-save", maxLines = 1) }
     }
 }

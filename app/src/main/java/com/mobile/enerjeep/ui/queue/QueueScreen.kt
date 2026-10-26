@@ -434,7 +434,7 @@ fun QueueItem(
                 TextButton(onClick = {
                     showCancelConfirm = false
                     onCancelClick()
-                }) { Text("Oo, kanselahin", color = ErrorRed) }
+                }) { Text("Oo", color = ErrorRed, maxLines = 1) }
             },
             dismissButton = {
                 TextButton(onClick = { showCancelConfirm = false }) { Text("Hindi") }
@@ -520,9 +520,10 @@ fun QueueItem(
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text(
-                            text = "Ibalik sa Pila",
+                            text = "Ibalik",
                             fontSize = 11.sp,
-                            color = SuccessGreen
+                            color = SuccessGreen,
+                            maxLines = 1
                         )
                     }
                 } else {

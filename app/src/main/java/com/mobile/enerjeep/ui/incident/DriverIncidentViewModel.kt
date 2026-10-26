@@ -26,7 +26,10 @@ data class DriverIncident(
     // Newest activity (resolved time, else created time) used for ordering.
     val sortMillis: Long = 0L,
     // Creation time of the record, used by the "Ngayon" date filter.
-    val createdAtMillis: Long = 0L
+    val createdAtMillis: Long = 0L,
+    // Numero ng naaksidente na driver (impano sa incident record mismo -
+    // hindi mababasa ng driver ang /users list kaya dito nakaimbak).
+    val driverPhone: String = ""
 )
 
 enum class IncidentTabType {
@@ -200,6 +203,7 @@ class DriverIncidentViewModel @Inject constructor(
             isResolved = document.getBoolean("isResolved") == true || document.getString("status")?.lowercase() == "resolved",
             multiya = (document.get("penalty") as? Number)?.toDouble() ?: 0.0,
             isSentToDriver = document.getBoolean("sentToDriver") ?: true,
+            driverPhone = document.getString("driverPhone").orEmpty().trim(),
             sortMillis = (
                     document.safeTimestamp("resolvedAt")
                         ?: document.safeTimestamp("createdAt")

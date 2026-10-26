@@ -398,10 +398,11 @@ fun LoginScreen(
                                 text = if (
                                     uiState is LoginUiState.ResendingOtp
                                 ) {
-                                    "Nagpapadala ng OTP..."
+                                    "Nagpapadala..."
                                 } else {
-                                    "Ipadala muli ang OTP"
+                                    "Ipadala"
                                 },
+                                maxLines = 1,
                                 color = EnerjeepBlue,
                                 fontSize = 14.sp
                             )
@@ -466,10 +467,11 @@ fun LoginScreen(
                         } else {
                             Text(
                                 text = if (isOtpStage) {
-                                    "I-verify ang Code"
+                                    "I-verify"
                                 } else {
                                     "Mag-login"
                                 },
+                                maxLines = 1,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White

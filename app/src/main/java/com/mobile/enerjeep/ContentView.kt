@@ -68,7 +68,7 @@ fun ContentView(
                                 modifier = Modifier.padding(24.dp)
                             )
                             Button(onClick = { viewModel.retry() }) {
-                                Text("Subukan muli")
+                                Text("Subukan", maxLines = 1)
                             }
                         }
                     }

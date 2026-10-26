@@ -136,7 +136,7 @@ fun ProfileScreen(
                                             ProfileBlue
                                     )
                         ) {
-                            Text("Subukan muli")
+                            Text("Subukan", maxLines = 1)
                         }
                     }
                 }

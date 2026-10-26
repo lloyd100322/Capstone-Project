@@ -270,11 +270,11 @@ fun DriverDashboardContent(
                 TextButton(onClick = {
                     showTaposConfirm = false
                     onTaposNa()
-                }) { Text("Oo, tapos na", color = SuccessGreen) }
+                }) { Text("Oo", color = SuccessGreen, maxLines = 1) }
             },
             dismissButton = {
                 TextButton(onClick = { showTaposConfirm = false }) {
-                    Text("Hindi pa")
+                    Text("Hindi", maxLines = 1)
                 }
             }
         )

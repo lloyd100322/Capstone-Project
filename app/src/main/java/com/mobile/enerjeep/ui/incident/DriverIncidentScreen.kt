@@ -134,6 +134,7 @@ fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boo
 
 @Composable
 fun DriverIncidentCard(incident: DriverIncident, onViewClick: () -> Unit) {
+    val context = LocalContext.current
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
@@ -156,7 +157,36 @@ fun DriverIncidentCard(incident: DriverIncident, onViewClick: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onViewClick, shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)) { Icon(Icons.Default.Visibility, null, tint = Color.Black, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("Tingnan", color = Color.Black, fontSize = 14.sp) }
+            /*
+             * "Tingnan" + "Tawag" (katabi): ang Tawag ay dumidial sa
+             * numero ng naaksidente na driver - naka-DIAL (hindi
+             * auto-call) para makita muna ang numero bago tumawag.
+             * Ang button ay lumalabas lang kapag may naka-imbak na
+             * numero sa incident record.
+             */
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)) { Icon(Icons.Default.Visibility, null, tint = Color.Black, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("Tingnan", color = Color.Black, fontSize = 14.sp, maxLines = 1) }
+                if (incident.driverPhone.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = {
+                            val clean = incident.driverPhone.filter {
+                                it.isDigit() || it == '+'
+                            }
+                            if (clean.isNotBlank()) {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_DIAL,
+                                        Uri.parse("tel:$clean")
+                                    )
+                                )
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
+                    ) { Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("Tawag", color = SuccessGreen, fontSize = 14.sp, maxLines = 1) }
+                }
+            }
         }
     }
 }
@@ -187,6 +217,9 @@ fun IncidentDetailBottomSheet(
              * muna ng driver ang numero bago tumawag.
              */
             if (officePhone.isNotBlank()) {
+                if (officeName.isNotBlank()) {
+                    Spacer(Modifier.height(16.dp)); DetailRow(Icons.Default.Phone, "Opisina", officeName)
+                }
                 Spacer(Modifier.height(16.dp))
                 Button(
                     onClick = {
@@ -216,15 +249,11 @@ fun IncidentDetailBottomSheet(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Tawagan ang Opisina" +
-                                if (officeName.isNotBlank()) {
-                                    " ($officeName)"
-                                } else {
-                                    ""
-                                },
+                        "Tawagan",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = Color.White
+                        color = Color.White,
+                        maxLines = 1
                     )
                 }
             }

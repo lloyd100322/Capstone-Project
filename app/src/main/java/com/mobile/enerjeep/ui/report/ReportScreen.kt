@@ -49,8 +49,12 @@ val FieldBorderColor = Color(0xFFE5E7EB)
 fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
 
 @Composable
-fun ReportScreen(viewModel: ReportViewModel = hiltViewModel()) {
-    var currentScreen by remember { mutableStateOf("MainGrid") }
+fun ReportScreen(
+    viewModel: ReportViewModel = hiltViewModel(),
+    // "DonasyonNgKoop" kapag galing sa Donasyon stat ng dashboard.
+    initialScreen: String = "MainGrid"
+) {
+    var currentScreen by remember { mutableStateOf(initialScreen) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     when (val state = uiState) {
         is ReportUiState.Loading -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = EnerjeepBlue) }
@@ -272,7 +276,7 @@ fun DonasyonNgKoopScreen(currentDonasyon: List<DonasyonItem>, allDonasyon: List<
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Kabuuang Donasyon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(kabuuangDonasyon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Ngayon: ${formatCurrency(donasyonNgayon).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
         }
-        Spacer(Modifier.height(16.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(onClick = { showAddModal = true }, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("+ Idagdag") } }
+        Spacer(Modifier.height(16.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(onClick = { showAddModal = true }, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Idagdag", maxLines = 1) } }
         Spacer(Modifier.height(16.dp))
         val sourceBars = remember(allDonasyon) {
             allDonasyon

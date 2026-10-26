@@ -477,13 +477,14 @@ fun AccountCard(
                 ) {
                     Text(
                         text = if (account.isActive) {
-                            "Alisin sa Serbisyo"
+                            "Alisin"
                         } else {
-                            "Ibalik sa Serbisyo"
+                            "Ibalik"
                         },
                         color = Color.Black,
                         fontWeight = FontWeight.Medium,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1
                     )
                 }
 

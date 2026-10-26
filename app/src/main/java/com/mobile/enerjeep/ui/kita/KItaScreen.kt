@@ -2,7 +2,6 @@ package com.mobile.enerjeep.ui.kita
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.HistoryPeriod
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
@@ -36,17 +36,23 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     var plateFilter by remember { mutableStateOf("") }
     // Make sure the listeners belong to the driver who is signed in right now.
     LaunchedEffect(Unit) { viewModel.refreshIdentity() }
-    val isHistory = uiState.selectedTab == KitaTabType.KASAYSAYAN
-    val visibleRecords = if (isHistory) filterHistoryRecords(
-        records = uiState.filteredRecords,
+    /*
+     * Wala nang "Ngayon | Kasaysayan" tabs - ang date filter na lang ang
+     * natitira at default nito ay "Ngayon" (HistoryFilterState). Ang
+     * summary card ay laging batay sa nakikitang listahan, kaya tugma
+     * ang mga numero sa mga record na ipinapakita.
+     */
+    val filteredByDate = filterHistoryRecords(
+        records = uiState.records,
         dateText = { it.date },
         filter = historyFilter,
         createdAtMillis = { it.createdAtMillis.takeIf { value -> value > 0L } }
-    ) else uiState.filteredRecords
-    val finalRecords = visibleRecords.filter {
+    )
+    val finalRecords = filteredByDate.filter {
         plateFilter.isBlank() ||
                 it.title.contains(plateFilter, ignoreCase = true)
     }
+    val totals = remember(finalRecords) { KitaHistory.totals(finalRecords) }
 
     Column(Modifier.fillMaxSize().background(LightGrayBackground).padding(horizontal = 24.dp)) {
         Spacer(Modifier.height(24.dp))
@@ -60,19 +66,19 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(24.dp))
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(20.dp)) {
-                Text(if (isHistory) "Netong Kita sa Kasaysayan" else "Netong Kita Ngayon", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
+                Text(if (historyFilter.period == HistoryPeriod.TODAY) "Netong Kita Ngayon" else "Netong Kita", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
                 Spacer(Modifier.height(4.dp))
-                Text("₱${String.format("%,.0f", uiState.netEarnings)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                Text("₱${String.format("%,.0f", totals.net)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = .2f))
                 Spacer(Modifier.height(16.dp))
-                SummaryMoneyRow("Kita", uiState.totalKita)
+                SummaryMoneyRow("Kita", totals.kita)
                 Spacer(Modifier.height(8.dp))
-                SummaryMoneyRow("Bayad", uiState.totalBayad)
+                SummaryMoneyRow("Bayad", totals.bayad)
                 Spacer(Modifier.height(8.dp))
-                SummaryMoneyRow("Multa", uiState.totalMultiya)
+                SummaryMoneyRow("Multa", totals.multa)
                 Spacer(Modifier.height(8.dp))
-                SummaryMoneyRow("Donasyon (Bawas)", uiState.totalBawas)
+                SummaryMoneyRow("Donasyon (Bawas)", totals.bawas)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -80,73 +86,68 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         /*
          * Ang charts/statistics ay inilipat sa Mga Ulat ng ADMIN.
          * Dito sa driver Kita: simpleng summary + listahan ng records.
+         * Plate filter + date filter (default "Ngayon") na lang ang
+         * nasa itaas ng listahan - walang tabs.
          */
-        Spacer(Modifier.height(24.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            KitaTabButton(Modifier.weight(1f), "Ngayon", uiState.selectedTab == KitaTabType.NGAYON) { viewModel.onTabSelected(KitaTabType.NGAYON) }
-            KitaTabButton(Modifier.weight(1f), "Kasaysayan", isHistory) { viewModel.onTabSelected(KitaTabType.KASAYSAYAN) }
+        Spacer(Modifier.height(16.dp))
+        /*
+         * Fase 5: tanggal ang SEARCH BOX - plate filter + date filter
+         * na lang (parehong logic sa Ulat ng Kita).
+         */
+        val plateOptions = remember(uiState.records) {
+            uiState.records
+                .map { it.title.substringAfter("•", "").trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
         }
-        if (isHistory) {
-            /*
-             * Fase 5: tanggal ang SEARCH BOX - plate filter + date filter
-             * na lang (parehong logic sa Ulat ng Kita).
-             */
-            Spacer(Modifier.height(16.dp))
-            val plateOptions = remember(uiState.records) {
-                uiState.records
-                    .map { it.title.substringAfter("•", "").trim() }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-                    .sorted()
-            }
-            var expandedPlate by remember { mutableStateOf(false) }
-            if (plateOptions.size > 1) {
-                ExposedDropdownMenuBox(
+        var expandedPlate by remember { mutableStateOf(false) }
+        if (plateOptions.size > 1) {
+            ExposedDropdownMenuBox(
+                expanded = expandedPlate,
+                onExpandedChange = { expandedPlate = !expandedPlate }
+            ) {
+                OutlinedTextField(
+                    value = plateFilter.ifBlank { "Lahat ng plaka" },
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(
+                            expanded = expandedPlate
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    singleLine = true
+                )
+                ExposedDropdownMenu(
                     expanded = expandedPlate,
-                    onExpandedChange = { expandedPlate = !expandedPlate }
+                    onDismissRequest = { expandedPlate = false }
                 ) {
-                    OutlinedTextField(
-                        value = plateFilter.ifBlank { "Lahat ng plaka" },
-                        onValueChange = {},
-                        readOnly = true,
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(
-                                expanded = expandedPlate
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        singleLine = true
+                    DropdownMenuItem(
+                        text = { Text("Lahat ng plaka") },
+                        onClick = {
+                            plateFilter = ""
+                            expandedPlate = false
+                        }
                     )
-                    ExposedDropdownMenu(
-                        expanded = expandedPlate,
-                        onDismissRequest = { expandedPlate = false }
-                    ) {
+                    plateOptions.forEach { plate ->
                         DropdownMenuItem(
-                            text = { Text("Lahat ng plaka") },
+                            text = { Text(plate) },
                             onClick = {
-                                plateFilter = ""
+                                plateFilter = plate
                                 expandedPlate = false
                             }
                         )
-                        plateOptions.forEach { plate ->
-                            DropdownMenuItem(
-                                text = { Text(plate) },
-                                onClick = {
-                                    plateFilter = plate
-                                    expandedPlate = false
-                                }
-                            )
-                        }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
             }
-            HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
         }
+        HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
         Spacer(Modifier.height(16.dp))
         if (finalRecords.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text(if (!isHistory) "Wala pang kita ngayon." else "Walang record sa napiling filter.", color = Color.Gray, fontSize = 14.sp)
+                Text(if (historyFilter.period == HistoryPeriod.TODAY) "Wala pang kita ngayon." else "Walang record sa napiling filter.", color = Color.Gray, fontSize = 14.sp)
             }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -172,14 +173,5 @@ private fun SummaryMoneyRow(label: String, amount: Double) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
         Text("₱${String.format("%,.0f", amount)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun KitaTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(modifier = modifier.height(40.dp).clickable { onClick() }, shape = RoundedCornerShape(20.dp), color = if (isSelected) Color.White else Color.Transparent, border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(text, color = if (isSelected) Color.Black else Color.Gray, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp)
-        }
     }
 }

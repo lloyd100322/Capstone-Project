@@ -450,7 +450,7 @@ fun OtpInputContent(
         },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Ipadala muli ang OTP")
+        Text("Ipadala", maxLines = 1)
     }
 
     Button(

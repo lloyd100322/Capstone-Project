@@ -71,6 +71,18 @@ fun HomeScreen(
         var showIncidentForm by remember { mutableStateOf(false) }
         var showEmergencyDialog by remember { mutableStateOf(false) }
 
+        /*
+         * Mula sa Donasyon stat card: kapag pinindot, dumidiretso sa
+         * mismong Donasyon screen sa loob ng Mga Ulat (hindi lang grid).
+         * Reset pabalik sa grid kapag umalis ng Mga Ulat tab.
+         */
+        var reportStartScreen by remember { mutableStateOf("MainGrid") }
+        LaunchedEffect(selectedTab) {
+            if (selectedTab != HomeTab.MgaUlat) {
+                reportStartScreen = "MainGrid"
+            }
+        }
+
         val activeJeeps by viewModel.activeJeepsCount
             .collectAsStateWithLifecycle()
 
@@ -81,6 +93,9 @@ fun HomeScreen(
             .collectAsStateWithLifecycle()
 
         val openIncidentCount by viewModel.openIncidentCount
+            .collectAsStateWithLifecycle()
+
+        val totalDonasyon by viewModel.totalDonasyon
             .collectAsStateWithLifecycle()
 
         Scaffold(
@@ -196,6 +211,7 @@ fun HomeScreen(
                             totalJeeps = totalJeeps,
                             totalSales = totalSales,
                             openIncidentCount = openIncidentCount,
+                            totalDonasyon = totalDonasyon,
 
                             // Changed: open Account Management first.
                             onCreateAccountClick = {
@@ -217,7 +233,10 @@ fun HomeScreen(
                                 selectedTab = HomeTab.Insidente
                             },
 
+                            // Donasyon stat = straight to the Donasyon
+                            // screen itself (not only the Mga Ulat grid).
                             onDonasyonClick = {
+                                reportStartScreen = "DonasyonNgKoop"
                                 selectedTab = HomeTab.MgaUlat
                             },
 
@@ -248,7 +267,7 @@ fun HomeScreen(
                     }
 
                     HomeTab.MgaUlat -> {
-                        ReportScreen()
+                        ReportScreen(initialScreen = reportStartScreen)
                     }
 
                     HomeTab.Profile -> {
@@ -288,6 +307,7 @@ fun HomeContent(
     totalJeeps: Int,
     totalSales: Double,
     openIncidentCount: Int,
+    totalDonasyon: Double,
     onCreateAccountClick: () -> Unit,
     onSalesClick: () -> Unit,
     onActiveClick: () -> Unit,
@@ -378,75 +398,42 @@ fun HomeContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SummaryCard(
-            modifier = Modifier.fillMaxWidth(0.5f),
-            title = "Insidente",
-            value = openIncidentCount.toString(),
-            icon = {
-                WarningIcon(
-                    modifier = Modifier.size(24.dp),
-                    color = WarningOrange
-                )
-            },
-            iconBackground = WarningOrangeLight,
-            onClick = onIncidentClick
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TruckIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = EnerjeepBlue
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                title = "Insidente",
+                value = openIncidentCount.toString(),
+                icon = {
+                    WarningIcon(
+                        modifier = Modifier.size(24.dp),
+                        color = WarningOrange
                     )
+                },
+                iconBackground = WarningOrangeLight,
+                onClick = onIncidentClick
+            )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-                    Text(
-                        text = "Buod ng Tracking",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
+            /*
+             * Donasyon stat: kabuuang donasyon ng kooperatiba. Dumidiretso
+             * sa mismong Donasyon screen kapag pinindot.
+             */
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                title = "Donasyon",
+                value = DashboardSummary.formatPeso(totalDonasyon),
+                icon = {
+                    DocumentIcon(
+                        modifier = Modifier.size(24.dp),
+                        color = ErrorRed
                     )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Aktibong Jeep Ngayon",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-
-                    Text(
-                        text = activeJeeps.toString(),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                }
-            }
+                },
+                iconBackground = ErrorRedLight,
+                onClick = onDonasyonClick
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -462,43 +449,25 @@ fun HomeContent(
 
         /*
          * Only the actions that are NOT covered by the stat cards stay
-         * here: account creation, donations and emergency. The rest of
-         * the old quick actions were removed because the statistics
-         * already open their tabs.
+         * here: account creation and emergency. The rest of the old
+         * quick actions (including Donasyon) were removed because the
+         * statistics already open their screens.
          */
-        Row(modifier = Modifier.fillMaxWidth()) {
-            QuickActionButton(
-                modifier = Modifier.weight(1f),
-                text = "Gumawa ng Account",
-                icon = {
-                    Text(
-                        "+",
-                        fontSize = 20.sp,
-                        color = SuccessGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                backgroundColor = SuccessGreenLight,
-                contentColor = SuccessGreen,
-                onClick = onCreateAccountClick
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            QuickActionButton(
-                modifier = Modifier.weight(1f),
-                text = "Donasyon ng Koop",
-                icon = {
-                    DocumentIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.Black
-                    )
-                },
-                backgroundColor = Color.White,
-                contentColor = Color.Black,
-                onClick = onDonasyonClick
-            )
-        }
+        QuickActionButton(
+            modifier = Modifier.fillMaxWidth(0.5f),
+            text = "Gumawa",
+            icon = {
+                Text(
+                    "+",
+                    fontSize = 20.sp,
+                    color = SuccessGreen,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            backgroundColor = SuccessGreenLight,
+            contentColor = SuccessGreen,
+            onClick = onCreateAccountClick
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 

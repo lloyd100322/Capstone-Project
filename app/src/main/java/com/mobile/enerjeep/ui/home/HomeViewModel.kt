@@ -62,6 +62,17 @@ class HomeViewModel @Inject constructor(
         _openIncidentCount.asStateFlow()
 
     /*
+     * "Donasyon" ng dashboard: kabuuang halaga ng lahat ng donasyon
+     * na naitala. Kapareho ng "Kabuuang Benta" - clickable ang card at
+     * dumidiretso sa mismong Donasyon screen (hindi lang sa Mga Ulat).
+     */
+    private val _totalDonasyon =
+        MutableStateFlow(0.0)
+
+    val totalDonasyon =
+        _totalDonasyon.asStateFlow()
+
+    /*
      * The superadmin-managed "available admin" emergency list. Drivers
      * see these contacts in the Emergency dialog.
      */
@@ -247,6 +258,35 @@ class HomeViewModel @Inject constructor(
                     DashboardSummary.openIncidentCount(
                         entries
                     )
+            }
+
+        /*
+         * The total donations of the cooperative ("Donasyon" card).
+         */
+        listeners += firestore
+            .collection(
+                FirestoreCollections.DONATIONS
+            )
+            .addSnapshotListener {
+                    snapshot,
+                    _ ->
+
+                if (snapshot == null) {
+                    return@addSnapshotListener
+                }
+
+                _totalDonasyon.value =
+                    snapshot.documents.sumOf {
+                        document ->
+                        (
+                                document.get(
+                                    "amount"
+                                )
+                                    as? Number
+                            )
+                                ?.toDouble()
+                                ?: 0.0
+                    }
             }
     }
 

@@ -71,7 +71,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         shape = RoundedCornerShape(22.dp)
                     ) { Text("Multa", fontSize = 12.sp, color = Color.White) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(22.dp)) { Text("+ I-report") }
+                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(22.dp)) { Text("I-report", maxLines = 1) }
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -269,7 +269,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                         }
                     }
                 ) {
-                    Text("Ipadala sa Driver", color = EnerjeepBlue)
+                    Text("Ipadala", color = EnerjeepBlue, maxLines = 1)
                 }
             },
             dismissButton = {
@@ -291,7 +291,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                             }
                         }
                     ) {
-                        Text("I-save Lang")
+                        Text("I-save", maxLines = 1)
                     }
                     TextButton(
                         onClick = { showSendPrompt = false }
@@ -315,7 +315,7 @@ fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkReso
         Column(Modifier.padding(20.dp)) {
             Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = Color.Gray); Text(incident.location, color = Color.Gray); Text(incident.date, color = Color.Gray, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth()) { Button(onClick = onMarkResolvedClick, modifier = Modifier.weight(1f)) { Text("Markahan Bilang Naayos") }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) { Text("Tingnan") } }
+            Row(Modifier.fillMaxWidth()) { Button(onClick = onMarkResolvedClick, modifier = Modifier.weight(1f)) { Text("Ayusin", maxLines = 1) }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) { Text("Tingnan", maxLines = 1) } }
         }
     }
 }
@@ -370,7 +370,7 @@ fun IncidentDetailsContent(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Tawagan ang Driver", color = SuccessGreen)
+                Text("Tawagan", color = SuccessGreen, maxLines = 1)
             }
         }
         /*
@@ -388,7 +388,7 @@ fun IncidentDetailsContent(
             ) {
                 PesoIcon(modifier = Modifier.size(16.dp), color = Color.White)
                 Spacer(Modifier.width(8.dp))
-                Text("I-record ang Bayad (Multa)", color = Color.White)
+                Text("Bayaran", color = Color.White, maxLines = 1)
             }
         }
         if (incident.sentToDriver == "Hindi") {
@@ -397,9 +397,9 @@ fun IncidentDetailsContent(
                 onClick = onSendToDriver,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
-            ) { Text("Ipadala sa Driver Ngayon") }
+            ) { Text("Ipadala", maxLines = 1) }
         }
-        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara") }; Spacer(Modifier.width(12.dp)); Button(onClick = onResolve, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Markahan Bilang Naayos") } }
+        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara", maxLines = 1) }; Spacer(Modifier.width(12.dp)); Button(onClick = onResolve, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Ayusin", maxLines = 1) } }
     }
 }
 
