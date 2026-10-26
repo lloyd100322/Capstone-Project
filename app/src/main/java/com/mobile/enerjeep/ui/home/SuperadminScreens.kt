@@ -315,7 +315,6 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
 
 @Composable
 fun SettingsView(viewModel: SuperadminViewModel) {
-    val cutoff by viewModel.cutoffHour.collectAsStateWithLifecycle()
     val tiers by viewModel.tiers.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
 
@@ -326,7 +325,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
     ) {
         Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Cut-off ng reset ng pila at ang bawas kada upuan ng jeep.",
+            "Awtomatikong reset ng pila (9:00 PM) at bawas kada upuan ng jeep.",
             fontSize = 12.sp,
             color = Color.Gray
         )
@@ -339,23 +338,12 @@ fun SettingsView(viewModel: SuperadminViewModel) {
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Cut-off ng Pila", fontWeight = FontWeight.Bold)
+                Text("Reset ng Pila", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Oras na nagre-reset ang pila (24-hour). Hal: 23 = 11 PM.",
+                    "Awtomatiko itong nagre-reset tuwing 9:00 PM - hindi na kailangan ng manual na button.",
                     fontSize = 11.sp,
                     color = Color.Gray
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = cutoff,
-                    onValueChange = { viewModel.updateCutoffHour(it) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
                 )
             }
         }

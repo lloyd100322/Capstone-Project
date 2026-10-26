@@ -3,6 +3,8 @@ package com.mobile.enerjeep.ui.report
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,46 +53,87 @@ fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstanc
 @Composable
 fun ReportScreen(
     viewModel: ReportViewModel = hiltViewModel(),
-    // "DonasyonNgKoop" kapag galing sa Donasyon stat ng dashboard.
-    initialScreen: String = "MainGrid"
+    /*
+     * ISANG buong screen na ang Mga Ulat: naka-stack ang lahat ng
+     * statistic na chart (Kita, Insidente, Multa, Donasyon) - walang
+     * choices/buttons na pipindutin pa. "donasyon" = dumidiretso sa
+     * Donasyon na seksyon (galing sa Donasyon stat ng dashboard).
+     */
+    initialSection: String = "top"
 ) {
-    var currentScreen by remember { mutableStateOf(initialScreen) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     when (val state = uiState) {
         is ReportUiState.Loading -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = EnerjeepBlue) }
         is ReportUiState.Error -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { Text(state.message, color = ErrorRed) }
-        is ReportUiState.Success -> when (currentScreen) {
-            "MainGrid" -> ReportsGridScreen(
-                onUlatNgKitaClick = { currentScreen = "UlatNgKita" },
-                onUlatNgInsidenteClick = { currentScreen = "UlatNgInsidente" },
-                onUlatNgMultiyaClick = { currentScreen = "UlatNgMultiya" },
-                onDonasyonClick = { currentScreen = "DonasyonNgKoop" }
-            )
-            "UlatNgKita" -> UlatNgKitaScreen(state.monthlyData, state.yearlyData, state.historyData) { currentScreen = "MainGrid" }
-            "UlatNgInsidente" -> UlatNgInsidenteScreen(state.currentIncidents, state.allIncidents, state.totalIncidentPenalty) { currentScreen = "MainGrid" }
-            "UlatNgMultiya" -> UlatNgMultiyaScreen(state.currentMultiya, state.allMultiya, state.multiyaNgayon, state.kabuuangMultiya) { currentScreen = "MainGrid" }
-            "DonasyonNgKoop" -> DonasyonNgKoopScreen(state.currentDonasyon, state.allDonasyon, state.donasyonNgayon, state.kabuuangDonasyon, { viewModel.addDonasyon(it) }) { currentScreen = "MainGrid" }
+        is ReportUiState.Success -> {
+            val listState = rememberLazyListState()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().background(LightGrayBackground),
+                contentPadding = PaddingValues(24.dp)
+            ) {
+                item {
+                    HeaderRow()
+                    Spacer(Modifier.height(28.dp))
+                    Text("Mga Ulat", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Buong estadistika ng kooperatiba sa isang screen.", fontSize = 14.sp, color = Color.Gray)
+                    Spacer(Modifier.height(28.dp))
+                }
+                item {
+                    ReportSectionHeader(Icons.Default.AccountBalanceWallet, EnerjeepBlue, EnerjeepBlueLight, "Ulat ng Kita")
+                    Spacer(Modifier.height(16.dp))
+                    UlatNgKitaContent(state.monthlyData, state.yearlyData, state.historyData)
+                    Spacer(Modifier.height(36.dp))
+                }
+                item {
+                    ReportSectionHeader(Icons.Default.Warning, WarningOrange, WarningOrangeLight, "Ulat ng Insidente")
+                    Spacer(Modifier.height(16.dp))
+                    UlatNgInsidenteContent(state.currentIncidents, state.allIncidents, state.totalIncidentPenalty)
+                    Spacer(Modifier.height(36.dp))
+                }
+                item {
+                    ReportSectionHeader(Icons.Default.PrivacyTip, ErrorRed, ErrorRedLight, "Ulat ng Multa")
+                    Spacer(Modifier.height(16.dp))
+                    UlatNgMultiyaContent(state.currentMultiya, state.allMultiya, state.multiyaNgayon, state.kabuuangMultiya)
+                    Spacer(Modifier.height(36.dp))
+                }
+                item {
+                    ReportSectionHeader(Icons.Default.FavoriteBorder, HeartPink, HeartPinkLight, "Donasyon ng Koop")
+                    Spacer(Modifier.height(16.dp))
+                    DonasyonContent(
+                        state.currentDonasyon,
+                        state.allDonasyon,
+                        state.donasyonNgayon,
+                        state.kabuuangDonasyon,
+                        onAddDonasyon = { viewModel.addDonasyon(it) }
+                    )
+                }
+            }
+            LaunchedEffect(initialSection) {
+                if (initialSection == "donasyon") {
+                    listState.scrollToItem(4)
+                }
+            }
         }
     }
 }
 
 @Composable
-fun ReportsGridScreen(onUlatNgKitaClick: () -> Unit, onUlatNgInsidenteClick: () -> Unit, onUlatNgMultiyaClick: () -> Unit, onDonasyonClick: () -> Unit) {
-    Scaffold(containerColor = LightGrayBackground) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp)) {
-            HeaderRow()
-            Spacer(Modifier.height(40.dp)); Text("Mga Ulat", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
-            Spacer(Modifier.height(4.dp)); Text("Pumili ng ulat na titingnan.", fontSize = 16.sp, color = Color.Gray); Spacer(Modifier.height(32.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ReportCard(Modifier.weight(1f), "Ulat ng Kita", "Buwanang at taunang kita", Icons.Default.AccountBalanceWallet, EnerjeepBlue, EnerjeepBlueLight, onUlatNgKitaClick)
-                ReportCard(Modifier.weight(1f), "Ulat ng Insidente", "Mga naitalang insidente", Icons.Default.Warning, WarningOrange, WarningOrangeLight, onUlatNgInsidenteClick)
-            }
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                ReportCard(Modifier.weight(1f), "Ulat ng Multa", "Mga naitalang multa", Icons.Default.PrivacyTip, ErrorRed, ErrorRedLight, onUlatNgMultiyaClick)
-                ReportCard(Modifier.weight(1f), "Donasyon ng Koop", "Mga donasyon ng kooperatiba", Icons.Default.FavoriteBorder, HeartPink, HeartPinkLight, onDonasyonClick)
+private fun ReportSectionHeader(
+    icon: ImageVector,
+    iconColor: Color,
+    iconBg: Color,
+    title: String
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(Modifier.size(44.dp), shape = RoundedCornerShape(14.dp), color = iconBg) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(22.dp))
             }
         }
+        Spacer(Modifier.width(12.dp))
+        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
     }
 }
 
@@ -104,7 +147,7 @@ private fun HeaderRow() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UlatNgKitaScreen(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIncome>, historyData: List<IncomeHistory>, onBack: () -> Unit) {
+fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIncome>, historyData: List<IncomeHistory>) {
     /*
      * Fase 5: ang dating Buwanang/Taunang LISTA ay naging LABELED
      * CHARTS (view-only), at ang tab/search ay pinalitan ng isang
@@ -118,7 +161,7 @@ fun UlatNgKitaScreen(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIn
             .distinct()
             .sorted()
     }
-    ReportPage("Ulat ng Kita", onBack) {
+    Column(Modifier.fillMaxWidth()) {
         LabeledBarChart(
             title = "Buwanang Kita",
             bars = monthlyData.map { it.period to it.amount }
@@ -185,11 +228,11 @@ fun UlatNgKitaScreen(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIn
 }
 
 @Composable
-fun UlatNgInsidenteScreen(currentIncidents: List<ReportIncidentItem>, allIncidents: List<ReportIncidentItem>, totalPenalty: Double, onBack: () -> Unit) {
+fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncidents: List<ReportIncidentItem>, totalPenalty: Double) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
-    ReportPage("Ulat ng Insidente", onBack) {
+    Column(Modifier.fillMaxWidth()) {
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Kabuuang Multa mula sa Insidente", color = Color.White); Spacer(Modifier.height(8.dp)); Text(formatCurrency(totalPenalty).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White) }
         }
@@ -225,11 +268,11 @@ fun UlatNgInsidenteScreen(currentIncidents: List<ReportIncidentItem>, allInciden
 }
 
 @Composable
-fun UlatNgMultiyaScreen(currentMultiya: List<ReportMultiyaItem>, allMultiya: List<ReportMultiyaItem>, multiyaNgayon: Double, kabuuangMultiya: Double, onBack: () -> Unit) {
+fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: List<ReportMultiyaItem>, multiyaNgayon: Double, kabuuangMultiya: Double) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
-    ReportPage("Ulat ng Multa", onBack) {
+    Column(Modifier.fillMaxWidth()) {
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Multa Ngayon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(multiyaNgayon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Kabuuang: ${formatCurrency(kabuuangMultiya).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
         }
@@ -266,13 +309,13 @@ fun UlatNgMultiyaScreen(currentMultiya: List<ReportMultiyaItem>, allMultiya: Lis
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DonasyonNgKoopScreen(currentDonasyon: List<DonasyonItem>, allDonasyon: List<DonasyonItem>, donasyonNgayon: Double, kabuuangDonasyon: Double, onAddDonasyon: (DonasyonItem) -> Unit, onBack: () -> Unit) {
+fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<DonasyonItem>, donasyonNgayon: Double, kabuuangDonasyon: Double, onAddDonasyon: (DonasyonItem) -> Unit) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var showAddModal by remember { mutableStateOf(false) }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ReportPage("Donasyon ng Koop", onBack) {
+    Column(Modifier.fillMaxWidth()) {
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Kabuuang Donasyon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(kabuuangDonasyon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Ngayon: ${formatCurrency(donasyonNgayon).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
         }
@@ -307,19 +350,6 @@ fun DonasyonNgKoopScreen(currentDonasyon: List<DonasyonItem>, allDonasyon: List<
 }
 
 @Composable
-private fun ReportPage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Scaffold(containerColor = LightGrayBackground) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack, modifier = Modifier.size(40.dp).background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp))) { Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black) }
-                Spacer(Modifier.width(16.dp)); Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            }
-            Spacer(Modifier.height(28.dp)); content.invoke(this)
-        }
-    }
-}
-
-@Composable
 private fun ReportTabs(selected: Int, onSelected: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().height(48.dp)) {
         TabButton(Modifier.weight(1f), "Ngayon", selected == 0) { onSelected(0) }
@@ -334,16 +364,6 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit, placehol
 
 @Composable
 private fun EmptyHistory() { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("Walang record sa napiling filter.", color = Color.Gray) } }
-
-@Composable
-fun ReportCard(modifier: Modifier = Modifier, title: String, description: String, icon: ImageVector, iconColor: Color, iconBgColor: Color, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = modifier.height(170.dp), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
-        Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.Start) {
-            Surface(Modifier.size(40.dp), shape = RoundedCornerShape(12.dp), color = iconBgColor) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp)) } }
-            Spacer(Modifier.height(16.dp)); Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black); Spacer(Modifier.height(4.dp)); Text(description, fontSize = 13.sp, color = Color.Gray)
-        }
-    }
-}
 
 @Composable
 fun MonthlyIncomeRow(data: MonthlyIncome) {

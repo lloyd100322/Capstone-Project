@@ -3,6 +3,9 @@ package com.mobile.enerjeep.ui.queue
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +22,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,6 +39,7 @@ import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
+import kotlin.math.roundToInt
 
 
 
@@ -52,7 +59,16 @@ fun QueueScreen(
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
 
     // "Zoom out": smaller boxes so a long pila scrolls faster.
+    // Pinch gesture ang nagpapalit nito (walang button).
     var compactView by remember { mutableStateOf(false) }
+
+    /*
+     * Drag-to-reorder (zoom-out mode lang): long-press + hila ng kahon
+     * para lumipat ng posisyon sa pila.
+     */
+    var dragIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetPx by remember { mutableStateOf(0f) }
+    val itemHeights = remember { mutableStateMapOf<String, Int>() }
 
     // Instead of just a boolean, hold the actual vehicle being dispatched so the modal knows what to show
     var vehicleToDispatch by remember { mutableStateOf<QueueVehicle?>(null) }
@@ -86,7 +102,7 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset 11:00 PM", fontSize = 14.sp, color = Color.Gray)
+            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset 9:00 PM", fontSize = 14.sp, color = Color.Gray)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -110,9 +126,8 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             /*
-             * Daily reset of the pila - the control lives here in the
-             * queue tab so no separate module is needed. The automatic
-             * cut-off is 11:00 PM (the terminal's last trip).
+             * Awtomatikong reset tuwing 9:00 PM - hindi na manual.
+             * (Tanggal na ang "I-reset Ngayon" na button.)
              */
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -126,29 +141,14 @@ fun QueueScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Reset ng Pila • Cut-off 11:00 PM",
+                            text = "Reset ng Pila • 9:00 PM",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Ang #1 ngayon ay huli na bukas; ang kasunod ang mauuna.",
+                            text = "Awtomatiko: ang #1 ngayon ay huli na bukas; ang kasunod ang mauuna.",
                             fontSize = 11.sp,
                             color = Color.Gray
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.forceRotateQueue() },
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            FieldBorderColor
-                        )
-                    ) {
-                        Text(
-                            "I-reset Ngayon",
-                            fontSize = 11.sp,
-                            color = Color.Black
                         )
                     }
                 }
@@ -188,18 +188,26 @@ fun QueueScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Tabs: 2 routes + Kasaysayan
-                    Row(modifier = Modifier.fillMaxWidth().height(48.dp)) {
+                    /*
+                     * Tabs: 2 routes + Kasaysayan. Marilao–Monumento
+                     * muna (tab 0), kasunod ang Monumento–Marilao
+                     * (tab 1), tapos Kasaysayan. Magkakapareho ang
+                     * laki at espasyo ng bawat tab para pantay.
+                     */
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         TabButton(
                             modifier = Modifier.weight(1f),
-                            text = "Monumento–Marilao",
+                            text = "Marilao–Monumento",
                             isSelected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
                             fontSize = 10.sp
                         )
                         TabButton(
                             modifier = Modifier.weight(1f),
-                            text = "Marilao–Monumento",
+                            text = "Monumento–Marilao",
                             isSelected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
                             fontSize = 10.sp
@@ -209,43 +217,22 @@ fun QueueScreen(
                             text = "Kasaysayan",
                             isSelected = selectedTab == 2,
                             onClick = { selectedTab = 2 },
-                            fontSize = 12.sp
+                            fontSize = 10.sp
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // "Zoom out" of the queue list - smaller boxes.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Laki ng box:",
-                            fontSize = 11.sp,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        OutlinedButton(
-                            onClick = { compactView = !compactView },
-                            shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                FieldBorderColor
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp)
-                        ) {
-                            Text(
-                                text = if (compactView) {
-                                    "Normal na laki"
-                                } else {
-                                    "I-zoom out (maliit)"
-                                },
-                                fontSize = 11.sp,
-                                color = Color.Black
-                            )
-                        }
-                    }
+                    /*
+                     * Zoom: PINCH gestures na lang ang gamit (walang
+                     * button). Pinch IN = maliit na box (zoom out),
+                     * pinch OUT = normal na laki.
+                     */
+                    Text(
+                        text = "I-pinch para mag-zoom • kapag maliit, pindutin nang matagal at hilahin ang kahon para lumipat ng posisyon.",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -266,13 +253,13 @@ fun QueueScreen(
                     if (selectedTab == 0 || selectedTab == 1) {
                         /*
                          * Each route tab shows only the pila of that
-                         * route. Tab 0 = Monumento -> Marilao, tab 1 =
-                         * Marilao -> Monumento.
+                         * route. Tab 0 = Marilao -> Monumento, tab 1 =
+                         * Monumento -> Marilao.
                          */
                         val onThisRoute = { vehicle: QueueVehicle ->
                             val marilaoFirst = vehicle.route.trim()
                                 .startsWith("Marilao", ignoreCase = true)
-                            if (selectedTab == 0) !marilaoFirst else marilaoFirst
+                            if (selectedTab == 0) marilaoFirst else !marilaoFirst
                         }
                         val searchedQueue = state.activeQueue.filter { vehicle ->
                             onThisRoute(vehicle) &&
@@ -287,7 +274,8 @@ fun QueueScreen(
                              * FIFO: only the jeepney at the FRONT of the
                              * line can be dispatched. To send someone else
                              * first, move it to the top with the arrows
-                             * ("Selects which one goes first").
+                             * ("Selects which one goes first"), or - kapag
+                             * naka-ZOOM OUT - i-drag ang kahon.
                              * A "Nakansela" entry is OUT of the line - it
                              * has no dispatch button and rejoins the END
                              * of the pila through "Ibalik sa Pila".
@@ -297,19 +285,120 @@ fun QueueScreen(
                                 .firstOrNull { !it.isCancelled }
                                 ?.id
 
-                            searchedQueue.forEach { vehicle ->
-                                QueueItem(
-                                    vehicle = vehicle,
-                                    displayPosition = vehicle.position,
-                                    compact = compactView,
-                                    canReorder = searchQuery.isBlank(),
-                                    canDispatch = vehicle.id == frontOfLineId,
-                                    onDispatchClick = { vehicleToDispatch = vehicle },
-                                    onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
-                                    onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) },
-                                    onRestoreClick = { viewModel.restoreQueueEntry(vehicle.id) }
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
+                            /*
+                             * Pinch-to-zoom ang buong listahan (dalawang
+                             * daliri). Hindi nito hinaharangan ang
+                             * single-finger scroll.
+                             */
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            var event =
+                                                awaitPointerEvent()
+                                            while (event.changes.count { it.pressed } < 2) {
+                                                if (event.changes.none { it.pressed }) {
+                                                    return@awaitEachGesture
+                                                }
+                                                event = awaitPointerEvent()
+                                            }
+                                            while (event.changes.count { it.pressed } >= 2) {
+                                                val zoom =
+                                                    event.calculateZoom()
+                                                if (zoom != 1f) {
+                                                    if (zoom < 0.95f) {
+                                                        compactView = true
+                                                    } else if (zoom > 1.05f) {
+                                                        compactView = false
+                                                    }
+                                                    event.changes.forEach {
+                                                        it.consume()
+                                                    }
+                                                }
+                                                event = awaitPointerEvent()
+                                            }
+                                        }
+                                    }
+                            ) {
+                                searchedQueue.forEachIndexed { index, vehicle ->
+                                    val isDragging = dragIndex == index
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .onSizeChanged {
+                                                itemHeights[vehicle.id] =
+                                                    it.height
+                                            }
+                                            .graphicsLayer {
+                                                translationY =
+                                                    if (isDragging) dragOffsetPx else 0f
+                                                shadowElevation =
+                                                    if (isDragging) 12f else 0f
+                                            }
+                                            .then(
+                                                /*
+                                                 * Drag-to-reorder: ZOOM OUT
+                                                 * mode lang habang walang
+                                                 * search. Long-press tapos
+                                                 * hila - lumilipat ng
+                                                 * posisyon sa pila.
+                                                 */
+                                                if (compactView &&
+                                                    searchQuery.isBlank() &&
+                                                    !vehicle.isCancelled
+                                                ) {
+                                                    Modifier.pointerInput(vehicle.id) {
+                                                        detectDragGesturesAfterLongPress(
+                                                            onDragStart = {
+                                                                dragIndex = index
+                                                                dragOffsetPx = 0f
+                                                            },
+                                                            onDrag = { _, amount ->
+                                                                dragOffsetPx += amount.y
+                                                            },
+                                                            onDragEnd = {
+                                                                val height =
+                                                                    (itemHeights[vehicle.id]
+                                                                        ?: 1)
+                                                                        .toFloat()
+                                                                val steps =
+                                                                    (dragOffsetPx / height)
+                                                                        .roundToInt()
+                                                                if (steps != 0) {
+                                                                    viewModel.updateVehiclePosition(
+                                                                        vehicle.id,
+                                                                        vehicle.position + steps
+                                                                    )
+                                                                }
+                                                                dragIndex = null
+                                                                dragOffsetPx = 0f
+                                                            },
+                                                            onDragCancel = {
+                                                                dragIndex = null
+                                                                dragOffsetPx = 0f
+                                                            }
+                                                        )
+                                                    }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
+                                    ) {
+                                        QueueItem(
+                                            vehicle = vehicle,
+                                            displayPosition = vehicle.position,
+                                            compact = compactView,
+                                            canReorder = searchQuery.isBlank(),
+                                            canDispatch = vehicle.id == frontOfLineId,
+                                            onDispatchClick = { vehicleToDispatch = vehicle },
+                                            onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
+                                            onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) },
+                                            onRestoreClick = { viewModel.restoreQueueEntry(vehicle.id) }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
                             }
                         }
                     } else {
@@ -399,14 +488,23 @@ fun TabButton(
     val elevation = if (isSelected) 2.dp else 0.dp
 
     Card(
-        modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp),
+        modifier = modifier.fillMaxHeight(),
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(text = text, fontSize = fontSize, fontWeight = FontWeight.Medium, color = textColor)
+        Box(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Medium,
+                color = textColor,
+                maxLines = 1
+            )
         }
     }
 }

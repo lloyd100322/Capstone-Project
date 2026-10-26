@@ -14,8 +14,11 @@ import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
@@ -77,11 +80,29 @@ class QueueViewModel @Inject constructor(
 
     private var queueListener: ListenerRegistration? = null
 
+    /*
+     * -----------------------------
+     * AWTOMATIKONG RESET (9:00 PM)
+     * -----------------------------
+     * Kahit nakabukas ang app, nagre-reset ang pila pagdating ng 9:00
+     * PM. Ang unang tseke ay agad (catch-up kapag lumampas na ang 9:00
+     * PM habang sarado ang app), tapos ang susunod ay eksaktong sa
+     * susunod na 9:00 PM.
+     */
+    private var rotationWatch: Job? = null
+
     companion object {
         private const val DEFAULT_ROUTE = "Monumento – Marilao"
 
         const val ROUTE_MA = "Monumento – Marilao"
         const val ROUTE_AM = "Marilao – Monumento"
+
+        /**
+         * Ang pila ay awtomatikong nagre-reset tuwing 9:00 PM (21:00).
+         * FIXED na ang oras - hindi na ito manual at hindi na ito
+         * nakadepende sa settings.
+         */
+        const val CUTOFF_HOUR = 21
 
         /** 0 = Monumento -> Marilao, 1 = Marilao -> Monumento. */
         fun routeKey(route: String?): Int =
@@ -119,6 +140,53 @@ class QueueViewModel @Inject constructor(
         startQueueListener()
         healActiveRoster()
         maybeRotateQueue()
+        startRotationWatch()
+    }
+
+    private fun startRotationWatch() {
+        if (!userSession.isAdmin()) return
+        rotationWatch?.cancel()
+        rotationWatch = viewModelScope.launch {
+            while (isActive) {
+                try {
+                    val rotated = rotateQueueIfNeeded(force = false)
+                    if (rotated) {
+                        onQueueRotated()
+                    }
+                } catch (_: Exception) {
+                    // Best effort - susubukan ulit sa susunod na tikso.
+                }
+                delay(millisUntilNextCutoff())
+            }
+        }
+    }
+
+    /** Millis hanggang sa susunod na 9:00 PM (hindi bababa sa 1 minuto). */
+    private fun millisUntilNextCutoff(): Long {
+        val now = Calendar.getInstance()
+        val next = (now.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, CUTOFF_HOUR)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (!after(now)) {
+                add(Calendar.DAY_OF_MONTH, 1)
+            }
+        }
+        return (next.timeInMillis - now.timeInMillis)
+            .coerceAtLeast(60_000L)
+    }
+
+    private fun onQueueRotated() {
+        ActivityLogger.log(
+            firestore,
+            userSession,
+            "Reset ng Pila",
+            "Automatic (9:00 PM)"
+        )
+        ToastFeedback.show(
+            "Na-reset na ang pila: ang dating #1 ay nasa huli na."
+        )
     }
 
     /**
@@ -1039,10 +1107,11 @@ class QueueViewModel @Inject constructor(
      * -----------------------------
      * DAILY RESET ("reset ng pila")
      * -----------------------------
-     * The terminal's last trip is around 11:00 PM. When the cut-off
-     * passes, every pila rotates: today's #1 goes to the LAST spot and
-     * everyone else moves up one - so the #2 of today leads tomorrow.
-     * The reset lives here in the queue tab (no separate module).
+     * AWTOMATIKO na ang reset tuwing 9:00 PM (21:00) - hindi na ito
+     * manual (tinanggal ang "I-reset Ngayon"). Ang rotation: ang #1
+     * ngayon ay huli na bukas at ang kasunod ang mauuna. Ang unang
+     * tseke ay tuwing binubuksan ang queue tab (catch-up), tapos may
+     * timer na nagre-reset mismo sa oras ng cut-off.
      */
 
     private fun rotationMetaReference() =
@@ -1051,12 +1120,12 @@ class QueueViewModel @Inject constructor(
             .document("queueRotation")
 
     /**
-     * The queue "day" flips at 11:00 PM (23:00) - after the cut-off the
+     * The queue "day" flips at 9:00 PM (21:00) - after the cut-off the
      * queue already belongs to the next operating day.
      */
     fun queueDayId(
         now: Date = Date(),
-        cutoffHour: Int = 23
+        cutoffHour: Int = CUTOFF_HOUR
     ): String {
         val calendar = Calendar.getInstance()
         calendar.time = now
@@ -1069,56 +1138,34 @@ class QueueViewModel @Inject constructor(
         ).format(calendar.time)
     }
 
-    /** Automatic check - runs whenever the queue opens. */
+    /** Automatic check - runs whenever the queue opens (catch-up). */
     private fun maybeRotateQueue() {
         if (!userSession.isAdmin()) return
         viewModelScope.launch {
             try {
-                rotateQueueIfNeeded(force = false)
+                val rotated = rotateQueueIfNeeded(force = false)
+                if (rotated) {
+                    onQueueRotated()
+                }
             } catch (_: Exception) {
-                // Best effort: the manual button can always rotate.
+                // Best effort - susubukan ulit sa susunod na tikso.
             }
         }
     }
 
-    /** Manual button in the queue tab: "I-reset Ngayon". */
-    fun forceRotateQueue() {
-        if (!userSession.isAdmin()) return
-        viewModelScope.launch {
-            try {
-                rotateQueueIfNeeded(force = true)
-                ActivityLogger.log(
-                    firestore,
-                    userSession,
-                    "Reset ng Pila",
-                    "Manual reset"
-                )
-
-                ToastFeedback.show(
-                    "Na-reset na ang pila: ang dating #1 ay nasa huli na."
-                )
-            } catch (e: Exception) {
-                ToastFeedback.show(
-                    e.message ?: "Hindi ma-reset ang pila."
-                )
-            }
-        }
-    }
-
-    private suspend fun rotateQueueIfNeeded(force: Boolean) {
+    private suspend fun rotateQueueIfNeeded(force: Boolean): Boolean {
         val queueSnapshot = firestore
             .collection(FirestoreCollections.QUEUE)
             .get()
             .await()
 
-        firestore.runTransaction { transaction ->
+        return firestore.runTransaction { transaction ->
             val metaReference = rotationMetaReference()
             val meta = transaction.get(metaReference)
             val lastReset = meta.getString("lastQueueDay")
 
-            // The cut-off hour is editable by the superadmin (Settings).
-            val cutoffHour = meta.getLong("cutoffHour")?.toInt() ?: 23
-            val today = queueDayId(Date(), cutoffHour)
+            // FIXED: 9:00 PM ang cut-off ng awtomatikong reset.
+            val today = queueDayId(Date(), CUTOFF_HOUR)
 
             if (!force && lastReset == today) {
                 return@runTransaction false
@@ -1290,6 +1337,7 @@ class QueueViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        rotationWatch?.cancel()
         queueListener?.remove()
         super.onCleared()
     }

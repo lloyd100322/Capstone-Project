@@ -62,9 +62,6 @@ class SuperadminViewModel @Inject constructor(
         MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val adminAccounts = _adminAccounts.asStateFlow()
 
-    private val _cutoffHour = MutableStateFlow("23")
-    val cutoffHour = _cutoffHour.asStateFlow()
-
     private val _tiers = MutableStateFlow(
         listOf(
             DeductionTier("16", "32"),
@@ -154,15 +151,6 @@ class SuperadminViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val rotation = firestore
-                    .collection(FirestoreCollections.SETTINGS)
-                    .document("queueRotation")
-                    .get()
-                    .await()
-
-                _cutoffHour.value = (rotation.getLong("cutoffHour") ?: 23L)
-                    .toString()
-
                 val tiersDocument = firestore
                     .collection(FirestoreCollections.SETTINGS)
                     .document("deductionTiers")
@@ -258,10 +246,6 @@ class SuperadminViewModel @Inject constructor(
         }
     }
 
-    fun updateCutoffHour(value: String) {
-        _cutoffHour.value = value.filter { it.isDigit() }.take(2)
-    }
-
     fun updateTier(index: Int, seater: String, amount: String) {
         val current = _tiers.value.toMutableList()
         if (index !in current.indices) return
@@ -281,12 +265,6 @@ class SuperadminViewModel @Inject constructor(
     }
 
     fun saveSettings() {
-        val cutoff = _cutoffHour.value.toIntOrNull()
-        if (cutoff == null || cutoff < 0 || cutoff > 23) {
-            _message.value = "Ang cut-off ay dapat 0-23 (24-hour)."
-            return
-        }
-
         val tierMap = mutableMapOf<String, Any>()
         _tiers.value.forEach { tier ->
             val seater = tier.seater.trim().toIntOrNull()
@@ -300,15 +278,6 @@ class SuperadminViewModel @Inject constructor(
             try {
                 firestore
                     .collection(FirestoreCollections.SETTINGS)
-                    .document("queueRotation")
-                    .set(
-                        mapOf("cutoffHour" to cutoff),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                    .await()
-
-                firestore
-                    .collection(FirestoreCollections.SETTINGS)
                     .document("deductionTiers")
                     .set(tierMap)
                     .await()
@@ -316,8 +285,7 @@ class SuperadminViewModel @Inject constructor(
                 ActivityLogger.log(
                     firestore, userSession,
                     "Settings",
-                    "Cut-off: ${cutoff}:00 • " +
-                            "Bawas kada upuan: " +
+                    "Bawas kada upuan: " +
                             tierMap.entries.joinToString(", ") {
                                 "${it.key}=${it.value}"
                             }

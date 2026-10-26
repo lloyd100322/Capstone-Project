@@ -73,13 +73,13 @@ fun HomeScreen(
 
         /*
          * Mula sa Donasyon stat card: kapag pinindot, dumidiretso sa
-         * mismong Donasyon screen sa loob ng Mga Ulat (hindi lang grid).
-         * Reset pabalik sa grid kapag umalis ng Mga Ulat tab.
+         * Donasyon na seksyon ng iisang Mga Ulat screen. Reset pabalik
+         * sa itaas kapag umalis ng Mga Ulat tab.
          */
-        var reportStartScreen by remember { mutableStateOf("MainGrid") }
+        var reportStartScreen by remember { mutableStateOf("top") }
         LaunchedEffect(selectedTab) {
             if (selectedTab != HomeTab.MgaUlat) {
-                reportStartScreen = "MainGrid"
+                reportStartScreen = "top"
             }
         }
 
@@ -234,9 +234,9 @@ fun HomeScreen(
                             },
 
                             // Donasyon stat = straight to the Donasyon
-                            // screen itself (not only the Mga Ulat grid).
+                            // section of the Mga Ulat screen.
                             onDonasyonClick = {
-                                reportStartScreen = "DonasyonNgKoop"
+                                reportStartScreen = "donasyon"
                                 selectedTab = HomeTab.MgaUlat
                             },
 
@@ -267,7 +267,7 @@ fun HomeScreen(
                     }
 
                     HomeTab.MgaUlat -> {
-                        ReportScreen(initialScreen = reportStartScreen)
+                        ReportScreen(initialSection = reportStartScreen)
                     }
 
                     HomeTab.Profile -> {
@@ -449,41 +449,43 @@ fun HomeContent(
 
         /*
          * Only the actions that are NOT covered by the stat cards stay
-         * here: account creation and emergency. The rest of the old
-         * quick actions (including Donasyon) were removed because the
-         * statistics already open their screens.
+         * here: account creation and emergency. Magkatabi (left and
+         * right) sa isang hilera para mas maayos tignan.
          */
-        QuickActionButton(
-            modifier = Modifier.fillMaxWidth(0.5f),
-            text = "Gumawa",
-            icon = {
-                Text(
-                    "+",
-                    fontSize = 20.sp,
-                    color = SuccessGreen,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            backgroundColor = SuccessGreenLight,
-            contentColor = SuccessGreen,
-            onClick = onCreateAccountClick
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                text = "Gumawa",
+                icon = {
+                    Text(
+                        "+",
+                        fontSize = 20.sp,
+                        color = SuccessGreen,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                backgroundColor = SuccessGreenLight,
+                contentColor = SuccessGreen,
+                onClick = onCreateAccountClick
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        QuickActionButton(
-            modifier = Modifier.fillMaxWidth(0.5f),
-            text = "Emergency",
-            icon = {
-                SirenIcon(
-                    modifier = Modifier.size(20.dp),
-                    color = ErrorRed
-                )
-            },
-            backgroundColor = ErrorRedLight,
-            contentColor = ErrorRed,
-            onClick = onEmergencyClick
-        )
+            QuickActionButton(
+                modifier = Modifier.weight(1f),
+                text = "Emergency",
+                icon = {
+                    SirenIcon(
+                        modifier = Modifier.size(20.dp),
+                        color = ErrorRed
+                    )
+                },
+                backgroundColor = ErrorRedLight,
+                contentColor = ErrorRed,
+                onClick = onEmergencyClick
+            )
+        }
     }
 }
 
