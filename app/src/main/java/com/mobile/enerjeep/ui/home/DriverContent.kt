@@ -688,6 +688,9 @@ fun DriverDashboardContent(
             }
         }
 
+        // Malinaw na puwang sa pagitan ng insidente card at ng button.
+        Spacer(modifier = Modifier.height(24.dp))
+
         /*
          * "Tapos Na Bumyahe" - aalis ang driver sa pila (Kasaysayan).
          * May confirm para walang aksidenteng pindot. Kapag tapos na

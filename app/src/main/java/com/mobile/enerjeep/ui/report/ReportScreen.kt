@@ -152,6 +152,8 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
      * Fase 5: ang dating Buwanang/Taunang LISTA ay naging LABELED
      * CHARTS (view-only), at ang tab/search ay pinalitan ng isang
      * "Kasaysayan" na may PLATE filter at date filter.
+     * Ayon sa hiling: KASAYSAYAN MUNA (nasa taas) at ang charts ay
+     * nasa IBABA.
      */
     var plateFilter by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
@@ -162,17 +164,6 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
             .sorted()
     }
     Column(Modifier.fillMaxWidth()) {
-        LabeledBarChart(
-            title = "Buwanang Kita",
-            bars = monthlyData.map { it.period to it.amount }
-        )
-        Spacer(Modifier.height(24.dp))
-        LabeledBarChart(
-            title = "Taunang Kita",
-            bars = yearlyData.map { it.year to it.amount },
-            barColor = Color(0xFF16A34A)
-        )
-        Spacer(Modifier.height(28.dp))
         Text("Kasaysayan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Spacer(Modifier.height(12.dp))
         if (plateOptions.size > 1) {
@@ -224,6 +215,21 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
         val history = filterHistoryRecords(filteredPlates, { it.date }, historyFilter)
         Spacer(Modifier.height(12.dp))
         if (history.isEmpty()) EmptyHistory() else history.forEach { IncomeHistoryCard(it); Spacer(Modifier.height(12.dp)) }
+
+        /*
+         * Ang mga chart ay nasa IBABA ng Kasaysayan.
+         */
+        Spacer(Modifier.height(12.dp))
+        LabeledBarChart(
+            title = "Buwanang Kita",
+            bars = monthlyData.map { it.period to it.amount }
+        )
+        Spacer(Modifier.height(24.dp))
+        LabeledBarChart(
+            title = "Taunang Kita",
+            bars = yearlyData.map { it.year to it.amount },
+            barColor = Color(0xFF16A34A)
+        )
     }
 }
 
