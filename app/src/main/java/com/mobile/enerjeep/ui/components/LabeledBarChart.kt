@@ -32,7 +32,13 @@ fun LabeledBarChart(
     title: String,
     bars: List<Pair<String, Double>>,
     barColor: Color = Color(0xFF194287),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /*
+     * isMoney=false para sa mga BILANG (hal: bilang ng insidente) -
+     * walang peso sign, numero lang. Default true (pera) ang Kita/Multa/
+     * Donasyon charts.
+     */
+    isMoney: Boolean = true
 ) {
     val max = (bars.maxOfOrNull { it.second } ?: 0.0).coerceAtLeast(1.0)
 
@@ -88,10 +94,17 @@ fun LabeledBarChart(
                             }
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "₱" + NumberFormat
-                                    .getNumberInstance(Locale.US)
-                                    .format(amount)
-                                    .replace(".00", ""),
+                                text = if (isMoney) {
+                                    "₱" + NumberFormat
+                                        .getNumberInstance(Locale.US)
+                                        .format(amount)
+                                        .replace(".00", "")
+                                } else {
+                                    NumberFormat
+                                        .getNumberInstance(Locale.US)
+                                        .format(amount)
+                                        .replace(".00", "")
+                                },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.width(72.dp),

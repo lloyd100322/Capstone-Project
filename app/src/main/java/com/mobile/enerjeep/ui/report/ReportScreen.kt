@@ -251,7 +251,8 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
         LabeledBarChart(
             title = "Bilang ng Insidente kada Plaka",
             bars = incidentBars,
-            barColor = Color(0xFFB45309)
+            barColor = Color(0xFFB45309),
+            isMoney = false // Bilang ito, hindi pera - walang peso sign.
         )
         Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa uri, plaka, o lokasyon")
         Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }

@@ -259,27 +259,8 @@ fun AccountManagementScreen(
                 ) { account ->
                     AccountCard(
                         account = account,
-                        onToggleStatus = {
-                            viewModel.toggleAccountStatus(account.id)
-                        },
                         onDelete = {
                             accountPendingDeletion = account
-                        },
-                        onChangeRole = if (
-                            isSuperadmin && !viewModel.isCurrentAccount(account)
-                        ) {
-                            {
-                                viewModel.changeUserRole(
-                                    account.id,
-                                    if (account.role == "Driver") {
-                                        "admin"
-                                    } else {
-                                        "driver"
-                                    }
-                                )
-                            }
-                        } else {
-                            null
                         },
                         isBusy = account.id in uiState.busyAccountIds
                     )
@@ -333,9 +314,7 @@ fun AccountManagementScreen(
 @Composable
 fun AccountCard(
     account: AccountItem,
-    onToggleStatus: () -> Unit,
     onDelete: () -> Unit,
-    onChangeRole: (() -> Unit)? = null,
     isBusy: Boolean = false
 ) {
     Card(
@@ -351,34 +330,91 @@ fun AccountCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
+            /*
+             * Iisang linya sa itaas: pangalan + role badge (kaliwa),
+             * status badge bago ang basurahan (kanan) - kapareho ng
+             * layout ng status + cancel sa mga pila ng jeep. Wala nang
+             * ibang button - delete at status na lang.
+             */
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = account.name,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = account.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val roleBgColor =
+                        when (account.role) {
+                            "Superadmin" -> Color(0xFF6D28D9)
+                            "Admin" -> Color(0xFF1B49B5)
+                            else -> Color(0xFFFEF3C7)
+                        }
+
+                    val roleTextColor =
+                        if (account.role == "Driver") {
+                            Color(0xFFD97706)
+                        } else {
+                            Color.White
+                        }
+
+                    Surface(
+                        color = roleBgColor,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(
+                                horizontal = 10.dp
+                            )
+                        ) {
+                            Text(
+                                text = account.role,
+                                color = roleTextColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                val roleBgColor =
-                    when (account.role) {
-                        "Superadmin" -> Color(0xFF6D28D9)
-                        "Admin" -> Color(0xFF1B49B5)
-                        else -> Color(0xFFFEF3C7)
+                val statusBgColor =
+                    if (account.isActive) {
+                        Color(0xFFDCFCE7)
+                    } else {
+                        Color(0xFFF3F4F6)
                     }
 
-                val roleTextColor =
-                    if (account.role == "Driver") {
-                        Color(0xFFD97706)
+                val statusTextColor =
+                    if (account.isActive) {
+                        Color(0xFF166534)
                     } else {
-                        Color.White
+                        Color.Gray
+                    }
+
+                val statusText =
+                    if (account.isActive) {
+                        "Aktibo"
+                    } else {
+                        "Hindi Aktibo"
                     }
 
                 Surface(
-                    color = roleBgColor,
+                    color = statusBgColor,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(24.dp)
                 ) {
@@ -389,12 +425,32 @@ fun AccountCard(
                         )
                     ) {
                         Text(
-                            text = account.role,
-                            color = roleTextColor,
+                            text = statusText,
+                            color = statusTextColor,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Medium
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = onDelete,
+                    enabled = !isBusy,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .border(
+                            1.dp,
+                            Color(0xFFFEE2E2),
+                            RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.Red
+                    )
                 }
             }
 
@@ -413,132 +469,6 @@ fun AccountCard(
                 fontSize = 12.sp,
                 color = Color.Gray
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val statusBgColor =
-                if (account.isActive) {
-                    Color(0xFFDCFCE7)
-                } else {
-                    Color(0xFFF3F4F6)
-                }
-
-            val statusTextColor =
-                if (account.isActive) {
-                    Color(0xFF166534)
-                } else {
-                    Color.Gray
-                }
-
-            val statusText =
-                if (account.isActive) {
-                    "Aktibo"
-                } else {
-                    "Hindi Aktibo"
-                }
-
-            Surface(
-                color = statusBgColor,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(24.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(
-                        horizontal = 10.dp
-                    )
-                ) {
-                    Text(
-                        text = statusText,
-                        color = statusTextColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onToggleStatus,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                    enabled = !isBusy,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        Color.LightGray
-                    )
-                ) {
-                    Text(
-                        text = if (account.isActive) {
-                            "Alisin"
-                        } else {
-                            "Ibalik"
-                        },
-                        color = Color.Black,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 11.sp,
-                        maxLines = 1
-                    )
-                }
-
-                /*
-                 * Superadmin only: promote a driver to admin or demote
-                 * an admin back to driver.
-                 */
-                if (onChangeRole != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(
-                        onClick = onChangeRole,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        enabled = !isBusy,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            Color(0xFF1B49B5)
-                        )
-                    ) {
-                        Text(
-                            text = if (account.role == "Driver") {
-                                "Gawing Admin"
-                            } else {
-                                "Gawing Driver"
-                            },
-                            color = Color(0xFF1B49B5),
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                IconButton(
-                    onClick = onDelete,
-                    enabled = !isBusy,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .border(
-                            1.dp,
-                            Color(0xFFFEE2E2),
-                            RoundedCornerShape(12.dp)
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color.Red
-                    )
-                }
-            }
         }
     }
 }

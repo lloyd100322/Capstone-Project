@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserSession
@@ -69,6 +70,13 @@ class SuperadminViewModel @Inject constructor(
         )
     )
     val tiers = _tiers.asStateFlow()
+
+    /*
+     * Oras ng awtomatikong reset ng pila (0-23, default 21 = 9 PM).
+     * Ito ang ginagamit ng QueueViewModel sa queue rotation.
+     */
+    private val _cutoffHour = MutableStateFlow("21")
+    val cutoffHour = _cutoffHour.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
@@ -173,6 +181,17 @@ class SuperadminViewModel @Inject constructor(
                             it.seater.toIntOrNull() ?: 0
                         }
                 }
+
+                val rotationDocument = firestore
+                    .collection(FirestoreCollections.SETTINGS)
+                    .document("queueRotation")
+                    .get()
+                    .await()
+
+                rotationDocument.getLong("cutoffHour")?.let { hour ->
+                    _cutoffHour.value =
+                        hour.toInt().coerceIn(0, 23).toString()
+                }
             } catch (_: Exception) {
                 // Defaults stay visible when the settings cannot load.
             }
@@ -253,6 +272,12 @@ class SuperadminViewModel @Inject constructor(
         _tiers.value = current
     }
 
+    fun updateCutoffHour(value: String) {
+        if (value.length <= 2 && value.all { it.isDigit() }) {
+            _cutoffHour.value = value
+        }
+    }
+
     fun addTier() {
         _tiers.value = _tiers.value + DeductionTier("", "")
     }
@@ -274,6 +299,13 @@ class SuperadminViewModel @Inject constructor(
             }
         }
 
+        val cutoff = _cutoffHour.value.trim().toIntOrNull()
+        if (cutoff == null || cutoff !in 0..23) {
+            _message.value = "Ang oras ng reset ay dapat 0 hanggang 23."
+            return
+        }
+        _cutoffHour.value = cutoff.toString()
+
         viewModelScope.launch {
             try {
                 firestore
@@ -282,10 +314,22 @@ class SuperadminViewModel @Inject constructor(
                     .set(tierMap)
                     .await()
 
+                firestore
+                    .collection(FirestoreCollections.SETTINGS)
+                    .document("queueRotation")
+                    .set(
+                        mapOf(
+                            "cutoffHour" to cutoff,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        ),
+                        SetOptions.merge()
+                    )
+                    .await()
+
                 ActivityLogger.log(
                     firestore, userSession,
                     "Settings",
-                    "Bawas kada upuan: " +
+                    "Oras ng reset: $cutoff:00 | Bawas kada upuan: " +
                             tierMap.entries.joinToString(", ") {
                                 "${it.key}=${it.value}"
                             }

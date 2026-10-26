@@ -17,6 +17,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -82,27 +83,40 @@ class QueueViewModel @Inject constructor(
 
     /*
      * -----------------------------
-     * AWTOMATIKONG RESET (9:00 PM)
+     * AWTOMATIKONG RESET (cut-off)
      * -----------------------------
-     * Kahit nakabukas ang app, nagre-reset ang pila pagdating ng 9:00
-     * PM. Ang unang tseke ay agad (catch-up kapag lumampas na ang 9:00
-     * PM habang sarado ang app), tapos ang susunod ay eksaktong sa
-     * susunod na 9:00 PM.
+     * Kahit nakabukas ang app, nagre-reset ang pila pagdating ng
+     * cut-off hour (default 9:00 PM, settable ng superadmin). Ang unang
+     * tseke ay agad (catch-up kapag lumampas na ang cut-off habang
+     * sarado ang app), tapos ang susunod ay eksaktong sa susunod na
+     * cut-off.
      */
     private var rotationWatch: Job? = null
 
     companion object {
-        private const val DEFAULT_ROUTE = "Monumento – Marilao"
+        /*
+         * Ang bagong sasakyan sa pila ay pumapasok sa MARILAO –
+         * MONUMENTO. Ang Monumento – Marilao ay simula lang na WALA
+         * PANG LAMAN - lalamanin lang nito ang mga driver pagkatapos
+         * silang i-dispatch mula sa Marilao – Monumento (kabila).
+         */
+        private const val DEFAULT_ROUTE = "Marilao – Monumento"
 
         const val ROUTE_MA = "Monumento – Marilao"
         const val ROUTE_AM = "Marilao – Monumento"
 
-        /**
-         * Ang pila ay awtomatikong nagre-reset tuwing 9:00 PM (21:00).
-         * FIXED na ang oras - hindi na ito manual at hindi na ito
-         * nakadepende sa settings.
+        /*
+         * Ang pila ay awtomatikong nagre-reset tuwing cut-off hour
+         * (default 9:00 PM / 21:00, settable ng superadmin). Hindi na ito
+         * manual - awtomatiko pa rin.
          */
         const val CUTOFF_HOUR = 21
+
+        fun formatCutoffHour(hour: Int): String {
+            val h12 = ((hour + 11) % 12) + 1
+            val amPm = if (hour < 12) "AM" else "PM"
+            return "$h12:00 $amPm"
+        }
 
         /** 0 = Monumento -> Marilao, 1 = Marilao -> Monumento. */
         fun routeKey(route: String?): Int =
@@ -136,11 +150,88 @@ class QueueViewModel @Inject constructor(
         }
     }
 
+    /*
+     * Ang oras ng awtomatikong reset: binabasa mula sa settings
+     * ("cutoffHour", default 21 = 9 PM). Naka-cache dito para sa timer
+     * at ipinapakita sa UI.
+     */
+    @Volatile
+    private var cutoffHour: Int = CUTOFF_HOUR
+
+    private val _cutoffLabel =
+        MutableStateFlow(formatCutoffHour(CUTOFF_HOUR))
+
+    val cutoffLabel: StateFlow<String> = _cutoffLabel.asStateFlow()
+
     init {
         startQueueListener()
         healActiveRoster()
+        normalizeQueueRoutes()
         maybeRotateQueue()
         startRotationWatch()
+    }
+
+    /**
+     * ONE-TIME normalization ng mga ruta: ang buong pila ay inilalagay
+     * sa Marilao – Monumento (ang panimulang ruta). Ang Monumento –
+     * Marilao ay mananatiling WALA SA LAMAN hanggang sa may unang
+     * i-dispatch mula sa Marilao – Monumento. Isang beses lang ito
+     * (may flag sa settings) para hindi na galawin ang mga legit na
+     * entry na gawa ng dispatch.
+     */
+    private fun normalizeQueueRoutes() {
+        if (!userSession.isAdmin()) return
+
+        viewModelScope.launch {
+            try {
+                val metaReference = rotationMetaReference()
+                val meta = metaReference.get().await()
+                if (meta.getBoolean("routesNormalized") == true) {
+                    return@launch
+                }
+
+                val queueSnapshot = firestore
+                    .collection(FirestoreCollections.QUEUE)
+                    .get()
+                    .await()
+
+                val open = queueSnapshot.documents.filter {
+                    isActiveStatus(it.getString("status"))
+                }
+
+                val batch = firestore.batch()
+
+                val allSorted = open.sortedWith(
+                    compareBy<DocumentSnapshot> {
+                        if (it.getBoolean("isCancelled") == true) 1 else 0
+                    }.thenBy {
+                        it.getLong("position") ?: Long.MAX_VALUE
+                    }
+                )
+
+                allSorted.forEachIndexed { index, document ->
+                    batch.update(
+                        document.reference,
+                        mapOf(
+                            "route" to ROUTE_AM,
+                            "position" to index + 1,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                }
+
+                batch.update(
+                    metaReference,
+                    mapOf(
+                        "routesNormalized" to true,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                batch.commit().await()
+            } catch (_: Exception) {
+                // Best effort - hindi nasisira ang pila kung hindi ito tumakbo.
+            }
+        }
     }
 
     private fun startRotationWatch() {
@@ -161,11 +252,11 @@ class QueueViewModel @Inject constructor(
         }
     }
 
-    /** Millis hanggang sa susunod na 9:00 PM (hindi bababa sa 1 minuto). */
+    /** Millis hanggang sa susunod na cut-off hour (hindi bababa sa 1 minuto). */
     private fun millisUntilNextCutoff(): Long {
         val now = Calendar.getInstance()
         val next = (now.clone() as Calendar).apply {
-            set(Calendar.HOUR_OF_DAY, CUTOFF_HOUR)
+            set(Calendar.HOUR_OF_DAY, cutoffHour)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
@@ -182,7 +273,7 @@ class QueueViewModel @Inject constructor(
             firestore,
             userSession,
             "Reset ng Pila",
-            "Automatic (9:00 PM)"
+            "Automatic (${_cutoffLabel.value})"
         )
         ToastFeedback.show(
             "Na-reset na ang pila: ang dating #1 ay nasa huli na."
@@ -1107,11 +1198,12 @@ class QueueViewModel @Inject constructor(
      * -----------------------------
      * DAILY RESET ("reset ng pila")
      * -----------------------------
-     * AWTOMATIKO na ang reset tuwing 9:00 PM (21:00) - hindi na ito
-     * manual (tinanggal ang "I-reset Ngayon"). Ang rotation: ang #1
-     * ngayon ay huli na bukas at ang kasunod ang mauuna. Ang unang
-     * tseke ay tuwing binubuksan ang queue tab (catch-up), tapos may
-     * timer na nagre-reset mismo sa oras ng cut-off.
+     * AWTOMATIKO ang reset tuwing cut-off hour (default 9:00 PM / 21:00,
+     * settable ng superadmin sa Settings) - hindi ito manual (tinanggal
+     * ang "I-reset Ngayon"). Ang rotation: ang #1 ngayon ay huli na
+     * bukas at ang kasunod ang mauuna. Ang unang tseke ay tuwing
+     * binubuksan ang queue tab (catch-up), tapos may timer na nagre-reset
+     * mismo sa oras ng cut-off.
      */
 
     private fun rotationMetaReference() =
@@ -1120,8 +1212,8 @@ class QueueViewModel @Inject constructor(
             .document("queueRotation")
 
     /**
-     * The queue "day" flips at 9:00 PM (21:00) - after the cut-off the
-     * queue already belongs to the next operating day.
+     * The queue "day" flips at the cut-off hour (default 21:00) - after
+     * the cut-off the queue already belongs to the next operating day.
      */
     fun queueDayId(
         now: Date = Date(),
@@ -1164,8 +1256,13 @@ class QueueViewModel @Inject constructor(
             val meta = transaction.get(metaReference)
             val lastReset = meta.getString("lastQueueDay")
 
-            // FIXED: 9:00 PM ang cut-off ng awtomatikong reset.
-            val today = queueDayId(Date(), CUTOFF_HOUR)
+            // Ang cut-off hour ay settable ng superadmin (default 21 = 9 PM).
+            val hour = (meta.getLong("cutoffHour")?.toInt() ?: CUTOFF_HOUR)
+                .coerceIn(0, 23)
+            cutoffHour = hour
+            _cutoffLabel.value = formatCutoffHour(hour)
+
+            val today = queueDayId(Date(), hour)
 
             if (!force && lastReset == today) {
                 return@runTransaction false

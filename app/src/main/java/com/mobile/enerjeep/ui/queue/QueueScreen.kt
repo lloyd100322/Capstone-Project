@@ -50,11 +50,12 @@ fun QueueScreen(
 ) {
     // Collect Business State from ViewModel safely
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val cutoffHourLabel by viewModel.cutoffLabel.collectAsStateWithLifecycle()
 
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
 
-    // 0: Monumento -> Marilao, 1: Marilao -> Monumento, 2: Kasaysayan
+    // 0: Marilao -> Monumento, 1: Monumento -> Marilao, 2: Kasaysayan
     var selectedTab by remember { mutableStateOf(0) }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
 
@@ -102,7 +103,7 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset 9:00 PM", fontSize = 14.sp, color = Color.Gray)
+            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset $cutoffHourLabel", fontSize = 14.sp, color = Color.Gray)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -126,8 +127,9 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             /*
-             * Awtomatikong reset tuwing 9:00 PM - hindi na manual.
-             * (Tanggal na ang "I-reset Ngayon" na button.)
+             * Awtomatikong reset tuwing cut-off hour (editable ng
+             * superadmin sa Settings). Tanggal na ang "I-reset Ngayon"
+             * na button - awtomatiko pa rin ang reset.
              */
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -141,7 +143,7 @@ fun QueueScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Reset ng Pila • 9:00 PM",
+                            text = "Reset ng Pila • $cutoffHourLabel",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )

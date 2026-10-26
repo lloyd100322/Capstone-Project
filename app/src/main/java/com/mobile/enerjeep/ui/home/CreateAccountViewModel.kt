@@ -48,8 +48,13 @@ class CreateAccountViewModel @Inject constructor(
         private val PH_PHONE_REGEX =
             Regex("^\\+639\\d{9}$")
 
+        /*
+         * Ang bagong account (driver) ay pumapasok sa MARILAO –
+         * MONUMENTO. Ang Monumento – Marilao ay simula lang na walang
+         * laman - lalamanin lang ito ng mga na-dispatch (kabila).
+         */
         private const val DEFAULT_ROUTE =
-            "Monumento – Marilao"
+            "Marilao – Monumento"
     }
 
     fun createAccount(

@@ -610,97 +610,6 @@ fun EditProfileContent(
                     Modifier.padding(24.dp)
             ) {
 
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-
-                    OutlinedTextField(
-                        value =
-                            firstName,
-                        onValueChange = {
-                            firstName = it
-                        },
-                        modifier =
-                            Modifier.weight(1f),
-                        label = {
-                            Text("Pangalan")
-                        },
-                        singleLine = true,
-                        enabled = false
-                    )
-
-                    OutlinedTextField(
-                        value =
-                            lastName,
-                        onValueChange = {
-                            lastName = it
-                        },
-                        modifier =
-                            Modifier.weight(1f),
-                        label = {
-                            Text("Apelyido")
-                        },
-                        singleLine = true,
-                        enabled = false
-                    )
-                }
-
-                Spacer(
-                    modifier =
-                        Modifier.height(16.dp)
-                )
-
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = {
-                        if (
-                            it.length <= 10 &&
-                            it.all { char ->
-                                char.isDigit()
-                            }
-                        ) {
-                            phone = it
-                        }
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    label = {
-                        Text("Telepono")
-                    },
-                    leadingIcon = {
-                        Text("+63")
-                    },
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType =
-                                KeyboardType.Phone
-                        ),
-                    singleLine = true,
-                    enabled = false
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(8.dp)
-                )
-
-                Text(
-                    text =
-                        "Naka-lock ang pangalan, apelyido at phone number (ginagamit ito ng Firebase Phone Authentication). Ang emergency contact lang ang maaaring i-edit.",
-                    color =
-                        Color.Gray,
-                    fontSize =
-                        12.sp
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(16.dp)
-                )
-
                 OutlinedTextField(
                     value = emergencyContactName,
                     onValueChange = {
@@ -743,21 +652,6 @@ fun EditProfileContent(
                                 KeyboardType.Phone
                         ),
                     singleLine = true
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(8.dp)
-                )
-
-                Text(
-                    text =
-                        "Ito ang lalabas sa Emergency button ng dashboard. " +
-                                "Pwedeng iwanang blank pareho kung walang contact.",
-                    color =
-                        Color.Gray,
-                    fontSize =
-                        12.sp
                 )
 
                 Spacer(
