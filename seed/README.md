@@ -44,24 +44,34 @@ Phone login needs an SMS OTP. For development and presentations, use
 3. On the login screen, type the number — the OTP `123456` will be
    accepted instantly.
 
-## How to run
+## How to run (Windows / PowerShell)
 
-1. Get a **service account key**: Firebase console → Project settings →
-   Service accounts → *Generate new private key*. Save it **outside**
-   the repository (never commit it).
-2. Install and run:
+0. **Kailangan ng Node.js** — i-download/install ang LTS mula sa
+   https://nodejs.org (kung wala pa). I-check sa PowerShell:
+   `node -v` — dapat may laman.
 
-   ```bash
-   cd seed
+1. **Kunin ang service account key**: Firebase console →
+   **Project settings → Service accounts → Generate new private key**.
+   I-save ito sa **labas** ng repository (hal. `C:\Users\Dave\Downloads\`)
+   — **huwag na huwag** i-commit.
+
+2. Sa PowerShell:
+
+   ```powershell
+   cd C:\Users\Dave\AndroidStudioProjects\Capstone-Project3\seed
    npm install
-   node seed.js --serviceAccount /path/to/serviceAccount.json
+   node seed.js --serviceAccount C:\Users\Dave\Downloads\serviceAccount.json
    ```
 
-   (Or set `GOOGLE_APPLICATION_CREDENTIALS` and run `node seed.js`.)
+   (O kaya: i-set ang `GOOGLE_APPLICATION_CREDENTIALS` at patakbuhin
+   lang ang `node seed.js`.)
 
 3. Options:
-   - `--wipe` — deletes existing docs in the seeded collections first.
-     **Never** use this on a project with real data.
+   - `--wipe` — buburahin muna ang laman ng seeded collections bago
+     magsulat. **Huwag** gagamitin sa may totoong datos.
+
+4. Pagkatapos: i-restart ang app — dapat puno na ng datos (pila,
+   insidente, kita, donations, Talaan).
 
 ## Notes
 

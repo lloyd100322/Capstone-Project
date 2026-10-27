@@ -1,0 +1,14 @@
+{
+  "name": "enerjeep-seed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realistic Firestore demo data for EnerJeep (maintainer tool - not part of the app)",
+  "main": "seed.js",
+  "scripts": {
+    "seed": "node seed.js",
+    "seed:wipe": "node seed.js --wipe"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

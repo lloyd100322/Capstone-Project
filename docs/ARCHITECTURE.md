@@ -9,12 +9,13 @@ item lists the decision, the reason, and the honest trade-off.
 ## 1. Why three user levels (Driver / Admin / Superadmin)?
 
 **The challenge:** *"Why create multiple restricted user levels when
-the superadmin controls already suffice?"*
+the superadmin controls already suffice? Everything the admin can do,
+the superadmin can also do — so what is the difference? What if the
+superadmin goes rogue?"*
 
-**Short answer:** the roles are not about *features* — they are about
-**who is allowed to change money-related policy** in a real cooperative.
-The three levels map to the three kinds of people who actually use a
-dispatch system.
+**Short answer:** the extra level is **not** there to give the admin
+superpowers the superadmin lacks — it is there so the **daily work does
+not run on a superadmin account**. The limit itself IS the benefit.
 
 | Level | Real-world counterpart | Daily job |
 |---|---|---|
@@ -22,63 +23,96 @@ dispatch system.
 | Admin | Dispatcher / operator on duty | Run the pila for the day: queue, dispatch, incidents, reports |
 | Superadmin | Cooperative manager / owner | Policy and accountability: rates, reset hour, who is in the system, the audit trail |
 
-### Reasons
+### The four questions a panel will ask — and the answers
 
-1. **Separation of duties (least privilege).** A person who is only
-   dispatching jeeps should not be able to change the per-seater
-   deduction rate or the daily reset hour — those decisions change how
-   much every driver earns. Keeping policy settings behind the
-   superadmin level means an honest mistake by the operator on duty
-   cannot silently alter everyone's pay.
+**Q1. "Kung kaya rin naman ng superadmin, ano ang difference?"**
+Yes — the superadmin can do everything the admin can. That is by
+design (it is a superset, like a bank manager over a teller). The
+point of the **admin** level is what the operator **cannot** do:
+change the per-seater deduction, change the daily reset hour, manage
+the emergency list, create other admin accounts, or read the audit
+trail. Day-to-day work happens on an account whose worst mistake is
+contained. A teller does not hold the vault key even though the
+manager can open the vault.
 
-2. **Accountability requires non-root actors.** The system keeps an
-   audit log ("Talaan ng Aktibidad") of *which account* dispatched,
-   cancelled, deleted, or edited something. That log is only meaningful
-   if day-to-day work is done by **admin** accounts that can be held
-   accountable by someone above them. If everybody used one shared
-   superadmin account, the audit trail would be useless — and a single
-   leaked credential would expose everything.
+**Q2. "Paano kung ang superadmin ang loloko-loko?"**
+Then the **audit log still catches them**. The `/activityLogs`
+collection is enforced by Firestore security rules as
+**append-only**: `allow update, delete: if false` — **not even the
+superadmin** can edit or delete an entry (see `firestore.rules`). Any
+action (including "Binura ang Account", dispatches, settings changes)
+is permanently stamped with **who, what, and when**. The role design
+does not pretend to defend against a malicious owner — nothing can —
+but it makes every action *traceable*, including theirs.
 
-3. **Blast-radius control.** Deleting accounts, managing the emergency
-   contact list, and setting money-related policy are high-impact
-   actions. Restricting them to one level reduces the number of
-   accounts that can do damage, and the audit log records those
-   actions explicitly.
+**Q3. "Anong benefit ng dagdag na user level? Kokonti lang naman ang
+users namin (ilan lang ang driver)."**
+Roles map to **jobs, not headcount**. Even a four-driver cooperative
+has someone who dispatches and someone who owns the business. Three
+levels = three real jobs:
 
-4. **It maps to the cooperative's real process.** Cooperatives do not
-   let the dispatcher rewrite the boundary rules of the day. The
-   software mirrors the organization instead of flattening it into one
-   all-powerful account.
+1. **Separation of duties** — the dispatcher cannot silently change
+   everyone's earnings (rates, reset hour are superadmin-only).
+2. **Attribution** — because daily work is done by named operator
+   accounts, "sino ang nagbura nito?" always has an answer. With one
+   shared superadmin account, nobody is liable.
+3. **Blast-radius control** — a lost operator phone does not lose the
+   policy controls, the emergency list, or the audit log.
+
+**Q4. "May pera ba dyan? May cashless? Gcash?"**
+No — and this is a **stated scope boundary** (see
+`SCOPE-AND-LIMITATIONS.md`). Money in this cooperative is **physical
+cash handed over** by the driver. The system does **not** hold, move,
+or process payments. What it does is **bookkeeping**: it records the
+cash amounts (Kita, Bayad, Multa, Bawas, dispatch fees) so the day can
+be accounted for. "Walang pera sa app" is a feature, not a gap — no
+stored value means no wallet to hack.
+
+### The deletion-liability walkthrough (demo-ready)
+
+1. Admin "Maria" deletes a driver account at 2 PM.
+2. That same minute the app writes an audit entry: action
+   **"Binura ang Account"**, actor **"Maria Santos"**, timestamp.
+3. Next day the superadmin opens **Mga Account → Talaan** and sees
+   exactly who deleted what — and **cannot be edited away** (rules
+   block even the superadmin from rewriting it).
+
+This is the concrete answer to *"e liable 'yung isang admin"*: the
+system makes liability **provable**.
 
 ### Honest trade-off
 
-Yes — everything *could* run under a single superadmin account, and the
-app would still function. What would be lost is the process: an
-all-powerful shared account means no accountability, no safe division
-of work, and one stolen phone could rewrite rates and delete accounts.
-The extra role is a small cost (one role check in code and security
-rules) for a large process benefit.
-
-If the panel still insists on two levels, the change is deliberately
-small: the `admin` role already has its own UI gating
-(`UserSession.isSuperadmin()`), so merging is a configuration-level
-decision — but we recommend keeping the separation above.
+Yes — everything *could* run under one superadmin account. What would
+be lost is the process: no attribution ("sino ang gumawa?"), a single
+stolen phone exposes policy + data + logs, and operators work with the
+same keys as the owner. The cost of the extra level is one role check
+in code and in the security rules — a small price for liability and
+containment. If the panel still insists on two levels, merging is a
+configuration-level change (`UserSession` gating) — but the
+accountability argument disappears with it.
 
 ---
 
 ## 2. Why is the operating/reset hour a *setting*, not code?
 
 **Earlier review finding:** *"the operating hours cannot be dynamically
-updated without rewriting code."*
+updated without rewriting code — what if commuters grow at night and
+the pila must run until 10 PM or 11 PM?"*
 
-**Status: fixed.** The daily reset hour is data-driven:
+**Status: fixed — and this exact scenario works today.** The daily
+reset hour is data-driven:
 
 - Stored in Firestore at `settings/queueRotation.cutoffHour`
   (0–23; default 21 = 9 PM).
 - Editable by the superadmin in **Mga Account → Settings** ("Oras ng
-  Reset") — no code change, no rebuild.
+  Reset") — no code change, no rebuild, no redeploy.
+- Example (the adviser's exact case): commuters increase at night →
+  superadmin changes 21 → 22 (or 23) in Settings → **the Pila screen
+  immediately shows "Reset ng Pila • 10:00 PM"** and the rotation timer
+  follows the new hour. Changing it back is equally instant.
 - The queue reads the value on every open and before every scheduled
-  rotation, and the UI shows the live value ("Reset ng Pila • 9:00 PM").
+  rotation (catch-up included), so an app that was closed during the
+  change still respects the new hour.
 - The same Settings screen also holds the per-seater deduction tiers
   (`settings/deductionTiers`), which used to be constants.
 

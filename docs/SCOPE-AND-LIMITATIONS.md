@@ -60,39 +60,45 @@ stronger in review than one that pretends to do everything.
 These are deliberate boundaries, not oversights. Each item is a valid
 question in review, so each has a stated reason.
 
-1. **No true background push notifications.** Dispatch alerts work only
+1. **No cashless / payment processing (no GCash, no wallet).** Money in
+   this cooperative is **physical cash** handed over by the driver. The
+   app **holds no money and moves no money** — it is a *record*
+   (bookkeeping) of the cash amounts (Kita, Bayad, Multa, Bawas,
+   dispatch fees). "Walang pera sa app" is deliberate: no stored value,
+   no wallet to hack, no remittance partner needed.
+2. **No true background push notifications.** Dispatch alerts work only
    while the app is open (in-app sound/banner/bell). Firebase Cloud
    Messaging (FCM) is a future enhancement; it needs server-side
    plumbing and possibly billing, and the current workflow (drivers
    sign in before the day starts) does not require it.
-2. **No real-time GPS tracking of jeepneys.** The system tracks queue
+3. **No real-time GPS tracking of jeepneys.** The system tracks queue
    state, not vehicle locations.
-3. **No payroll, accounting export, or government reporting** (e.g.,
+4. **No payroll, accounting export, or government reporting** (e.g.,
    BIR forms). Kita/Ledger are operational records, not a full
    accounting suite. Data can be exported later (future work).
-4. **Single cooperative only.** One dataset, one set of routes
+5. **Single cooperative only.** One dataset, one set of routes
    (Monumento–Marilao). Multi-cooperative support is out of scope.
-5. **"Operating hours" = the queue cut-off/rotation time only.** The
+6. **"Operating hours" = the queue cut-off/rotation time only.** The
    system models the *operating-day boundary* (dynamic, superadmin-
    editable — see `docs/ARCHITECTURE.md`). It does not implement a
    business-hours schedule that blocks dispatches outside a set window,
    driver shift planning, or a calendar/holiday system. (The old
    "Iskedyul" tab was removed as unnecessary.)
-6. **No offline mode.** The app requires internet (Firestore). A failed
+7. **No offline mode.** The app requires internet (Firestore). A failed
    write is reported to the user instead of being queued silently.
-7. **SMS OTP costs money.** Firebase Phone Auth billing
+8. **SMS OTP costs money.** Firebase Phone Auth billing
    (~USD 0.01–0.06 per verification) is on the project owner; **test
    phone numbers** in the Firebase console are used for development and
    demos so no SMS cost is incurred (see `seed/README.md`).
-8. **App Check enforcement is a console setting.** Play Integrity
+9. **App Check enforcement is a console setting.** Play Integrity
    covers real devices; development devices must register debug tokens
    (a 403 before registration is expected behavior, not a bug).
-9. **Android only** (minSdk 29 / Android 10). No iOS or web client.
-10. **Password recovery** is handled by an in-app reset flow (not email
+10. **Android only** (minSdk 29 / Android 10). No iOS or web client.
+11. **Password recovery** is handled by an in-app reset flow (not email
     links), because the login identity is a phone number, not an email.
-11. **One active vehicle per driver account.** A driver with multiple
+12. **One active vehicle per driver account.** A driver with multiple
     jeepneys uses multiple accounts (keeps the queue unambiguous).
-12. **Seed/demo data is not production data.** `seed/` exists so the
+13. **Seed/demo data is not production data.** `seed/` exists so the
     system can be demonstrated realistically (see `seed/README.md`);
     it should not be mixed with real records.
 
