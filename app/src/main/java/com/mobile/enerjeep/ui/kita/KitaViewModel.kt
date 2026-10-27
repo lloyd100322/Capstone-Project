@@ -45,8 +45,6 @@ data class KitaUiState(
     val totalKita: Double = 0.0,
     val totalBayad: Double = 0.0,
     val totalMultiya: Double = 0.0,
-    // Fase 8: donasyon = bawas sa malinis na kita.
-    val totalBawas: Double = 0.0,
     val selectedTab: KitaTabType = KitaTabType.NGAYON,
     val searchQuery: String = "",
     val records: List<KitaRecord> = emptyList(),
@@ -367,7 +365,6 @@ class KitaViewModel @Inject constructor(
             totalKita = totals.kita,
             totalBayad = totals.bayad,
             totalMultiya = totals.multa,
-            totalBawas = totals.bawas,
             selectedTab = tab,
             searchQuery = query,
             records = allRecords,

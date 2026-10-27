@@ -64,7 +64,7 @@ No — and this is a **stated scope boundary** (see
 `SCOPE-AND-LIMITATIONS.md`). Money in this cooperative is **physical
 cash handed over** by the driver. The system does **not** hold, move,
 or process payments. What it does is **bookkeeping**: it records the
-cash amounts (Kita, Bayad, Multa, Bawas, dispatch fees) so the day can
+cash amounts (Kita, Bayad, Multa, donations, dispatch fees) so the day can
 be accounted for. "Walang pera sa app" is a feature, not a gap — no
 stored value means no wallet to hack.
 

@@ -213,10 +213,14 @@ service cloud.firestore {
 
     // ------------------------------------------------------------------
     // /donations - donations report
+    //
+    // Ang donasyon (at ang "gamit" nito) ay pondo ng kooperatiba -
+    // SUPERADMIN lang ang humahawak. Ang donasyon ay HIWALAY sa kita
+    // ng mga driver - hindi ito binabawas sa kahit kanino.
     // ------------------------------------------------------------------
     match /donations/{donationId} {
       allow read: if isMember();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isSuperadmin();
     }
 
     // Everything else is closed by default.

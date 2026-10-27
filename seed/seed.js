@@ -474,13 +474,20 @@ async function seedKitaAndLedger() {
 
 async function seedDonations() {
   let batch = db.batch();
+  /*
+   * type "donate" = idinagdag sa pondo (boluntaryo, kahit kanino).
+   * type "gamit"  = ibinawas mula sa pondo (ginamit ng kooperatiba).
+   * HIWALAY ang donasyon sa kita ng mga driver - hindi binabawas.
+   */
   const donations = [
-    [0, 10, 0, "Tulong para sa gulong", 2000, "Donasyon ng may-ari"],
-    [1, 15, 30, "Ambag para sa ayuda", 1500, "Mula sa kita ng kooperatiba"],
-    [3, 9, 0, "Tulong sa pamilya ng driver", 1000, "Donasyon ng mga kasapi"],
+    [0, 10, 0, "Tulong para sa gulong", 2000, "Donasyon ng may-ari", "sponsor", "donate"],
+    [1, 15, 30, "Ambag para sa ayuda", 1500, "Mula sa kita ng kooperatiba", "kooperatiba", "donate"],
+    [3, 9, 0, "Tulong sa pamilya ng driver", 1000, "Donasyon ng mga kasapi", "kasapi", "donate"],
+    [1, 11, 0, "Tulong sa miyembro", 500, "Gamit ng pondo - tulong pangkalusugan", "tulong", "gamit"],
+    [2, 14, 0, "Gamit sa opisina", 300, "Papel at supplies ng kooperatiba", "opisina", "gamit"],
   ];
   donations.forEach((e, i) => {
-    const [back, hh, mm, donor, amount, note] = e;
+    const [back, hh, mm, donor, amount, note, source, type] = e;
     const d = daysAgo(back, hh, mm);
     const id = `donation_seed_${i + 1}`;
     batch.set(db.collection("donations").doc(id), {
@@ -489,11 +496,13 @@ async function seedDonations() {
       amount,
       date: dateLabel(d),
       note,
+      source,
+      type,
       createdAt: ts(d),
     });
   });
   await batch.commit();
-  console.log("  donations: 3 entries");
+  console.log("  donations: 5 entries (3 donate, 2 gamit)");
 }
 
 async function seedSettings() {

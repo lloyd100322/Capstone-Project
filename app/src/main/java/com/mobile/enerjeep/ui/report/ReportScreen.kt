@@ -106,6 +106,7 @@ fun ReportScreen(
                         state.allDonasyon,
                         state.donasyonNgayon,
                         state.kabuuangDonasyon,
+                        isSuperadmin = viewModel.isSuperadmin(),
                         onAddDonasyon = { viewModel.addDonasyon(it) }
                     )
                 }
@@ -316,20 +317,42 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<DonasyonItem>, donasyonNgayon: Double, kabuuangDonasyon: Double, onAddDonasyon: (DonasyonItem) -> Unit) {
+fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<DonasyonItem>, donasyonNgayon: Double, kabuuangDonasyon: Double, isSuperadmin: Boolean, onAddDonasyon: (DonasyonItem) -> Unit) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var showAddModal by remember { mutableStateOf(false) }
+    var showGamitModal by remember { mutableStateOf(false) }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val nakalap = remember(allDonasyon) { allDonasyon.filter { it.type != "gamit" }.sumOf { it.amount } }
+    val nagamit = remember(allDonasyon) { allDonasyon.filter { it.type == "gamit" }.sumOf { it.amount } }
     Column(Modifier.fillMaxWidth()) {
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.padding(24.dp)) { Text("Kabuuang Donasyon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(kabuuangDonasyon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Ngayon: ${formatCurrency(donasyonNgayon).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
+            Column(Modifier.padding(24.dp)) {
+                Text("Natitirang Donasyon", color = Color.White.copy(alpha = .9f))
+                Spacer(Modifier.height(8.dp))
+                Text(formatCurrency(kabuuangDonasyon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Spacer(Modifier.height(8.dp))
+                Text("Nakalap: ${formatCurrency(nakalap).replace(".00", "")} • Nagamit: ${formatCurrency(nagamit).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f))
+                Spacer(Modifier.height(4.dp))
+                Text("Ngayon: ${formatCurrency(donasyonNgayon).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f))
+            }
         }
-        Spacer(Modifier.height(16.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(onClick = { showAddModal = true }, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Idagdag", maxLines = 1) } }
+        Spacer(Modifier.height(16.dp))
+        /*
+         * Ang pondo ng donasyon ay SUPERADMIN lang ang humahawak
+         * (magdagdag ng donasyon o maglabas ng gamit).
+         */
+        if (isSuperadmin) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
+                OutlinedButton(onClick = { showGamitModal = true }) { Text("Gamit", maxLines = 1) }
+                Button(onClick = { showAddModal = true }, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Idagdag", maxLines = 1) }
+            }
+        }
         Spacer(Modifier.height(16.dp))
         val sourceBars = remember(allDonasyon) {
             allDonasyon
+                .filter { it.type != "gamit" }
                 .groupBy { it.source.ifBlank { "Iba" } }
                 .map { (source, items) -> source to items.sumOf { it.amount } }
                 .sortedByDescending { it.second }
@@ -352,7 +375,10 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
         else list.forEach { DonasyonCardItem(it); Spacer(Modifier.height(12.dp)) }
     }
     if (showAddModal) ModalBottomSheet(onDismissRequest = { showAddModal = false }, sheetState = sheetState, containerColor = Color.White) {
-        AddDonasyonFormContent(onCancel = { showAddModal = false }, onSubmit = { onAddDonasyon(it); showAddModal = false; selectedTab = 0 })
+        AddDonasyonFormContent(isGamit = false, onCancel = { showAddModal = false }, onSubmit = { onAddDonasyon(it); showAddModal = false; selectedTab = 0 })
+    }
+    if (showGamitModal) ModalBottomSheet(onDismissRequest = { showGamitModal = false }, sheetState = sheetState, containerColor = Color.White) {
+        AddDonasyonFormContent(isGamit = true, onCancel = { showGamitModal = false }, onSubmit = { onAddDonasyon(it); showGamitModal = false; selectedTab = 0 })
     }
 }
 
@@ -420,31 +446,43 @@ fun ReportMultiyaCard(multiya: ReportMultiyaItem) {
 
 @Composable
 fun DonasyonCardItem(donasyon: DonasyonItem) {
+    val isGamit = donasyon.type == "gamit"
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) { Text(donasyon.donor, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(donasyon.source, fontSize = 13.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text(donasyon.date, fontSize = 12.sp, color = Color.Gray); if (donasyon.note.isNotBlank()) Text(donasyon.note, fontSize = 12.sp, color = Color.Gray) }
-            Text(formatCurrency(donasyon.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Column(Modifier.weight(1f)) { Text(if (isGamit) "Gamit • " + donasyon.donor else donasyon.donor, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(donasyon.source, fontSize = 13.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text(donasyon.date, fontSize = 12.sp, color = Color.Gray); if (donasyon.note.isNotBlank()) Text(donasyon.note, fontSize = 12.sp, color = Color.Gray) }
+            Text(
+                (if (isGamit) "−" else "+") + formatCurrency(donasyon.amount).replace(".00", ""),
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = if (isGamit) Color(0xFFEF4444) else Color(0xFF10B981)
+            )
         }
     }
 }
 
 @Composable
-fun AddDonasyonFormContent(onCancel: () -> Unit, onSubmit: (DonasyonItem) -> Unit) {
+fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (DonasyonItem) -> Unit) {
     var donor by remember { mutableStateOf("") }; var amount by remember { mutableStateOf("") }; var source by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
     val today = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date()); var date by remember { mutableStateOf(today) }
     Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 32.dp)) {
-        Text("Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
-        Text("Ang donasyon ay itinatala bilang BAWAS sa malinis na kita.", fontSize = 12.sp, color = Color.Gray); Spacer(Modifier.height(12.dp))
-        Text("Donor", fontWeight = FontWeight.Medium); OutlinedTextField(donor, { donor = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Pangalan ng donor") })
+        Text(if (isGamit) "Gamit ng Donasyon" else "Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
+        Text(
+            if (isGamit)
+                "Ibinabawas ito sa natitirang pondo ng donasyon. Hiwalay pa rin ito sa kita."
+            else
+                "Ang donasyon ay boluntaryo at hiwalay sa kita - hindi ito binabawas sa kahit kanino.",
+            fontSize = 12.sp, color = Color.Gray
+        ); Spacer(Modifier.height(12.dp))
+        Text(if (isGamit) "Saan / Para kanino ginamit" else "Donor", fontWeight = FontWeight.Medium); OutlinedTextField(donor, { donor = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text(if (isGamit) "Hal: Tulong sa miyembro" else "Pangalan ng donor") })
         Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f)) { Text("Halaga (Bawas sa kita)", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
+            Column(Modifier.weight(1f)) { Text("Halaga", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
             Column(Modifier.weight(1f)) { Text("Petsa", fontWeight = FontWeight.Medium); OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("MMM dd, yyyy") }) }
         }
-        Spacer(Modifier.height(12.dp)); Text("Source", fontWeight = FontWeight.Medium); OutlinedTextField(source, { source = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hal: byahe, LGU, etc.") })
+        Spacer(Modifier.height(12.dp)); Text("Source", fontWeight = FontWeight.Medium); OutlinedTextField(source, { source = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text(if (isGamit) "Hal: tulong, opisina" else "Hal: byahe, LGU, etc.") })
         Spacer(Modifier.height(12.dp)); Text("Note", fontWeight = FontWeight.Medium); OutlinedTextField(note, { note = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Karagdagang detalye") })
         Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Kanselahin") }; Spacer(Modifier.width(12.dp))
-            Button(onClick = { val parsed = amount.toDoubleOrNull() ?: 0.0; if (donor.isNotBlank() && parsed > 0.0) onSubmit(DonasyonItem(donor, parsed, date, source, note)) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Ipasa") }
+            Button(onClick = { val parsed = amount.toDoubleOrNull() ?: 0.0; if (donor.isNotBlank() && parsed > 0.0) onSubmit(DonasyonItem(donor, parsed, date, source, note, if (isGamit) "gamit" else "donate")) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Ipasa") }
         }
     }
 }

@@ -32,13 +32,17 @@ stronger in review than one that pretends to do everything.
   dispatch time) with the net amount written to the ledger.
 
 ### Earnings and reports
-- **Kita**: merged manual entries (Kita / Bayad / Multa / Bawas) and
-  dispatch ledger records, with date filter (default: today) and plate
-  filter; net earnings per day.
+- **Kita**: merged manual entries (Kita / Bayad / Multa) and
+  dispatch ledger records, with date filter (default: all dates) and
+  plate filter; net earnings per day. **Donations are NOT part of
+  this** — they are voluntary and never deducted from anyone's
+  earnings.
 - **Mga Ulat** (admin): income (Kasaysayan + monthly/yearly charts),
   incident counts per plate (plain counts — no peso sign), fines chart,
-  donations (recorded as "Bawas" against net income).
-- **Donations** tracking with donor, amount, date, note.
+  donations (a separate voluntary fund — the balance can go **up or
+  down**: donations add to it, recorded "gamit" expenses subtract).
+- **Donations** are managed by the **superadmin only** (add donation /
+  record "gamit"), with donor, amount, date, source, note.
 
 ### Incidents
 - Report, resolve ("Ayusin"), fines on incidents, call button on the
@@ -63,7 +67,7 @@ question in review, so each has a stated reason.
 1. **No cashless / payment processing (no GCash, no wallet).** Money in
    this cooperative is **physical cash** handed over by the driver. The
    app **holds no money and moves no money** — it is a *record*
-   (bookkeeping) of the cash amounts (Kita, Bayad, Multa, Bawas,
+   (bookkeeping) of the cash amounts (Kita, Bayad, Multa, donations,
    dispatch fees). "Walang pera sa app" is deliberate: no stored value,
    no wallet to hack, no remittance partner needed.
 2. **No true background push notifications.** Dispatch alerts work only

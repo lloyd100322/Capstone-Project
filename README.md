@@ -53,7 +53,7 @@ The app has **three roles**: **Driver**, **Admin** (daily operator), and
   location, description, date, status) plus a **"Tawag"** call button
   (phone dialer — the driver sees the number before calling).
 - **Kita**: earnings list with a date filter (default: today) and plate
-  filter; add manual Kita / Bayad / Bawas entries.
+  filter; add manual Kita / Bayad / Multa entries.
 
 ### Admin — tabs: Home | Pila | Insidente | Mga Ulat | Profile
 - **Home**: daily dashboard (income, incidents, drivers, jeeps,

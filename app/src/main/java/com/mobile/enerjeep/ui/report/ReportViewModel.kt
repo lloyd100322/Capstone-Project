@@ -66,7 +66,14 @@ data class DonasyonItem(
     val amount: Double,
     val date: String,
     val source: String,
-    val note: String
+    val note: String,
+    /**
+     * "donate" = idinagdag sa pondo (boluntaryo, kahit kanino).
+     * "gamit"  = ibinawas mula sa pondo (ginamit ng kooperatiba).
+     * Ang donasyon ay HIWALAY sa kita - hindi ito binabawas sa
+     * sinumang driver o miyembro.
+     */
+    val type: String = "donate"
 )
 
 sealed interface ReportUiState {
@@ -533,14 +540,21 @@ class ReportViewModel @Inject constructor(
 
         val donasyonNgayon =
             currentDonasyon.sumOf {
-                it.amount
+                if (it.type == "gamit") -it.amount else it.amount
             }
 
+        /*
+         * Ang "kabuuang donasyon" ay ang NATITIRANG PONDO:
+         * nakalap (donate) minus ang nagamit (gamit). Hindi lang
+         * pataas nang pataas - pwedeng bumaba kapag may ginamit.
+         */
         val kabuuangDonasyon =
             donationDocs.sumOf {
-                it.getDouble(
-                    "amount"
-                ) ?: 0.0
+                val amount =
+                    (it.get("amount") as? Number)?.toDouble() ?: 0.0
+                val type =
+                    it.getString("type")?.lowercase() ?: "donate"
+                if (type == "gamit") -amount else amount
             }
 
         _uiState.value =
@@ -599,6 +613,9 @@ class ReportViewModel @Inject constructor(
             )
     }
 
+    /** Ang donasyon (dagdag/gamit) ay superadmin lang ang humahawak. */
+    fun isSuperadmin(): Boolean = userSession.isSuperadmin()
+
     fun addDonasyon(
         donasyon: DonasyonItem
     ) {
@@ -632,6 +649,10 @@ class ReportViewModel @Inject constructor(
                 "isHistory" to
                         false,
 
+                "type" to
+                        if (donasyon.type == "gamit") "gamit"
+                        else "donate",
+
                 "createdAt" to
                         FieldValue
                             .serverTimestamp()
@@ -653,38 +674,15 @@ class ReportViewModel @Inject constructor(
                 com.mobile.enerjeep.data.ActivityLogger.log(
                     firestore,
                     userSession,
-                    "Donasyon",
+                    if (donasyon.type == "gamit") "Gamit ng Donasyon" else "Donasyon",
                     "₱" + donasyon.amount.toString()
                 )
 
                 /*
-                 * Fase 8: ang donasyon ay "Bawas" - may katumbas na
-                 * record sa kita collection (type "Bawas") para
-                 * ibinabawas ito sa malinis na kita. Deterministic ang id
-                 * para hindi doble kapag inulit.
+                 * Ang donasyon ay HIWALAY sa kita - boluntaryo ito at
+                 * hindi kailanman binabawas sa kita ng sinuman (lalo na
+                 * ng driver). Walang katumbas na record sa "kita".
                  */
-                val bawasId = "bawas_$id"
-                firestore
-                    .collection(
-                        com.mobile.enerjeep.data.FirestoreCollections
-                            .KITA
-                    )
-                    .document(bawasId)
-                    .set(
-                        mapOf(
-                            "id" to bawasId,
-                            "title" to "Donasyon • " +
-                                    donasyon.donor.trim(),
-                            "amount" to donasyon.amount,
-                            "type" to "Bawas",
-                            "date" to donasyon.date,
-                            "isHistory" to false,
-                            "sourceId" to id,
-                            "createdAt" to FieldValue
-                                .serverTimestamp()
-                        )
-                    )
-                    .await()
 
             } catch (e: Exception) {
 
@@ -830,7 +828,15 @@ class ReportViewModel @Inject constructor(
                     .getString(
                         "note"
                     )
-                    .orEmpty()
+                    .orEmpty(),
+
+            type =
+                document
+                    .getString(
+                        "type"
+                    )
+                    ?.lowercase()
+                    ?: "donate"
         )
     }
 

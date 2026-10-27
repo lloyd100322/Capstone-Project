@@ -85,8 +85,6 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                 SummaryMoneyRow("Bayad", totals.bayad)
                 Spacer(Modifier.height(8.dp))
                 SummaryMoneyRow("Multa", totals.multa)
-                Spacer(Modifier.height(8.dp))
-                SummaryMoneyRow("Donasyon (Bawas)", totals.bawas)
             }
         }
         Spacer(Modifier.height(24.dp))

@@ -278,14 +278,25 @@ class HomeViewModel @Inject constructor(
                 _totalDonasyon.value =
                     snapshot.documents.sumOf {
                         document ->
-                        (
-                                document.get(
-                                    "amount"
+                        val amount =
+                            (
+                                    document.get(
+                                        "amount"
+                                    )
+                                        as? Number
                                 )
-                                    as? Number
-                            )
                                 ?.toDouble()
                                 ?: 0.0
+                        val type =
+                            document
+                                .getString("type")
+                                ?.lowercase()
+                                ?: "donate"
+                        /*
+                         * Ang card ay nagpapakita ng NATITIRANG pondo:
+                         * nakalap (donate) minus nagamit (gamit).
+                         */
+                        if (type == "gamit") -amount else amount
                     }
             }
     }

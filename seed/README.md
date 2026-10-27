@@ -13,7 +13,7 @@ working immediately, without manual data entry.
 | `queue` | 5 pila sa **Marilao – Monumento**, 1 dispatched (#1 ng **Monumento – Marilao**), 1 completed (Kasaysayan), 1 Nakansela |
 | `incidents` | 2 bukas + 2 naayos (may multa ang isa) — mga lugar sa Monumento/Marilao |
 | `kita` + `ledger` | Pamasahe/Diesel/Multa/Bawas records + dispatch ledger (3 araw) |
-| `donations` | 3 donations |
+| `donations` | 5 entries (3 donate, 2 gamit - fund up/down) |
 | `settings` | `deductionTiers` (16→₱32, 22→₱44) + `queueRotation` (cutoffHour 21) |
 | `emergencyContacts` | 911 + 2 lokal na contact |
 | `activityLogs` | 5 audit entries |
