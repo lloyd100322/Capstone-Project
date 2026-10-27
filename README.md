@@ -14,6 +14,8 @@ The app has **three roles**: **Driver**, **Admin** (daily operator), and
   their justification (user levels, dynamic settings, security model)
 - [`docs/SCOPE-AND-LIMITATIONS.md`](docs/SCOPE-AND-LIMITATIONS.md) —
   what the system covers and what it deliberately does not
+- [`docs/TESTING.md`](docs/TESTING.md) — how to share the APK with
+  group testers (no cable needed) + test accounts and OTP setup
 - [`seed/README.md`](seed/README.md) — realistic demo data (accounts,
   queue, incidents, earnings) for presentations
 
