@@ -392,7 +392,7 @@ fun YearlyIncomeRow(data: YearlyIncome) {
 fun IncomeHistoryCard(history: IncomeHistory) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text(history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(2.dp)); Text(history.driverName, fontSize = 14.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text("Neto: ${formatCurrency(history.netAmount).replace(".00", "")}", fontSize = 14.sp, color = Color.Gray) }
+            Column(Modifier.weight(1f)) { Text(history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(2.dp)); Text(history.driverName, fontSize = 14.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text("Malinis na Kita: ${formatCurrency(history.netAmount).replace(".00", "")}", fontSize = 14.sp, color = Color.Gray) }
             Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(history.grossAmount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 18.sp); Spacer(Modifier.height(4.dp)); Text(history.date, fontSize = 12.sp, color = Color.Gray) }
         }
     }
@@ -434,7 +434,7 @@ fun AddDonasyonFormContent(onCancel: () -> Unit, onSubmit: (DonasyonItem) -> Uni
     val today = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date()); var date by remember { mutableStateOf(today) }
     Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 32.dp)) {
         Text("Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
-        Text("Ang donasyon ay itinatala bilang BAWAS sa netong kita.", fontSize = 12.sp, color = Color.Gray); Spacer(Modifier.height(12.dp))
+        Text("Ang donasyon ay itinatala bilang BAWAS sa malinis na kita.", fontSize = 12.sp, color = Color.Gray); Spacer(Modifier.height(12.dp))
         Text("Donor", fontWeight = FontWeight.Medium); OutlinedTextField(donor, { donor = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Pangalan ng donor") })
         Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) { Text("Halaga (Bawas sa kita)", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }

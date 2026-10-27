@@ -58,7 +58,7 @@ object KitaHistory {
         val kita: Double = 0.0,
         val bayad: Double = 0.0,
         val multa: Double = 0.0,
-        // Fase 8: ang donasyon ay "Bawas" - ibinabawas sa netong kita.
+        // Fase 8: ang donasyon ay "Bawas" - ibinabawas sa malinis na kita.
         val bawas: Double = 0.0
     ) {
         val net: Double get() = kita - (bayad + multa + bawas)
@@ -86,7 +86,7 @@ object KitaHistory {
             }
             .sumOf { it.amount }
 
-        // Fase 8: donasyon = "Bawas" (deduction sa netong kita).
+        // Fase 8: donasyon = "Bawas" (deduction sa malinis na kita).
         val bawas = records
             .filter {
                 it.type.equals("Bawas", ignoreCase = true) ||

@@ -6,7 +6,7 @@ import java.util.Locale
 /**
  * Pure helpers for the two numbers on the admin dashboard.
  *
- * The dashboard card "Kabuuang Benta" shows how much money the cooperative
+ * The dashboard card "Kabuuang Kita" shows how much money the cooperative
  * collected, and the card "Insidente" shows how many incidents are still
  * open. Both numbers used to be written by hand in the screen (a peso sign
  * with a zero, and a zero), so they never changed. They are built here from
@@ -38,7 +38,7 @@ object DashboardSummary {
         entry.netAmount ?: entry.amount ?: 0.0
 
     /**
-     * "Kabuuang Benta": the sum of every collection of the ledger.
+     * "Kabuuang Kita": the sum of every collection of the ledger.
      */
     fun totalSales(entries: List<DashboardLedgerEntry>): Double =
         entries.sumOf { amount(it) }

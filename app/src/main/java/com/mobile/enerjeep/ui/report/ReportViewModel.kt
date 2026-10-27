@@ -660,7 +660,7 @@ class ReportViewModel @Inject constructor(
                 /*
                  * Fase 8: ang donasyon ay "Bawas" - may katumbas na
                  * record sa kita collection (type "Bawas") para
-                 * ibinabawas ito sa netong kita. Deterministic ang id
+                 * ibinabawas ito sa malinis na kita. Deterministic ang id
                  * para hindi doble kapag inulit.
                  */
                 val bawasId = "bawas_$id"

@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.ActivityLogger
@@ -23,7 +22,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -126,6 +124,24 @@ class QueueViewModel @Inject constructor(
 
         fun sameRoute(a: String?, b: String?): Boolean =
             routeKey(a) == routeKey(b)
+
+        /**
+         * Active = nasa pang-araw-araw na pila ("Nakapila", kasama ang
+         * naka-flag na "cancelled" - hiwalay ang flag sa status). Ang
+         * dispatched/cancelled/completed/resolved ay history na.
+         */
+        fun isActiveStatus(
+            status: String?
+        ): Boolean {
+            return when (status?.lowercase(Locale.ROOT)) {
+                "dispatched",
+                "cancelled",
+                "completed",
+                "resolved" -> false
+
+                else -> true
+            }
+        }
 
         /**
          * The route going BACK. A dispatched driver enters the pila of
@@ -240,32 +256,18 @@ class QueueViewModel @Inject constructor(
         rotationWatch = viewModelScope.launch {
             while (isActive) {
                 try {
-                    val rotated = rotateQueueIfNeeded(force = false)
-                    if (rotated) {
+                    val result = QueueRotation.rotateOnce(firestore)
+                    cutoffHour = result.cutoffHour
+                    _cutoffLabel.value = formatCutoffHour(result.cutoffHour)
+                    if (result.rotated) {
                         onQueueRotated()
                     }
                 } catch (_: Exception) {
                     // Best effort - susubukan ulit sa susunod na tikso.
                 }
-                delay(millisUntilNextCutoff())
+                delay(QueueRotation.millisUntilNextCutoff(cutoffHour))
             }
         }
-    }
-
-    /** Millis hanggang sa susunod na cut-off hour (hindi bababa sa 1 minuto). */
-    private fun millisUntilNextCutoff(): Long {
-        val now = Calendar.getInstance()
-        val next = (now.clone() as Calendar).apply {
-            set(Calendar.HOUR_OF_DAY, cutoffHour)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            if (!after(now)) {
-                add(Calendar.DAY_OF_MONTH, 1)
-            }
-        }
-        return (next.timeInMillis - now.timeInMillis)
-            .coerceAtLeast(60_000L)
     }
 
     private fun onQueueRotated() {
@@ -1201,113 +1203,33 @@ class QueueViewModel @Inject constructor(
      * AWTOMATIKO ang reset tuwing cut-off hour (default 9:00 PM / 21:00,
      * settable ng superadmin sa Settings) - hindi ito manual (tinanggal
      * ang "I-reset Ngayon"). Ang rotation: ang #1 ngayon ay huli na
-     * bukas at ang kasunod ang mauuna. Ang unang tseke ay tuwing
-     * binubuksan ang queue tab (catch-up), tapos may timer na nagre-reset
-     * mismo sa oras ng cut-off.
+     * bukas at ang kasunod ang mauuna.
+     *
+     * Ang aktwal na engine ay nasa QueueRotation (shared) - tumatakbo
+     * ito HINDI lang sa Pila tab kundi pati agad sa pag-login ng admin
+     * o superadmin (tingnan ang ContentViewModel). Kaya kahit hindi
+     * superadmin ang naka-login at kahit anong screen ang bukas, nagre-
+     * reset ang pila sa tamang oras.
      */
 
     private fun rotationMetaReference() =
-        firestore
-            .collection(FirestoreCollections.SETTINGS)
-            .document("queueRotation")
-
-    /**
-     * The queue "day" flips at the cut-off hour (default 21:00) - after
-     * the cut-off the queue already belongs to the next operating day.
-     */
-    fun queueDayId(
-        now: Date = Date(),
-        cutoffHour: Int = CUTOFF_HOUR
-    ): String {
-        val calendar = Calendar.getInstance()
-        calendar.time = now
-        if (calendar.get(Calendar.HOUR_OF_DAY) >= cutoffHour) {
-            calendar.add(Calendar.DAY_OF_MONTH, 1)
-        }
-        return SimpleDateFormat(
-            "yyyyMMdd",
-            Locale.US
-        ).format(calendar.time)
-    }
+        QueueRotation.metaReference(firestore)
 
     /** Automatic check - runs whenever the queue opens (catch-up). */
     private fun maybeRotateQueue() {
         if (!userSession.isAdmin()) return
         viewModelScope.launch {
             try {
-                val rotated = rotateQueueIfNeeded(force = false)
-                if (rotated) {
+                val result = QueueRotation.rotateOnce(firestore)
+                cutoffHour = result.cutoffHour
+                _cutoffLabel.value = formatCutoffHour(result.cutoffHour)
+                if (result.rotated) {
                     onQueueRotated()
                 }
             } catch (_: Exception) {
                 // Best effort - susubukan ulit sa susunod na tikso.
             }
         }
-    }
-
-    private suspend fun rotateQueueIfNeeded(force: Boolean): Boolean {
-        val queueSnapshot = firestore
-            .collection(FirestoreCollections.QUEUE)
-            .get()
-            .await()
-
-        return firestore.runTransaction { transaction ->
-            val metaReference = rotationMetaReference()
-            val meta = transaction.get(metaReference)
-            val lastReset = meta.getString("lastQueueDay")
-
-            // Ang cut-off hour ay settable ng superadmin (default 21 = 9 PM).
-            val hour = (meta.getLong("cutoffHour")?.toInt() ?: CUTOFF_HOUR)
-                .coerceIn(0, 23)
-            cutoffHour = hour
-            _cutoffLabel.value = formatCutoffHour(hour)
-
-            val today = queueDayId(Date(), hour)
-
-            if (!force && lastReset == today) {
-                return@runTransaction false
-            }
-
-            listOf(ROUTE_MA, ROUTE_AM).forEach { route ->
-                val active = queueSnapshot.documents
-                    .filter {
-                        isActiveStatus(it.getString("status")) &&
-                                it.getBoolean("isCancelled") != true &&
-                                sameRoute(it.getString("route"), route)
-                    }
-                    .sortedBy {
-                        it.getLong("position") ?: Long.MAX_VALUE
-                    }
-
-                if (active.size > 1) {
-                    /*
-                     * Rotation: today's first goes to the last spot,
-                     * everyone else moves up one position.
-                     */
-                    val rotated = active.drop(1) + active.first()
-                    rotated.forEachIndexed { index, document ->
-                        transaction.update(
-                            document.reference,
-                            mapOf(
-                                "position" to index + 1,
-                                "updatedAt" to
-                                        FieldValue.serverTimestamp()
-                            )
-                        )
-                    }
-                }
-            }
-
-            transaction.set(
-                metaReference,
-                mapOf(
-                    "lastQueueDay" to today,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                ),
-                SetOptions.merge()
-            )
-            true
-        }.await()
     }
 
     /**
@@ -1403,19 +1325,6 @@ class QueueViewModel @Inject constructor(
                     e.message ?: "Hindi matapos ang biyahe."
                 )
             }
-        }
-    }
-
-    private fun isActiveStatus(
-        status: String?
-    ): Boolean {
-        return when (status?.lowercase(Locale.ROOT)) {
-            "dispatched",
-            "cancelled",
-            "completed",
-            "resolved" -> false
-
-            else -> true
         }
     }
 

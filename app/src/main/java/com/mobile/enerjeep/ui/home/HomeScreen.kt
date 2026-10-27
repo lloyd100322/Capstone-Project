@@ -367,7 +367,7 @@ fun HomeContent(
              */
             SummaryCard(
                 modifier = Modifier.weight(1f),
-                title = "Kabuuang Benta",
+                title = "Kabuuang Kita",
                 value = DashboardSummary.formatPeso(totalSales),
                 icon = {
                     SalesIcon(

@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Checks the two numbers of the admin dashboard:
  *
- *  - "Kabuuang Benta" adds up the collections of the ledger
+ *  - "Kabuuang Kita" adds up the collections of the ledger
  *  - "Insidente" counts the incidents that are still open
  */
 class DashboardSummaryTest {

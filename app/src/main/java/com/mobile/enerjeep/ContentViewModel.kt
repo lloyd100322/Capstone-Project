@@ -9,9 +9,13 @@ import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.navigation.Screen
+import com.mobile.enerjeep.ui.components.ToastFeedback
+import com.mobile.enerjeep.ui.queue.QueueRotation
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -35,6 +39,36 @@ class ContentViewModel @Inject constructor(
     /** Re-runs the session check (used by the retry button). */
     fun retry() {
         checkSession()
+    }
+
+    private var rotationWatchStarted = false
+
+    /**
+     * Catch-up ng awtomatikong reset agad sa pag-login, tapos isang
+     * watch habang naka-bukas ang app. Idempotent (isang beses lang
+     * bawat session).
+     */
+    private fun startQueueRotation() {
+        if (rotationWatchStarted) return
+        rotationWatchStarted = true
+
+        viewModelScope.launch {
+            while (isActive) {
+                val hour = try {
+                    val result = QueueRotation.rotateOnce(firestore)
+                    if (result.rotated) {
+                        ToastFeedback.show(
+                            "Na-reset na ang pila: ang dating #1 ay nasa huli na."
+                        )
+                    }
+                    result.cutoffHour
+                } catch (_: Exception) {
+                    // Best effort - susubukan sa susunod na tikso.
+                    QueueRotation.CUTOFF_HOUR
+                }
+                delay(QueueRotation.millisUntilNextCutoff(hour))
+            }
+        }
     }
 
     private fun checkSession() {
@@ -93,6 +127,18 @@ class ContentViewModel @Inject constructor(
                     )
                     
                     userSession.setUser(profile)
+
+                    /*
+                     * AWTOMATIKONG RESET NG PILA - tumatakbo AGAD sa
+                     * pag-login ng admin/superadmin (kahit hindi sa Pila
+                     * screen at kahit ADMIN lang ang naka-login). May
+                     * watch din habang naka-bukas ang app kaya nagre-reset
+                     * ito kahit nasa Home lang ang user.
+                     */
+                    if (matchedRole != UserRole.Driver) {
+                        startQueueRotation()
+                    }
+
                     _authState.value = AppAuthState.Authenticated(Screen.Home)
                 } else {
                     // Profile missing in Firestore, force re-login

@@ -850,7 +850,7 @@ fun DispatchCollectionContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = "Neto", color = Color.Gray)
+            Text(text = "Malinis na Kita", color = Color.Gray)
             Text(text = "₱${netValue.toInt()}", fontWeight = FontWeight.Bold, color = EnerjeepBlue)
         }
 

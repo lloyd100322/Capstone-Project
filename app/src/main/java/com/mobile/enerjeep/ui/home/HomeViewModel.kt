@@ -40,7 +40,7 @@ class HomeViewModel @Inject constructor(
         _totalJeepsCount.asStateFlow()
 
     /*
-     * "Kabuuang Benta" of the dashboard: the sum of every collection that
+     * "Kabuuang Kita" of the dashboard: the sum of every collection that
      * was recorded in the ledger. It used to be a hardcoded "₱0" in the
      * screen, so the card never showed anything.
      */
@@ -63,7 +63,7 @@ class HomeViewModel @Inject constructor(
 
     /*
      * "Donasyon" ng dashboard: kabuuang halaga ng lahat ng donasyon
-     * na naitala. Kapareho ng "Kabuuang Benta" - clickable ang card at
+     * na naitala. Kapareho ng "Kabuuang Kita" - clickable ang card at
      * dumidiretso sa mismong Donasyon screen (hindi lang sa Mga Ulat).
      */
     private val _totalDonasyon =

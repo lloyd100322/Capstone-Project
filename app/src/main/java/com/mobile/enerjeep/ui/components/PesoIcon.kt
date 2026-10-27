@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
  *  guhit/canvas. Baguhin lang ang mga halaga sa ibaba at AWTOMATIKONG
  *  mag-iiba ang peso sign SA LAHAT NG LUGAR:
  *
- *    - Admin dashboard  ("Kabuuang Benta" card)
+ *    - Admin dashboard  ("Kabuuang Kita" card)
  *    - Kita tab ng driver (bottom navigation)
  *    - Dispatch collection form  (Kita / Other Fees)
  *    - Ledger "+ Idagdag"  (Halaga)

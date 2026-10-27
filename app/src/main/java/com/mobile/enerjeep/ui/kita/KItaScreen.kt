@@ -31,7 +31,15 @@ import com.mobile.enerjeep.ui.theme.LightGrayBackground
 @Composable
 fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
+    /*
+     * Default: "Lahat ng petsa" - laging nakikita ang BUONG records ng
+     * driver. (Dati ay "Ngayon" ang default kaya pagkalipas ng araw ay
+     * "nawawala" ang kita sa listahan - akala ng driver ay nabura.)
+     * Pwede pa ring piliin ang "Ngayon" sa date filter.
+     */
+    var historyFilter by remember {
+        mutableStateOf(HistoryFilterState(period = HistoryPeriod.ALL))
+    }
     // Fase 5: plate filter (kapalit ng nawalang search box)
     var plateFilter by remember { mutableStateOf("") }
     // Make sure the listeners belong to the driver who is signed in right now.
@@ -66,7 +74,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(24.dp))
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(20.dp)) {
-                Text(if (historyFilter.period == HistoryPeriod.TODAY) "Netong Kita Ngayon" else "Netong Kita", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
+                Text(if (historyFilter.period == HistoryPeriod.TODAY) "Malinis na Kita Ngayon" else "Malinis na Kita", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
                 Spacer(Modifier.height(4.dp))
                 Text("₱${String.format("%,.0f", totals.net)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
@@ -147,7 +155,14 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(16.dp))
         if (finalRecords.isEmpty()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text(if (historyFilter.period == HistoryPeriod.TODAY) "Wala pang kita ngayon." else "Walang record sa napiling filter.", color = Color.Gray, fontSize = 14.sp)
+                Text(
+                    if (historyFilter.period == HistoryPeriod.TODAY)
+                        "Wala pang kita ngayon. Piliin ang \"Lahat ng petsa\" para makita ang nakaraang kita."
+                    else
+                        "Walang record sa napiling filter.",
+                    color = Color.Gray,
+                    fontSize = 14.sp
+                )
             }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {

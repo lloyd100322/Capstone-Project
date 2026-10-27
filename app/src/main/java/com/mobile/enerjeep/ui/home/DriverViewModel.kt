@@ -66,7 +66,7 @@ data class DriverDashboardUiState(
     // "Tapos Na Bumyahe": tapos na ang biyahe NGAYON - pula ang button
     // at lalabas sa ibaba ang buong kita sa araw.
     val travelEndedToday: Boolean = false,
-    // Buong kita ng driver sa buong araw (neto, gaya ng Kita tab).
+    // Buong kita ng driver sa buong araw (malinis na kita, gaya ng Kita tab).
     // Null habang hindi pa naloload.
     val dailyEarnings: Double? = null
 )
@@ -388,8 +388,8 @@ class DriverViewModel @Inject constructor(
     }
 
     /**
-     * Buong kita ng driver sa buong araw (neto - kapareho ng "Netong
-     * Kita Ngayon" sa Kita tab). Ipinapakita sa ibaba ng "Tapos Na
+     * Buong kita ng driver sa buong araw (malinis na kita - kapareho ng
+     * "Malinis na Kita Ngayon" sa Kita tab). Ipinapakita sa ibaba ng "Tapos Na
      * Bumyahe" button para hindi na kailangang pumunta sa Kita tab.
      */
     private fun loadDailyEarnings() {
