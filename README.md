@@ -9,6 +9,14 @@ donations, and an emergency contact system. Data is stored in
 The app has **three roles**: **Driver**, **Admin** (daily operator), and
 **Superadmin** (full package).
 
+**Project documentation**
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design decisions and
+  their justification (user levels, dynamic settings, security model)
+- [`docs/SCOPE-AND-LIMITATIONS.md`](docs/SCOPE-AND-LIMITATIONS.md) —
+  what the system covers and what it deliberately does not
+- [`seed/README.md`](seed/README.md) — realistic demo data (accounts,
+  queue, incidents, earnings) for presentations
+
 ---
 
 ## Tech stack
@@ -180,6 +188,8 @@ app/src/main/java/com/mobile/enerjeep/
 └── MainActivity.kt
 functions/           # Cloud Function (delete Auth user on account delete)
 firestore.rules      # Firestore security rules (deploy with the CLI)
+docs/                # architecture justification + scope/limitations
+seed/                # realistic demo data (Firestore seed script)
 ```
 
 ### Editing the peso (₱) sign

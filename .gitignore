@@ -15,3 +15,8 @@
 local.properties
 /.idea/
 /.idea/
+
+# Never commit Firebase service-account keys (used by seed/seed.js).
+serviceAccount*.json
+*service-account*.json
+*-serviceAccount*.json
