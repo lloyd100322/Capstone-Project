@@ -20,3 +20,7 @@ local.properties
 serviceAccount*.json
 *service-account*.json
 *-serviceAccount*.json
+
+# Local tooling artifacts (npm) and manual backups
+node_modules/
+*.local-backup
