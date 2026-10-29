@@ -37,6 +37,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 private val ProfileLightGray =
     Color(0xFFF8F9FA)
@@ -494,7 +495,7 @@ fun ProfileMainContent(
                         text =
                             profile.phoneNumber,
                         color =
-                            Color.Gray,
+                            TextSecondary,
                         fontSize =
                             13.sp
                     )
@@ -660,7 +661,7 @@ fun ProfileMainContent(
 
         Text(
             text = "Enerjeep v1.0.0",
-            color = Color.Gray,
+            color = TextSecondary,
             fontSize = 12.sp,
             textAlign = TextAlign.Center,
             modifier =
@@ -1059,7 +1060,7 @@ fun MenuRow(
 
             Text(
                 text = subtitle,
-                color = Color.Gray,
+                color = TextSecondary,
                 fontSize = 12.sp
             )
         }
@@ -1067,7 +1068,7 @@ fun MenuRow(
         Icon(
             Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = Color.LightGray
+            tint = TextSecondary
         )
     }
 }

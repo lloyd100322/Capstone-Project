@@ -26,6 +26,7 @@ import com.mobile.enerjeep.ui.components.HistoryPeriod
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,7 +159,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                         "Wala pang kita ngayon. Piliin ang \"Lahat ng petsa\" para makita ang nakaraang kita."
                     else
                         "Walang record sa napiling filter.",
-                    color = Color.Gray,
+                    color = TextSecondary,
                     fontSize = 14.sp
                 )
             }
@@ -174,7 +175,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                             Column(Modifier.weight(1f)) {
                                 Text(record.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
                                 Spacer(Modifier.height(2.dp))
-                                Text(record.date, fontSize = 12.sp, color = Color.Gray)
+                                Text(record.date, fontSize = 12.sp, color = TextSecondary)
                             }
                             Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (record.type == "Kita") Color(0xFF10B981) else Color(0xFFEF4444))
                         }

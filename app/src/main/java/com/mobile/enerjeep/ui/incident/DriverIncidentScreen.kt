@@ -35,6 +35,8 @@ import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.WarningOrange
 import com.mobile.enerjeep.ui.theme.WarningOrangeLight
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import android.content.Intent
 import android.net.Uri
 
@@ -69,9 +71,9 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(
             value = uiState.searchQuery, onValueChange = viewModel::onSearchQueryChanged, modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon", color = Color.Gray, fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) }, shape = RoundedCornerShape(24.dp), singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, unfocusedBorderColor = Color.LightGray, focusedBorderColor = EnerjeepBlue)
+            placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon", color = TextSecondary, fontSize = 14.sp) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) }, shape = RoundedCornerShape(24.dp), singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue)
         )
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -89,7 +91,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
                 CircularProgressIndicator(color = EnerjeepBlue)
             }
         } else if (visibleIncidents.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = Color.Gray, fontSize = 14.sp) }
+            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = TextSecondary, fontSize = 14.sp) }
         } else {
             /*
              * Buong page ang scrollable (hindi lang ang listahan) kaya
@@ -115,7 +117,7 @@ fun IncidentSummaryCard(modifier: Modifier = Modifier, count: Int, label: String
             Column(Modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
                 Surface(shape = RoundedCornerShape(8.dp), color = iconColor.copy(alpha = .1f), modifier = Modifier.size(32.dp)) { Box(contentAlignment = Alignment.Center) { icon() } }
                 Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Bottom) { Text(count.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black); Spacer(Modifier.width(8.dp)); Text(label, fontSize = 14.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 3.dp)) }
+                Row(verticalAlignment = Alignment.Bottom) { Text(count.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black); Spacer(Modifier.width(8.dp)); Text(label, fontSize = 14.sp, color = TextSecondary, modifier = Modifier.padding(bottom = 3.dp)) }
             }
         }
     }
@@ -123,8 +125,8 @@ fun IncidentSummaryCard(modifier: Modifier = Modifier, count: Int, label: String
 
 @Composable
 fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(modifier.height(40.dp).clickable(onClick = onClick), shape = RoundedCornerShape(20.dp), color = if (isSelected) Color.White else Color.Transparent, border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)) {
-        Box(contentAlignment = Alignment.Center) { Text(text, color = if (isSelected) Color.Black else Color.Gray, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp) }
+    Surface(modifier.height(40.dp).clickable(onClick = onClick), shape = RoundedCornerShape(20.dp), color = if (isSelected) Color.White else Color.Transparent, border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor)) {
+        Box(contentAlignment = Alignment.Center) { Text(text, color = if (isSelected) Color.Black else TextSecondary, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp) }
     }
 }
 
@@ -145,17 +147,17 @@ fun DriverIncidentCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     Text(incident.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
-                    Spacer(Modifier.height(2.dp)); Text(incident.plateNumber, fontSize = 14.sp, color = Color.Gray)
+                    Spacer(Modifier.height(2.dp)); Text(incident.plateNumber, fontSize = 14.sp, color = TextSecondary)
                     if (incident.location.isNotBlank()) {
                         Spacer(Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.LocationOn, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text(incident.location, fontSize = 14.sp, color = Color.Gray)
+                            Text(incident.location, fontSize = 14.sp, color = TextSecondary)
                         }
                     }
-                    Spacer(Modifier.height(2.dp)); Text(incident.description, fontSize = 14.sp, color = Color.Gray)
-                    Spacer(Modifier.height(6.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.AccessTime, null, tint = Color.Gray, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text(incident.date, fontSize = 12.sp, color = Color.Gray) }
+                    Spacer(Modifier.height(2.dp)); Text(incident.description, fontSize = 14.sp, color = TextSecondary)
+                    Spacer(Modifier.height(6.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text(incident.date, fontSize = 12.sp, color = TextSecondary) }
                 }
                 Surface(color = if (incident.isResolved) SuccessGreen.copy(alpha = .1f) else WarningOrangeLight, shape = RoundedCornerShape(8.dp)) {
                     Text(if (incident.isResolved) "Naayos" else "Di-naayos", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)

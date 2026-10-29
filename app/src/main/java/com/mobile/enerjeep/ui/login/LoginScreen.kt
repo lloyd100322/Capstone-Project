@@ -34,6 +34,7 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 
 @Composable
@@ -222,7 +223,7 @@ fun LoginScreen(
                             Text(
                                 text = "+63",
                                 fontSize = 16.sp,
-                                color = Color.Gray
+                                color = TextSecondary
                             )
 
                             Box(
@@ -243,7 +244,7 @@ fun LoginScreen(
                                 placeholder = {
                                     Text(
                                         "9XXXXXXXXX",
-                                        color = Color.LightGray
+                                        color = TextSecondary
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -365,7 +366,7 @@ fun LoginScreen(
                             placeholder = {
                                 Text(
                                     "XXXXXX",
-                                    color = Color.LightGray
+                                    color = TextSecondary
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -412,7 +413,7 @@ fun LoginScreen(
                             Text(
                                 text = "Maaari muling magpadala sa " +
                                         "${resendCooldownSeconds}s",
-                                color = Color.Gray,
+                                color = TextSecondary,
                                 fontSize = 12.sp
                             )
                         }

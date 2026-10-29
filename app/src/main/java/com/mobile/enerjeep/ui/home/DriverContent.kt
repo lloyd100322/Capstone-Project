@@ -28,6 +28,7 @@ import com.mobile.enerjeep.R
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.ui.incident.DriverIncidentScreen
 import com.mobile.enerjeep.ui.kita.KitaScreen
@@ -113,12 +114,12 @@ fun DriverContent(
                         showIncidentForm = false
                     },
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home", fontSize = 10.sp) },
+                    label = { Text("Home", fontSize = 12.sp) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = EnerjeepBlue,
                         selectedTextColor = EnerjeepBlue,
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
                         indicatorColor = Color.Transparent
                     )
                 )
@@ -126,7 +127,7 @@ fun DriverContent(
                     selected = selectedTab == DriverTab.Insidente,
                     onClick = { selectedTab = DriverTab.Insidente },
                     icon = { WarningIcon(modifier = Modifier.size(24.dp)) },
-                    label = { Text("Insidente", fontSize = 10.sp) }
+                    label = { Text("Insidente", fontSize = 12.sp) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Kita,
@@ -134,8 +135,8 @@ fun DriverContent(
                         selectedTab = DriverTab.Kita
                         showIncidentForm = false
                     },
-                    icon = { SalesIcon(size = 24.dp, color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else Color.Gray) },
-                    label = { Text("Kita", fontSize = 10.sp) }
+                    icon = { SalesIcon(size = 24.dp, color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else TextSecondary) },
+                    label = { Text("Kita", fontSize = 12.sp) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Profile,
@@ -144,12 +145,12 @@ fun DriverContent(
                         showIncidentForm = false
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("Profile", fontSize = 10.sp) },
+                    label = { Text("Profile", fontSize = 12.sp) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = EnerjeepBlue,
                         selectedTextColor = EnerjeepBlue,
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
                         indicatorColor = Color.Transparent
                     )
                 )
@@ -364,7 +365,7 @@ fun DriverDashboardContent(
         Text(
             text = "Narito ang iyong pila at status ngayon.",
             fontSize = 16.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -594,7 +595,7 @@ fun DriverDashboardContent(
                                 ).filter { it.isNotBlank() }
                                     .joinToString(" • "),
                                 fontSize = 14.sp,
-                                color = Color.Gray,
+                                color = TextSecondary,
                                 modifier = Modifier.weight(1f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -679,7 +680,7 @@ fun DriverDashboardContent(
                                 text = "Plaka " + (activeIncidentPlate?.takeIf { it.isNotBlank() }
                                     ?: plateNumber),
                                 fontSize = 13.sp,
-                                color = Color.Gray,
+                                color = TextSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -688,14 +689,14 @@ fun DriverDashboardContent(
                                 Icon(
                                     imageVector = Icons.Default.AccessTime,
                                     contentDescription = null,
-                                    tint = Color.Gray,
+                                    tint = TextSecondary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = activeIncidentDate ?: "",
                                     fontSize = 12.sp,
-                                    color = Color.Gray,
+                                    color = TextSecondary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -803,7 +804,7 @@ fun DriverDashboardContent(
                         Text(
                             text = "Buong Kita Ngayon",
                             fontSize = 14.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -892,7 +893,7 @@ fun DispatchAlertsSheet(
             if (alerts.isEmpty()) {
                 Text(
                     "Wala pang alerto. Ipapakita dito kapag na-dispatch ka.",
-                    color = Color.Gray,
+                    color = TextSecondary,
                     fontSize = 14.sp
                 )
             } else {
@@ -931,7 +932,7 @@ fun DispatchAlertsSheet(
                                 Text(
                                     alert.time,
                                     fontSize = 11.sp,
-                                    color = Color.Gray
+                                    color = TextSecondary
                                 )
                             }
                         }

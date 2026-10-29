@@ -29,6 +29,7 @@ import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.ledger.LedgerViewModel
 import com.mobile.enerjeep.ui.ledger.TerminalFeeFormContent
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
@@ -95,7 +96,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                     Spacer(Modifier.height(24.dp))
                     if (selectedTab == 0) {
                         val incidents = state.activeIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
-                        if (incidents.isEmpty()) Text("Walang insidenteng hindi pa naayos.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
+                        if (incidents.isEmpty()) Text("Walang insidenteng hindi pa naayos.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(48.dp))
                         else incidents.forEach { incident ->
                             IncidentItemCard(incident, onViewClick = { selectedIncident = incident }, onMarkResolvedClick = { viewModel.resolveIncident(incident.id) })
                             Spacer(Modifier.height(12.dp))
@@ -114,7 +115,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                             historyFilter,
                             { it.createdAtMillis.takeIf { millis -> millis > 0 } }
                         )
-                        if (incidents.isEmpty()) Text("Walang naayos na insidente sa napiling filter.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(48.dp))
+                        if (incidents.isEmpty()) Text("Walang naayos na insidente sa napiling filter.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(48.dp))
                         else incidents.forEach { incident -> HistoryIncidentItemCard(incident) { selectedIncident = incident }; Spacer(Modifier.height(12.dp)) }
                     }
                 }
@@ -206,7 +207,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         if (driverOptions.isEmpty()) {
             Text(
                 "Walang jeep na may dispatch record. Dispatch muna ang sasakyan bago mag-report ng insidente.",
-                color = Color.Gray,
+                color = TextSecondary,
                 fontSize = 12.sp
             )
         }
@@ -214,7 +215,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         Spacer(Modifier.height(16.dp))
         IncidentFormTextField("Uri ng Insidente", incidentType, { if (!submitted) incidentType = it }, "Ilagay ang uri ng insidente")
         Spacer(Modifier.height(16.dp)); IncidentFormTextField("Lokasyon", location, { if (!submitted) location = it }, "Ilagay ang lokasyon")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(size = 18.dp, color = TextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
         Spacer(Modifier.height(16.dp)); Text("Paglalarawan", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
         OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
         Spacer(Modifier.height(32.dp))
@@ -296,7 +297,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                     TextButton(
                         onClick = { showSendPrompt = false }
                     ) {
-                        Text("Kanselahin", color = Color.Gray)
+                        Text("Kanselahin", color = TextSecondary)
                     }
                 }
             }
@@ -306,14 +307,14 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
 
 @Composable
 fun IncidentStatCard(modifier: Modifier = Modifier, title: String, value: String, icon: @Composable () -> Unit) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(16.dp)) { icon(); Spacer(Modifier.height(12.dp)); Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(title, fontSize = 12.sp, color = Color.Gray) } }
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(16.dp)) { icon(); Spacer(Modifier.height(12.dp)); Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(title, fontSize = 12.sp, color = TextSecondary) } }
 }
 
 @Composable
 fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkResolvedClick: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(20.dp)) {
-            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = Color.Gray); Text(incident.location, color = Color.Gray); Text(incident.date, color = Color.Gray, fontSize = 12.sp)
+            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.location, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
             Row(Modifier.fillMaxWidth()) { Button(onClick = onMarkResolvedClick, modifier = Modifier.weight(1f)) { Text("Ayusin", maxLines = 1) }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) { Text("Tingnan", maxLines = 1) } }
         }
@@ -324,7 +325,7 @@ fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkReso
 fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(20.dp)) {
-            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = Color.Gray); Text(incident.date, color = Color.Gray, fontSize = 12.sp)
+            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
             // The "Naayos" tab only holds resolved incidents, but the
             // badge still follows the real status of the record.
@@ -404,7 +405,7 @@ fun IncidentDetailsContent(
 }
 
 @Composable
-fun IncidentInfoRow(label: String, value: String) { Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) { Text(label, color = Color.Gray, fontSize = 12.sp); Text(value, fontWeight = FontWeight.Medium) } }
+fun IncidentInfoRow(label: String, value: String) { Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) { Text(label, color = TextSecondary, fontSize = 12.sp); Text(value, fontWeight = FontWeight.Medium) } }
 
 @Composable
 fun IncidentFormTextField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String, leadingIcon: (@Composable () -> Unit)? = null, keyboardOptions: KeyboardOptions = KeyboardOptions.Default) {

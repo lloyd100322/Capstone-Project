@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 
 
@@ -79,7 +80,7 @@ fun SummaryCard(
                     Text(
                         text = title,
                         fontSize = 14.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
                     if (onClick != null) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -87,7 +88,7 @@ fun SummaryCard(
                             text = "›",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -231,7 +232,7 @@ fun TruckIcon(modifier: Modifier = Modifier, color: Color = Color.Green) {
 }
 
 @Composable
-fun DocumentIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun DocumentIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
@@ -252,7 +253,7 @@ fun DocumentIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
 }
 
 @Composable
-fun ListIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun ListIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height

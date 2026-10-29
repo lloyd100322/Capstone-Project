@@ -34,6 +34,7 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 @Composable
 fun DriverProfileScreen(
@@ -206,7 +207,7 @@ fun DriverProfileMainContent(
                     Text(
                         text = "+63 ${uiState.phone}",
                         fontSize = 14.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
 
                     Spacer(
@@ -288,7 +289,7 @@ fun DriverProfileMainContent(
                             text =
                                 "I-update ang iyong impormasyon",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -297,7 +298,7 @@ fun DriverProfileMainContent(
                     imageVector =
                         Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = TextSecondary
                 )
             }
         }
@@ -358,7 +359,7 @@ fun DriverProfileMainContent(
                             text =
                                 "Password at privacy",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -367,7 +368,7 @@ fun DriverProfileMainContent(
                     imageVector =
                         Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = TextSecondary
                 )
             }
         }
@@ -416,7 +417,7 @@ fun DriverProfileMainContent(
             Text(
                 text = "Enerjeep v1.0.0",
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = TextSecondary
             )
         }
     }
@@ -548,7 +549,7 @@ fun DriverEditProfileContent(
                 Text(
                     text = "Emergency Contact Name",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -579,7 +580,7 @@ fun DriverEditProfileContent(
                 Text(
                     text = "Emergency Contact Number",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -721,7 +722,7 @@ fun DriverSecurityContent(
                     text =
                         "Palitan ang iyong password para sa account security.",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -731,7 +732,7 @@ fun DriverSecurityContent(
                 Text(
                     text = "Lumang Password",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -752,7 +753,7 @@ fun DriverSecurityContent(
                         Icon(
                             Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color.Gray
+                            tint = TextSecondary
                         )
                     }
                 )
@@ -764,7 +765,7 @@ fun DriverSecurityContent(
                 Text(
                     text = "Bagong Password",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -785,7 +786,7 @@ fun DriverSecurityContent(
                         Icon(
                             Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color.Gray
+                            tint = TextSecondary
                         )
                     }
                 )
@@ -797,7 +798,7 @@ fun DriverSecurityContent(
                 Text(
                     text = "Kumpirmahin",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -818,7 +819,7 @@ fun DriverSecurityContent(
                         Icon(
                             Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color.Gray
+                            tint = TextSecondary
                         )
                     }
                 )

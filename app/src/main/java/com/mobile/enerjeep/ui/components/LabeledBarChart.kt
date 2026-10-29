@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 import java.util.Locale
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /*
  * Fase 5: "labeled view-only charts" - mga simpleng bar chart na may
@@ -52,14 +53,14 @@ fun LabeledBarChart(
         ) {
             Column(Modifier.padding(16.dp)) {
                 if (bars.isEmpty()) {
-                    Text("Walang datos.", color = Color.Gray, fontSize = 13.sp)
+                    Text("Walang datos.", color = TextSecondary, fontSize = 13.sp)
                 } else {
                     bars.forEach { (label, amount) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = label,
                                 fontSize = 12.sp,
-                                color = Color.Gray,
+                                color = TextSecondary,
                                 modifier = Modifier.width(88.dp),
                                 maxLines = 1
                             )

@@ -22,6 +22,7 @@ import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /*
  * The SUPERADMIN toolbox screens. Only the superadmin can open these
@@ -57,7 +58,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
             "Ang mga admin dito ang makikita ng mga driver sa Emergency " +
                     "button. Idagdag lang ang mga \"available\" na tatawagan.",
             fontSize = 12.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Spacer(Modifier.height(16.dp))
@@ -80,7 +81,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                     Text(
                         "Walang admin account.",
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
                 } else {
                     var expanded by remember { mutableStateOf(false) }
@@ -147,7 +148,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                 Text(
                     "O maglagay ng ibang numero:",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(
@@ -195,7 +196,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         Spacer(Modifier.height(8.dp))
 
         if (contacts.isEmpty()) {
-            Text("Walang laman ang listahan.", color = Color.Gray)
+            Text("Walang laman ang listahan.", color = TextSecondary)
         } else {
             contacts.forEach { contact ->
                 Card(
@@ -220,7 +221,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                             Text(
                                 contact.number,
                                 fontSize = 12.sp,
-                                color = Color.Gray
+                                color = TextSecondary
                             )
                         }
                         IconButton(
@@ -293,7 +294,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
             "Sino ang gumawa ng bawat aksyon at kailan - para sa " +
                     "accountability. Hindi ito pwedeng baguhin o burahin.",
             fontSize = 12.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Spacer(Modifier.height(16.dp))
@@ -360,11 +361,11 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
         Spacer(Modifier.height(12.dp))
 
         if (logs.isEmpty()) {
-            Text("Wala pang naitatalang aktibidad.", color = Color.Gray)
+            Text("Wala pang naitatalang aktibidad.", color = TextSecondary)
         } else if (visible.isEmpty()) {
             Text(
                 "Walang tugmang talaan sa napiling filter.",
-                color = Color.Gray
+                color = TextSecondary
             )
         } else {
             visible.forEach { log ->
@@ -390,7 +391,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                             Text(
                                 log.time,
                                 fontSize = 10.sp,
-                                color = Color.Gray
+                                color = TextSecondary
                             )
                         }
                         if (log.detail.isNotBlank()) {
@@ -408,7 +409,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                                         ""
                                     },
                             fontSize = 11.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -434,7 +435,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
         Text(
             "Oras ng awtomatikong reset ng pila at bawas kada upuan ng jeep.",
             fontSize = 12.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Spacer(Modifier.height(16.dp))
@@ -451,7 +452,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
                     "Awtomatiko ang reset sa oras na ito. " +
                             "Halimbawa: 9:00 PM. Walang manual na reset.",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
                 Spacer(Modifier.height(8.dp))
                 /*
@@ -525,7 +526,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
                     "Kapag nag-dispatch, ang bawas ay awtomatiko mula sa " +
                             "bilang ng upuan ng jeep.",
                     fontSize = 11.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
                 Spacer(Modifier.height(8.dp))
 

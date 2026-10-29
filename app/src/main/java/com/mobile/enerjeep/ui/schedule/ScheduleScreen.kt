@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 @Composable
 fun ScheduleScreen(
@@ -187,7 +188,7 @@ fun ScheduleScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Kabuuan sa Pila", fontSize = 16.sp, color = Color.Gray)
+                    Text(text = "Kabuuan sa Pila", fontSize = 16.sp, color = TextSecondary)
                     Text(
                         text = uiState.totalInQueue.toString(),
                         fontSize = 16.sp,
@@ -203,7 +204,7 @@ fun ScheduleScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Iyong Posisyon", fontSize = 16.sp, color = Color.Gray)
+                    Text(text = "Iyong Posisyon", fontSize = 16.sp, color = TextSecondary)
                     Text(
                         text = "#${uiState.queuePosition}",
                         fontSize = 16.sp,

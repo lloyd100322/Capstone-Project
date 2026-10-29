@@ -36,6 +36,7 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 val LightGrayBackground = Color(0xFFF8F9FA)
 val EnerjeepBlue = Color(0xFF194287)
@@ -78,7 +79,7 @@ fun ReportScreen(
                     Spacer(Modifier.height(28.dp))
                     Text("Mga Ulat", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
                     Spacer(Modifier.height(4.dp))
-                    Text("Buong estadistika ng kooperatiba sa isang screen.", fontSize = 14.sp, color = Color.Gray)
+                    Text("Buong estadistika ng kooperatiba sa isang screen.", fontSize = 14.sp, color = TextSecondary)
                     Spacer(Modifier.height(28.dp))
                 }
                 item {
@@ -234,7 +235,7 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
         val source = if (selectedTab == 0) currentIncidents else allIncidents
         val searched = source.filter { it.plateNumber.contains(searchQuery, true) || it.title.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
         val list = if (selectedTab == 1) filterHistoryRecords(searched, { it.date }, historyFilter) else searched
-        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang naitalang insidente.", color = Color.Gray) }
+        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang naitalang insidente.", color = TextSecondary) }
         else list.forEach { ReportIncidentCard(it); Spacer(Modifier.height(12.dp)) }
     }
 }
@@ -274,7 +275,7 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
             historyFilter,
             { it.createdAtMillis.takeIf { millis -> millis > 0L } }
         ) else searched
-        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang multa ngayon.", color = Color.Gray) }
+        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang multa ngayon.", color = TextSecondary) }
         else list.forEach { ReportMultiyaCard(it); Spacer(Modifier.height(12.dp)) }
     }
 }
@@ -335,7 +336,7 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
         val source = if (selectedTab == 0) currentDonasyon else allDonasyon
         val searched = source.filter { it.donor.contains(searchQuery, true) || it.source.contains(searchQuery, true) }
         val list = if (selectedTab == 1) filterHistoryRecords(searched, { it.date }, historyFilter) else searched
-        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang donasyon.", color = Color.Gray) }
+        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang donasyon.", color = TextSecondary) }
         else list.forEach { DonasyonCardItem(it); Spacer(Modifier.height(12.dp)) }
     }
     if (showAddModal) ModalBottomSheet(onDismissRequest = { showAddModal = false }, sheetState = sheetState, containerColor = Color.White) {
@@ -355,12 +356,12 @@ private fun ReportTabs(selected: Int, onSelected: (Int) -> Unit) {
 }
 
 @Composable
-private fun EmptyHistory() { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("Walang record sa napiling filter.", color = Color.Gray) } }
+private fun EmptyHistory() { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("Walang record sa napiling filter.", color = TextSecondary) } }
 
 @Composable
 fun MonthlyIncomeRow(data: MonthlyIncome) {
     Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column { Text(data.period, fontWeight = FontWeight.Bold, fontSize = 14.sp); Spacer(Modifier.height(2.dp)); Text("${data.trips} trips", fontSize = 12.sp, color = Color.Gray) }
+        Column { Text(data.period, fontWeight = FontWeight.Bold, fontSize = 14.sp); Spacer(Modifier.height(2.dp)); Text("${data.trips} trips", fontSize = 12.sp, color = TextSecondary) }
         Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(data.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 16.sp); data.growthPercentage?.let { Text("+$it%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreenText) } }
     }
 }
@@ -368,7 +369,7 @@ fun MonthlyIncomeRow(data: MonthlyIncome) {
 @Composable
 fun YearlyIncomeRow(data: YearlyIncome) {
     Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column { Text(data.year, fontWeight = FontWeight.Bold, fontSize = 14.sp); Spacer(Modifier.height(2.dp)); Text("${data.activeMonths} buwan aktibo", fontSize = 12.sp, color = Color.Gray) }
+        Column { Text(data.year, fontWeight = FontWeight.Bold, fontSize = 14.sp); Spacer(Modifier.height(2.dp)); Text("${data.activeMonths} buwan aktibo", fontSize = 12.sp, color = TextSecondary) }
         Text(formatCurrency(data.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 16.sp)
     }
 }
@@ -377,8 +378,8 @@ fun YearlyIncomeRow(data: YearlyIncome) {
 fun IncomeHistoryCard(history: IncomeHistory) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text(history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(2.dp)); Text(history.driverName, fontSize = 14.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text("Malinis na Kita: ${formatCurrency(history.netAmount).replace(".00", "")}", fontSize = 14.sp, color = Color.Gray) }
-            Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(history.grossAmount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 18.sp); Spacer(Modifier.height(4.dp)); Text(history.date, fontSize = 12.sp, color = Color.Gray) }
+            Column(Modifier.weight(1f)) { Text(history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(2.dp)); Text(history.driverName, fontSize = 14.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text("Malinis na Kita: ${formatCurrency(history.netAmount).replace(".00", "")}", fontSize = 14.sp, color = TextSecondary) }
+            Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(history.grossAmount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 18.sp); Spacer(Modifier.height(4.dp)); Text(history.date, fontSize = 12.sp, color = TextSecondary) }
         }
     }
 }
@@ -387,7 +388,7 @@ fun IncomeHistoryCard(history: IncomeHistory) {
 fun ReportIncidentCard(incident: ReportIncidentItem) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) { Text(incident.title, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(4.dp)); Text("Plaka: ${incident.plateNumber}", fontSize = 12.sp, color = Color.Gray); Text("Lokasyon: ${incident.location}", fontSize = 12.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text(incident.date, fontSize = 12.sp, color = Color.Gray) }
+            Column(Modifier.weight(1f)) { Text(incident.title, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(4.dp)); Text("Plaka: ${incident.plateNumber}", fontSize = 12.sp, color = TextSecondary); Text("Lokasyon: ${incident.location}", fontSize = 12.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text(incident.date, fontSize = 12.sp, color = TextSecondary) }
             Text(formatCurrency(incident.penalty).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
@@ -397,7 +398,7 @@ fun ReportIncidentCard(incident: ReportIncidentItem) {
 fun ReportMultiyaCard(multiya: ReportMultiyaItem) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) { Text(multiya.plateNumber, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(multiya.driverName, fontSize = 13.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text(multiya.date, fontSize = 12.sp, color = Color.Gray) }
+            Column(Modifier.weight(1f)) { Text(multiya.plateNumber, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(multiya.driverName, fontSize = 13.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text(multiya.date, fontSize = 12.sp, color = TextSecondary) }
             Text(formatCurrency(multiya.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
@@ -408,7 +409,7 @@ fun DonasyonCardItem(donasyon: DonasyonItem) {
     val isGamit = donasyon.type == "gamit"
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) { Text(if (isGamit) "Gamit • " + donasyon.donor else donasyon.donor, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(donasyon.source, fontSize = 13.sp, color = Color.Gray); Spacer(Modifier.height(4.dp)); Text(donasyon.date, fontSize = 12.sp, color = Color.Gray); if (donasyon.note.isNotBlank()) Text(donasyon.note, fontSize = 12.sp, color = Color.Gray) }
+            Column(Modifier.weight(1f)) { Text(if (isGamit) "Gamit • " + donasyon.donor else donasyon.donor, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(donasyon.source, fontSize = 13.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text(donasyon.date, fontSize = 12.sp, color = TextSecondary); if (donasyon.note.isNotBlank()) Text(donasyon.note, fontSize = 12.sp, color = TextSecondary) }
             Text(
                 (if (isGamit) "−" else "+") + formatCurrency(donasyon.amount).replace(".00", ""),
                 fontWeight = FontWeight.Bold,
@@ -430,11 +431,11 @@ fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (Do
                 "Ibinabawas ito sa natitirang pondo ng donasyon. Hiwalay pa rin ito sa kita."
             else
                 "Ang donasyon ay boluntaryo at hiwalay sa kita - hindi ito binabawas sa kahit kanino.",
-            fontSize = 12.sp, color = Color.Gray
+            fontSize = 12.sp, color = TextSecondary
         ); Spacer(Modifier.height(12.dp))
         Text(if (isGamit) "Saan / Para kanino ginamit" else "Donor", fontWeight = FontWeight.Medium); OutlinedTextField(donor, { donor = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text(if (isGamit) "Hal: Tulong sa miyembro" else "Pangalan ng donor") })
         Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f)) { Text("Halaga", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
+            Column(Modifier.weight(1f)) { Text("Halaga", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = TextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
             Column(Modifier.weight(1f)) { Text("Petsa", fontWeight = FontWeight.Medium); OutlinedTextField(date, { date = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("MMM dd, yyyy") }) }
         }
         Spacer(Modifier.height(12.dp)); Text("Source", fontWeight = FontWeight.Medium); OutlinedTextField(source, { source = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text(if (isGamit) "Hal: tulong, opisina" else "Hal: byahe, LGU, etc.") })
@@ -449,7 +450,7 @@ fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (Do
 @Composable
 fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
     Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (isSelected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(if (isSelected) 2.dp else 0.dp)) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (isSelected) Color.Black else Color.Gray) }
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (isSelected) Color.Black else TextSecondary) }
     }
 }
 

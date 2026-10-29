@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /**
  * Pagpipilian sa "Tungkulin" dropdown. Ang label ang nakikita ng user;
@@ -176,7 +177,7 @@ fun CreateAccountScreen(
                         Text(
                             "+63",
                             fontSize = 16.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
 
                         Box(
@@ -197,7 +198,7 @@ fun CreateAccountScreen(
                             placeholder = {
                                 Text(
                                     "9XXXXXXXXX",
-                                    color = Color.LightGray
+                                    color = TextSecondary
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -524,7 +525,7 @@ fun CustomInputField(
         placeholder = {
             Text(
                 placeholder,
-                color = Color.LightGray
+                color = TextSecondary
             )
         },
         modifier = Modifier

@@ -39,6 +39,7 @@ import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import kotlin.math.roundToInt
 
 
@@ -103,7 +104,7 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset $cutoffHourLabel", fontSize = 14.sp, color = Color.Gray)
+            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset $cutoffHourLabel", fontSize = 14.sp, color = TextSecondary)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -112,8 +113,8 @@ fun QueueScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Hanapin ayon sa plaka", color = Color.LightGray) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
+                placeholder = { Text("Hanapin ayon sa plaka", color = TextSecondary) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
                 shape = RoundedCornerShape(12.dp),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -150,7 +151,7 @@ fun QueueScreen(
                         Text(
                             text = "Awtomatiko: ang #1 ngayon ay huli na bukas; ang kasunod ang mauuna.",
                             fontSize = 11.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -233,7 +234,7 @@ fun QueueScreen(
                     Text(
                         text = "I-pinch para mag-zoom • kapag maliit, pindutin nang matagal at hilahin ang kahon para lumipat ng posisyon.",
                         fontSize = 11.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -248,7 +249,7 @@ fun QueueScreen(
                         Text(
                             "I-clear ang search para magpalit ng posisyon ng mga sasakyan.",
                             fontSize = 11.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -269,7 +270,7 @@ fun QueueScreen(
                         }
                         if (searchedQueue.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                Text("Walang sasakyan sa pila.", color = Color.Gray)
+                                Text("Walang sasakyan sa pila.", color = TextSecondary)
                             }
                         } else {
                             /*
@@ -418,7 +419,7 @@ fun QueueScreen(
 
                         if (filteredHistory.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                Text("Walang kasaysayan.", color = Color.Gray)
+                                Text("Walang kasaysayan.", color = TextSecondary)
                             }
                         } else {
                             filteredHistory.forEach { history ->
@@ -472,7 +473,7 @@ fun QueueStatCard(modifier: Modifier = Modifier, title: String, value: String, i
             icon()
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            Text(text = title, fontSize = 12.sp, color = Color.Gray)
+            Text(text = title, fontSize = 12.sp, color = TextSecondary)
         }
     }
 }
@@ -486,7 +487,7 @@ fun TabButton(
     fontSize: androidx.compose.ui.unit.TextUnit = 14.sp
 ) {
     val backgroundColor = if (isSelected) Color.White else Color.Transparent
-    val textColor = if (isSelected) Color.Black else Color.Gray
+    val textColor = if (isSelected) Color.Black else TextSecondary
     val elevation = if (isSelected) 2.dp else 0.dp
 
     Card(
@@ -591,10 +592,10 @@ fun QueueItem(
                     Text(
                         text = vehicle.driverName,
                         fontSize = if (compact) 12.sp else 14.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
                     if (!compact) {
-                        Text(text = vehicle.route, fontSize = 12.sp, color = Color.Gray)
+                        Text(text = vehicle.route, fontSize = 12.sp, color = TextSecondary)
                     }
 
                     /*
@@ -605,7 +606,7 @@ fun QueueItem(
                     Text(
                         text = "Sumali: ${vehicle.time}",
                         fontSize = if (compact) 11.sp else 12.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
                 }
 
@@ -730,9 +731,9 @@ fun HistoryItem(history: HistoryVehicle) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(text = history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
-                Text(text = history.driverName, fontSize = 12.sp, color = Color.Gray)
-                Text(text = history.route, fontSize = 11.sp, color = Color.Gray)
-                Text(text = "Sumali: ${history.time}", fontSize = 11.sp, color = Color.Gray)
+                Text(text = history.driverName, fontSize = 12.sp, color = TextSecondary)
+                Text(text = history.route, fontSize = 11.sp, color = TextSecondary)
+                Text(text = "Sumali: ${history.time}", fontSize = 11.sp, color = TextSecondary)
             }
             StatusBadge(text = history.status, backgroundColor = statusBg, textColor = statusColor)
         }
@@ -809,8 +810,8 @@ fun DispatchCollectionContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        InfoRow(label = "Plaka", value = plateNumber, icon = { TruckIcon(modifier = Modifier.size(16.dp), color = Color.Gray) })
-        InfoRow(label = "Ruta", value = route, icon = { RouteIcon(modifier = Modifier.size(16.dp), color = Color.Gray) })
+        InfoRow(label = "Plaka", value = plateNumber, icon = { TruckIcon(modifier = Modifier.size(16.dp), color = TextSecondary) })
+        InfoRow(label = "Ruta", value = route, icon = { RouteIcon(modifier = Modifier.size(16.dp), color = TextSecondary) })
         InfoRow(label = "Driver", value = driverName, icon = null)
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -821,7 +822,7 @@ fun DispatchCollectionContent(
             value = income,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) income = it },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = TextSecondary) },
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)
@@ -834,14 +835,14 @@ fun DispatchCollectionContent(
         Text(
             text = "Awtomatiko itong kinakalkula mula sa bilang ng upuan ng jeep. Maaari itong baguhin dito.",
             fontSize = 11.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = otherFees,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) otherFees = it },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = Color.Gray) },
+            leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = TextSecondary) },
             shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)
@@ -850,7 +851,7 @@ fun DispatchCollectionContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(text = "Malinis na Kita", color = Color.Gray)
+            Text(text = "Malinis na Kita", color = TextSecondary)
             Text(text = "₱${netValue.toInt()}", fontWeight = FontWeight.Bold, color = EnerjeepBlue)
         }
 
@@ -873,14 +874,14 @@ fun DispatchCollectionContent(
 fun InfoRow(label: String, value: String, icon: (@Composable () -> Unit)? = null) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) { icon(); Spacer(modifier = Modifier.width(8.dp)) } else { Spacer(modifier = Modifier.width(24.dp)) }
-        Text(text = label, color = Color.Gray, modifier = Modifier.weight(1f))
+        Text(text = label, color = TextSecondary, modifier = Modifier.weight(1f))
         Text(text = value, fontWeight = FontWeight.Bold)
     }
 }
 
 // Icon Definitions
 @Composable
-fun WorldIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun WorldIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val width = size.width; val height = size.height
         drawCircle(color = color, radius = width * 0.45f, center = Offset(width * 0.5f, height * 0.5f), style = Stroke(width = width * 0.05f))
@@ -889,14 +890,14 @@ fun WorldIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
     }
 }
 @Composable
-fun NavigationIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun NavigationIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val path = androidx.compose.ui.graphics.Path().apply { moveTo(size.width * 0.5f, 0f); lineTo(size.width, size.height); lineTo(size.width * 0.5f, size.height * 0.8f); lineTo(0f, size.height); close() }
         drawPath(path = path, color = color)
     }
 }
 @Composable
-fun ArrowUpIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun ArrowUpIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val width = size.width; val height = size.height
         val path = androidx.compose.ui.graphics.Path().apply { moveTo(width * 0.5f, height * 0.2f); lineTo(width * 0.8f, height * 0.5f); lineTo(width * 0.2f, height * 0.5f); close() }
@@ -905,7 +906,7 @@ fun ArrowUpIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
     }
 }
 @Composable
-fun ArrowDownIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun ArrowDownIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val width = size.width; val height = size.height
         val path = androidx.compose.ui.graphics.Path().apply { moveTo(width * 0.5f, height * 0.8f); lineTo(width * 0.8f, height * 0.5f); lineTo(width * 0.2f, height * 0.5f); close() }
@@ -914,14 +915,14 @@ fun ArrowDownIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
     }
 }
 @Composable
-fun CancelIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun CancelIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         drawCircle(color = color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
         drawLine(color = color, start = Offset(size.width * 0.25f, size.height * 0.25f), end = Offset(size.width * 0.75f, size.height * 0.75f), strokeWidth = 2.dp.toPx())
     }
 }
 @Composable
-fun RouteIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun RouteIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         val width = size.width; val height = size.height
         val path = androidx.compose.ui.graphics.Path().apply { moveTo(width * 0.2f, height * 0.2f); cubicTo(width * 0.8f, height * 0.2f, width * 0.2f, height * 0.8f, width * 0.8f, height * 0.8f) }
@@ -931,7 +932,7 @@ fun RouteIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
     }
 }
 @Composable
-fun TruckIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun TruckIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     androidx.compose.foundation.Canvas(modifier = modifier) {
         drawRoundRect(color = color, topLeft = Offset(0f, size.height * 0.2f), size = Size(size.width * 0.6f, size.height * 0.6f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
         drawRoundRect(color = color, topLeft = Offset(size.width * 0.65f, size.height * 0.4f), size = Size(size.width * 0.35f, size.height * 0.4f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))

@@ -28,6 +28,7 @@ import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import androidx.compose.ui.window.Dialog
 import com.mobile.enerjeep.ui.queue.QueueScreen
 import com.mobile.enerjeep.ui.incident.IncidentScreen
@@ -118,13 +119,13 @@ fun HomeScreen(
                             )
                         },
                         label = {
-                            Text("Home", fontSize = 10.sp)
+                            Text("Home", fontSize = 12.sp)
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = EnerjeepBlue,
                             selectedTextColor = EnerjeepBlue,
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
                             indicatorColor = Color.Transparent
                         )
                     )
@@ -139,7 +140,7 @@ fun HomeScreen(
                             ListIcon(modifier = Modifier.size(24.dp))
                         },
                         label = {
-                            Text("Pila", fontSize = 10.sp)
+                            Text("Pila", fontSize = 12.sp)
                         }
                     )
 
@@ -152,7 +153,7 @@ fun HomeScreen(
                             WarningIcon(modifier = Modifier.size(24.dp))
                         },
                         label = {
-                            Text("Insidente", fontSize = 10.sp)
+                            Text("Insidente", fontSize = 12.sp)
                         }
                     )
 
@@ -166,7 +167,7 @@ fun HomeScreen(
                             DocumentIcon(modifier = Modifier.size(24.dp))
                         },
                         label = {
-                            Text("Mga Ulat", fontSize = 10.sp)
+                            Text("Mga Ulat", fontSize = 12.sp)
                         }
                     )
 
@@ -183,13 +184,13 @@ fun HomeScreen(
                             )
                         },
                         label = {
-                            Text("Profile", fontSize = 10.sp)
+                            Text("Profile", fontSize = 12.sp)
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = EnerjeepBlue,
                             selectedTextColor = EnerjeepBlue,
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
                             indicatorColor = Color.Transparent
                         )
                     )
@@ -353,7 +354,7 @@ fun HomeContent(
         Text(
             text = "Buod ng kooperatiba sa isang tingin.",
             fontSize = 16.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -539,7 +540,7 @@ fun EmergencyDialog(
                 Text(
                     "Pindutin ang kontak para tawagan agad.",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

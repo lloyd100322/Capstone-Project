@@ -23,6 +23,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,14 +160,14 @@ fun AccountManagementScreen(
                 placeholder = {
                     Text(
                         "Hanapin ayon sa pangalan o numero",
-                        color = Color.Gray
+                        color = TextSecondary
                     )
                 },
                 leadingIcon = {
                     Icon(
                         Icons.Default.Search,
                         contentDescription = "Search",
-                        tint = Color.Gray
+                        tint = TextSecondary
                     )
                 },
                 modifier = Modifier
@@ -173,7 +175,7 @@ fun AccountManagementScreen(
                     .padding(bottom = 16.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = Color.LightGray,
+                    unfocusedBorderColor = FieldBorderColor,
                     focusedBorderColor = Color(0xFF1B49B5),
                     unfocusedContainerColor = Color.White,
                     focusedContainerColor = Color.White
@@ -208,7 +210,7 @@ fun AccountManagementScreen(
                     } else {
                         "Walang nahanap na account."
                     },
-                    color = Color.Gray,
+                    color = TextSecondary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 24.dp)
@@ -369,7 +371,7 @@ fun AccountCard(
                     if (account.isActive) {
                         Color(0xFF166534)
                     } else {
-                        Color.Gray
+                        TextSecondary
                     }
 
                 val statusText =
@@ -425,7 +427,7 @@ fun AccountCard(
             Text(
                 text = account.phone,
                 fontSize = 14.sp,
-                color = Color.Gray
+                color = TextSecondary
             )
 
             Spacer(modifier = Modifier.height(2.dp))
@@ -433,7 +435,7 @@ fun AccountCard(
             Text(
                 text = "Ginawa noong ${account.dateCreated}",
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = TextSecondary
             )
         }
     }
@@ -452,7 +454,7 @@ fun SuperadminTabButton(
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
             1.dp,
-            if (selected) Color(0xFF6D28D9) else Color.LightGray
+            if (selected) Color(0xFF6D28D9) else TextSecondary
         )
     ) {
         Text(
