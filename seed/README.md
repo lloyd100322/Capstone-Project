@@ -1,6 +1,6 @@
 # Seed data (demo dataset)
 
-Realistic test data for demonstrating EnerJeep: 8 accounts, queue
+Realistic test data for demonstrating EnerJeep: 35 accounts, queue
 entries on both routes, incidents, earnings, donations, settings,
 emergency contacts, and audit-log samples — so the app can be shown
 working immediately, without manual data entry.
@@ -9,7 +9,7 @@ working immediately, without manual data entry.
 
 | Collection | Contents |
 |---|---|
-| `users` + `userSecrets` | 1 superadmin, 1 admin, 6 drivers (Filipino names, PH plates, seaters 16/22) — all login-ready |
+| `users` + `userSecrets` | 1 superadmin, 1 admin, 33 drivers — tunay na listahan ng terminal (pangalan at plate totoo, galing sa listahan ng terminal; apelyido/cellphone/lisensya/seater/emergency ay demo-filled) — all login-ready |
 | `queue` | 5 pila sa **Marilao – Monumento**, 1 dispatched (#1 ng **Monumento – Marilao**), 1 completed (Kasaysayan), 1 Nakansela |
 | `incidents` | 2 bukas + 2 naayos (may multa ang isa) — mga lugar sa Monumento/Marilao |
 | `kita` + `ledger` | Pamasahe/Diesel/Multa/Bawas records + dispatch ledger (3 araw) |
@@ -26,7 +26,7 @@ Password for **all** seeded accounts: `Demo123!`
 |---|---|
 | Superadmin | `+639171000001` (Ramon Villanueva) |
 | Admin | `+639171000002` (Maria Santos) |
-| Drivers | `+639171000003` … `+639171000008` (Juan dela Cruz, Pedro Reyes, Jose Ramos, Ana Lim, Rafael Garcia, Miguel Torres) |
+| Drivers | `+639171000003` … `+639171000035` (33 tunay na drayber: Roger TXA 448, Jess DGT 463, Joel PWU 904, … , Marlon DLH 781 — tingnan ang `roster` sa `seed.js`) |
 
 > The password hash is generated with the same algorithm as the app
 > (PBKDF2-HMAC-SHA256, 12,000 iterations) — the accounts work on the

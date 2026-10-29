@@ -110,6 +110,61 @@ const DEMO_PASSWORD = "Demo123!";
 const ROUTE_AM = "Marilao – Monumento"; // entry route
 const ROUTE_MA = "Monumento – Marilao"; // fills up after dispatches
 
+/*
+ * TUNAY NA LISTAHAN NG TERMINAL (mula sa aktwal na listahan ng terminal).
+ * Pangalan at plate number lang ang nasa listahan; ang ibang fields
+ * (apelyido, cellphone, lisensya, seater, emergency contact) ay
+ * pinunan para kompleto ang account sa app.
+ *
+ * Dalawang pangalan ang blanko sa listahan (#8 at ang DLH 781 na walang
+ * numero) - "Bong" at "Marlon" ang mga placeholder.
+ */
+const roster = [
+  ["Roger", "TXA 448"],
+  ["Jess", "DGT 463"], // may pangalawang plate sa listahan: APT 255
+  ["Joel", "PWU 904"], // may pangalawang plate sa listahan: DKP 874
+  ["Gadaw", "CLJ 406"],
+  ["Bobet", "DDZ 726"],
+  ["Ryan", "PWD 501"],
+  ["Jhomson", "DKZ 231"],
+  ["Bong", "TWL 530"], // walang pangalan sa listahan - placeholder
+  ["Dong", "PIJ 242"],
+  ["Loloy", "DGV 885"],
+  ["Saludo", "BBG 981"],
+  ["Romie", "DGP 374"],
+  ["Dexter", "TVV 252"],
+  ["Joey", "PWS 831"],
+  ["Greg", "TXV 421"],
+  ["Narcing", "CWJ 183"],
+  ["Abet", "NVV 571"],
+  ["Champoy", "DGN 444"],
+  ["Jimmy", "DFH 706"],
+  ["Efren", "TXB 786"],
+  ["Batemg", "TWG 363"],
+  ["Ben", "NVW 659"],
+  ["Aljon", "CVP 680"],
+  ["Mark", "CVR 895"],
+  ["Terry", "EFM 592"],
+  ["Boyet", "PXE 220"],
+  ["Kemmeth", "TWK 437"],
+  ["Lamdo", "NYZ 488"],
+  ["Billy", "TGM 352"],
+  ["Michael", "TCL 133"],
+  ["Pat", "CVB 871"],
+  ["Jun", "TVA 282"],
+  ["Marlon", "DLH 781"], // walang numero/pangalan sa listahan - placeholder
+];
+
+// Mga apelyidong pantulong lang (wala sa listahan) - demo data.
+const LAST_NAMES = [
+  "Santos", "Reyes", "Cruz", "Bautista", "Mendoza", "Garcia", "Ramos",
+  "Torres", "Dela Cruz", "Fernandez", "Aquino", "Castillo", "Ramirez",
+  "Gonzales", "Francisco", "Diaz", "Lopez", "Rivera", "Gomez", "Alvarez",
+  "Romero", "Navarro", "Pascual", "Sandoval", "Marquez", "Estrada",
+  "Domingo", "Aguirre", "Padilla", "Manalo", "Mercado", "Del Rosario",
+  "Valdez",
+];
+
 const users = [
   {
     phone: "+639171000001",
@@ -125,67 +180,20 @@ const users = [
     lastName: "Santos",
     role: "admin",
   },
-  // Drivers - Filipino names, PH-style plates (3 letters + 3 digits).
-  {
-    phone: "+639171000003",
-    userId: "seed-uid-juan",
-    firstName: "Juan",
-    lastName: "dela Cruz",
+  // Drivers - tunay na pangalan at plate mula sa listahan ng terminal.
+  ...roster.map(([name, plate], i) => ({
+    phone: "+639171" + String(3 + i).padStart(6, "0"),
+    userId: "seed-uid-" + name.toLowerCase().replace(/[^a-z]+/g, "-"),
+    firstName: name,
+    lastName: LAST_NAMES[i],
     role: "driver",
-    plate: "TUV 345",
-    seater: 16,
-    license: "N01-12-345678",
-  },
-  {
-    phone: "+639171000004",
-    userId: "seed-uid-pedro",
-    firstName: "Pedro",
-    lastName: "Reyes",
-    role: "driver",
-    plate: "WXY 678",
-    seater: 22,
-    license: "N02-23-456789",
-  },
-  {
-    phone: "+639171000005",
-    userId: "seed-uid-jose",
-    firstName: "Jose",
-    lastName: "Ramos",
-    role: "driver",
-    plate: "ABC 901",
-    seater: 16,
-    license: "N03-34-567890",
-  },
-  {
-    phone: "+639171000006",
-    userId: "seed-uid-ana",
-    firstName: "Ana",
-    lastName: "Lim",
-    role: "driver",
-    plate: "DEF 234",
-    seater: 22,
-    license: "N04-45-678901",
-  },
-  {
-    phone: "+639171000007",
-    userId: "seed-uid-rafael",
-    firstName: "Rafael",
-    lastName: "Garcia",
-    role: "driver",
-    plate: "GHI 567",
-    seater: 16,
-    license: "N05-56-789012",
-  },
-  {
-    phone: "+639171000008",
-    userId: "seed-uid-miguel",
-    firstName: "Miguel",
-    lastName: "Torres",
-    role: "driver",
-    plate: "JKL 890",
-    seater: 22,
-    license: "N06-67-890123",
-  },
+    plate,
+    seater: i % 2 === 0 ? 16 : 22,
+    license:
+      "N" + String(i + 1).padStart(2, "0") +
+      "-" + String(21 + i).padStart(2, "0") +
+      "-" + String(100001 + i),
+  })),
 ];
 
 const drivers = users.filter((u) => u.role === "driver");
@@ -251,16 +259,23 @@ async function seedUsers() {
 }
 
 async function seedQueue() {
-  // Marilao - Monumento: the pila for today (5 waiting).
-  const order = [drivers[0], drivers[1], drivers[2], drivers[3], drivers[4]];
+  /*
+   * Tunay na pila ng terminal: lahat ng 33 drayber mula sa listahan,
+   * hinati sa dalawang ruta (17 sa Marilao-Monumento, 16 sa
+   * Monumento-Marilao). May dagdag na isang tapos na biyahe at isang
+   * nakansela para makita ang estado ng Kasaysayan at Nakansela.
+   */
+  const amDrivers = drivers.slice(0, 17);
+  const maDrivers = drivers.slice(17);
   let batch = db.batch();
-  order.forEach((d, i) => {
-    const at = daysAgo(0, 5 + i, 15 + i * 7);
+
+  amDrivers.forEach((d, i) => {
+    const at = daysAgo(0, 5 + (i % 12), 10 + (i % 6) * 8);
     batch.set(db.collection("queue").doc(`queue_seed_am_${i + 1}`), {
       id: `queue_seed_am_${i + 1}`,
       driverId: d.userId,
       plateNumber: d.plate,
-      driverName: `${d.firstName} ${d.lastName}`,
+      driverName: `${d.firstName} ${d.lastName}`.trim(),
       route: ROUTE_AM,
       position: i + 1,
       status: "Nakapila",
@@ -270,28 +285,31 @@ async function seedQueue() {
     });
   });
 
-  // Monumento - Marilao: one driver already dispatched (#1 of the other
-  // route) - this is what the tab looks like after the first dispatch.
-  batch.set(db.collection("queue").doc("queue_seed_ma_1"), {
-    id: "queue_seed_ma_1",
-    driverId: drivers[5].userId,
-    plateNumber: drivers[5].plate,
-    driverName: `${drivers[5].firstName} ${drivers[5].lastName}`,
-    route: ROUTE_MA,
-    position: 1,
-    status: "Nakapila",
-    isCancelled: false,
-    time: timeLabel(daysAgo(0, 6, 5)),
-    createdAt: ts(daysAgo(0, 6, 5)),
-    dispatchedAt: ts(daysAgo(0, 7, 40)),
+  maDrivers.forEach((d, i) => {
+    const at = daysAgo(0, 6 + (i % 10), 5 + (i % 6) * 9);
+    const entry = {
+      id: `queue_seed_ma_${i + 1}`,
+      driverId: d.userId,
+      plateNumber: d.plate,
+      driverName: `${d.firstName} ${d.lastName}`.trim(),
+      route: ROUTE_MA,
+      position: i + 1,
+      status: "Nakapila",
+      isCancelled: false,
+      time: timeLabel(at),
+      createdAt: ts(at),
+    };
+    // Ang unang entry ng kabilang ruta: nag-dispatch na ngayong umaga.
+    if (i === 0) entry.dispatchedAt = ts(daysAgo(0, 7, 40));
+    batch.set(db.collection("queue").doc(`queue_seed_ma_${i + 1}`), entry);
   });
 
-  // One completed trip today (Kasaysayan + red "Tapos Na Bumyahe").
+  // Isang tapos na biyahe ngayong araw (Kasaysayan).
   batch.set(db.collection("queue").doc("queue_seed_hist_1"), {
     id: "queue_seed_hist_1",
     driverId: drivers[0].userId,
     plateNumber: drivers[0].plate,
-    driverName: `${drivers[0].firstName} ${drivers[0].lastName}`,
+    driverName: `${drivers[0].firstName} ${drivers[0].lastName}`.trim(),
     route: ROUTE_AM,
     position: 0,
     status: "completed",
@@ -302,14 +320,14 @@ async function seedQueue() {
     updatedAt: ts(daysAgo(0, 12, 30)),
   });
 
-  // One cancelled entry (Nakansela example, still visible in the list).
+  // Isang nakanselang entry (Nakansela, nakikita pa rin sa listahan).
   batch.set(db.collection("queue").doc("queue_seed_cancel_1"), {
     id: "queue_seed_cancel_1",
     driverId: drivers[1].userId,
     plateNumber: drivers[1].plate,
-    driverName: `${drivers[1].firstName} ${drivers[1].lastName}`,
+    driverName: `${drivers[1].firstName} ${drivers[1].lastName}`.trim(),
     route: ROUTE_AM,
-    position: 6,
+    position: 34,
     status: "cancelled",
     isCancelled: true,
     time: timeLabel(daysAgo(0, 5, 55)),
@@ -318,7 +336,9 @@ async function seedQueue() {
   });
 
   await batch.commit();
-  console.log("  queue: 5 pila + 1 kabila + 1 tapos + 1 nakansela");
+  console.log(
+    "  queue: 33 tunay na drayber sa dalawang ruta (17 + 16) + 1 tapos + 1 nakansela"
+  );
 }
 
 async function seedIncidents() {
@@ -444,8 +464,9 @@ async function seedKitaAndLedger() {
 
   // Dispatch ledger records (what the Kita tab merges with the manual
   // entries - one per dispatched queue entry).
+  // Ang una ay ang na-dispatch na entry sa kabilang ruta (queue_seed_ma_1).
   const dispatches = [
-    [0, 7, 40, drivers[5], "queue_seed_ma_1", 1320],
+    [0, 7, 40, drivers[17], "queue_seed_ma_1", 1320],
     [1, 8, 0, drivers[0], "queue_seed_hist_old", 1120],
     [2, 7, 55, drivers[1], "queue_seed_hist_old2", 1540],
   ];
@@ -556,8 +577,8 @@ async function seedEmergency() {
 async function seedLogs() {
   let batch = db.batch();
   const logs = [
-    ["Maria Santos", "Admin", "Dispatch", "TUV 345 → Monumento – Marilao", 0, 7, 40],
-    ["Maria Santos", "Admin", "Tapos Na", "TUV 345", 0, 12, 30],
+    ["Maria Santos", "Admin", "Dispatch", `${drivers[17].plate} → Monumento – Marilao`, 0, 7, 40],
+    ["Maria Santos", "Admin", "Tapos Na", drivers[0].plate, 0, 12, 30],
     ["Ramon Villanueva", "Superadmin", "Settings", "Oras ng reset: 9:00 PM | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
     ["Ramon Villanueva", "Superadmin", "Bagong Account", "Maria Santos (admin)", 20, 9, 0],
     ["Maria Santos", "Admin", "Insidente", "Inayos: Minor collision sa Monumento", 1, 16, 45],

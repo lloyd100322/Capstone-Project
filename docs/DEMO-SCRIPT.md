@@ -29,7 +29,7 @@ audit/liability) nang live.
 Login bilang driver (hal. `+639171000003`, password `Demo123!`, OTP sa
 test code).
 
-1. **Home** — "Musta, Juan!" → ipakita ang **blue status card**
+1. **Home** — "Musta, Roger!" → ipakita ang **blue status card**
    (posisyon #, plaka, ruta), **"Posisyon BUKAS"**, at ang
    **"Pila Ngayon"** (#1 at kasunod — sino ang mauuna).
 2. **"Tapos Na Bumyahe"** — pindutin → "Oo" → **pula** ang button at

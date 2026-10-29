@@ -67,12 +67,10 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 |---|---|---|
 | Superadmin | `+639171000001` | `Demo123!` |
 | Admin | `+639171000002` | `Demo123!` |
-| Driver (Juan) | `+639171000003` | `Demo123!` |
-| Driver (Pedro) | `+639171000004` | `Demo123!` |
-| Driver (Jose) | `+639171000005` | `Demo123!` |
-| Driver (Ana) | `+639171000006` | `Demo123!` |
-| Driver (Rafael) | `+639171000007` | `Demo123!` |
-| Driver (Miguel) | `+639171000008` | `Demo123!` |
+| Driver (Roger) | `+639171000003` | `Demo123!` |
+| Driver (Jess) | `+639171000004` | `Demo123!` |
+| Driver (Joel) | `+639171000005` | `Demo123!` |
+| ... (33 tunay na drayber ng terminal) | `+639171000006` … `+639171000035` | `Demo123!` |
 
 - Ang login ay **numero + password + OTP** (SMS verification).
 - Dahil test accounts ang nasa itaas, ang OTP ay **`123456`** lang —
@@ -95,7 +93,7 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 - [ ] Mga Ulat: Kasaysayan sa taas, charts sa ibaba
 
 **Superadmin account (+639171000001):**
-- [ ] Mga Account: kita ang 8 accounts
+- [ ] Mga Account: kita ang 35 accounts (33 tunay na drayber + superadmin + admin)
 - [ ] **Profile tab → Mga Setting** (sa ilalim ng "Seguridad") →
       baguhin ang **Oras ng Reset** (12-hour, hal. "9:00 PM") → I-save →
       buksan ang Pila → dapat nagbago ang "Reset ng Pila • HH:00 __"
@@ -132,7 +130,7 @@ numero ng test account (na hindi pagmamay-ari ng mga tester).
    | `+639171000001` | `123456` |
    | `+639171000002` | `123456` |
    | `+639171000003` | `123456` |
-   | ... (hanggang `+639171000008`) | `123456` |
+   | ... (hanggang `+639171000035`) | `123456` |
 
 3. **Save** — walang SMS na ipapadala kahit kailan, walang bayad.
 
