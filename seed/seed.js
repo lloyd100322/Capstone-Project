@@ -396,8 +396,8 @@ async function seedIncidents() {
       date: dateLabel(at),
       isResolved: !it.open,
       status: it.open ? "open" : "resolved",
-      multiya: it.multiya,
-      isSentToDriver: it.sent,
+      penalty: it.multiya,
+      sentToDriver: it.sent,
       createdAt: ts(at),
     });
   }
@@ -415,7 +415,7 @@ async function seedKitaAndLedger() {
     [0, 8, 30, "Kita", "Pamasahe (umaga)", 1450],
     [0, 13, 10, "Kita", "Pamasahe (hapon)", 1620],
     [0, 12, 45, "Bayad", "Diesel", 500],
-    [0, 17, 5, "Bawas", "Ambag sa donasyon", 50],
+    [0, 17, 5, "Bayad", "Toll at parking", 50],
     [1, 8, 25, "Kita", "Pamasahe (umaga)", 1380],
     [1, 14, 0, "Kita", "Pamasahe (hapon)", 1510],
     [1, 12, 30, "Bayad", "Diesel", 480],
@@ -453,16 +453,27 @@ async function seedKitaAndLedger() {
     const [back, hh, mm, driver, queueId, net] = e;
     const d = daysAgo(back, hh, mm);
     const id = `ledger_seed_${i + 1}`;
+    // Pareho ng hugis ng dispatch-ledger na sinusulat ng app
+    // (QueueViewModel dispatch): may gross/seater/deduction fields.
+    const tierBySeater = { 16: 32, 22: 44 }; // settings/deductionTiers
+    const tier = tierBySeater[driver.seater] ?? driver.seater * 2;
     batch.set(db.collection("ledger").doc(id), {
       id,
       driverId: driver.userId,
+      driverName: `${driver.firstName} ${driver.lastName}`,
       plateNumber: driver.plate,
       queueId,
-      amount: net,
-      netAmount: net,
-      feeType: "Dispatch",
-      source: "queue_dispatch",
       date: dateLabel(d),
+      amount: net,
+      grossAmount: net + tier,
+      otherFees: tier,
+      netAmount: net,
+      seater: driver.seater,
+      seaterDeduction: tier,
+      deductionCustomized: false,
+      feeType: "Dispatch",
+      status: "Bayad",
+      source: "queue_dispatch",
       createdAt: ts(d),
     });
     n++;
@@ -547,7 +558,7 @@ async function seedLogs() {
   const logs = [
     ["Maria Santos", "Admin", "Dispatch", "TUV 345 → Monumento – Marilao", 0, 7, 40],
     ["Maria Santos", "Admin", "Tapos Na", "TUV 345", 0, 12, 30],
-    ["Ramon Villanueva", "Superadmin", "Settings", "Oras ng reset: 21:00 | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
+    ["Ramon Villanueva", "Superadmin", "Settings", "Oras ng reset: 9:00 PM | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
     ["Ramon Villanueva", "Superadmin", "Bagong Account", "Maria Santos (admin)", 20, 9, 0],
     ["Maria Santos", "Admin", "Insidente", "Inayos: Minor collision sa Monumento", 1, 16, 45],
   ];
