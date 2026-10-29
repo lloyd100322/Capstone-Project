@@ -101,11 +101,10 @@ Ang "website" = isang **download page/link** — dalawang paraan:
       buksan ang Pila → dapat nagbago ang "Reset ng Pila • HH:00 __"
 - [ ] **Profile tab → Talaan ng Aktibidad**: may listahan ng lahat ng
       ginawa (may pangalan)
-- [ ] **Talaan filter**: subukan ang search box (aksyon/tao/detalye),
-      ang dropdown na **"Aksyon"** (hal. "Dispatch"), at ang filter ng
-      petsa (default: **"Ngayon"**; palitan sa Lahat/pumili ng petsa) —
-      dapat tama ang resulta at lumalabas ang "Walang tugmang talaan sa
-      napiling filter." kapag walang tugma
+- [ ] **Talaan filter**: subukan ang dropdown na **"Aksyon"** (hal.
+      "Dispatch") at ang filter ng petsa (default: **"Ngayon"**; palitan
+      sa Lahat/pumili ng petsa) — dapat tama ang resulta at lumalabas
+      ang "Walang tugmang talaan sa napiling filter." kapag walang tugma
 
 ### 4. Kapag may problema (troubleshooting)
 

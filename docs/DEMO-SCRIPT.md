@@ -85,9 +85,8 @@ Login bilang superadmin (`+639171000001`).
    burahin (hindi ang sarili).
 2. **Profile tab** → **Talaan ng Aktibidad** → ipakita ang bagong
    entry: **"Binura ang Account — Ni: [pangalan]"** may oras. Ipakita
-   rin ang bagong filter: i-search ang pangalan o piliin ang aksyon
-   (hal. "Binura ang Account") sa dropdown — mabilis mahanap kahit
-   mahaba ang talaan.
+   rin ang filter: piliin ang aksyon (hal. "Binura ang Account") sa
+   dropdown — mabilis mahanap kahit mahaba ang talaan.
 3. *"Ang log na ito ay **append-only** — kahit ako bilang superadmin,
    hindi ko ito kayang i-edit o burahin (Firestore rules mismo ang
    humaharang). Kaya kung may mawala, may mananagot."*
