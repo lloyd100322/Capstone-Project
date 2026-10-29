@@ -116,8 +116,10 @@ fun AccountManagementScreen(
                 .padding(horizontal = 16.dp)
         ) {
             /*
-             * Superadmin-only toolbox buttons. An admin never sees
-             * these - that is how the higher level shows itself.
+             * Superadmin-only toolbox button. An admin never sees
+             * this - that is how the higher level shows itself.
+             * (Ang Settings at Talaan ay nasa Profile tab na -
+             * ilalim ng "Seguridad".)
              */
             if (isSuperadmin) {
                 Row(
@@ -129,16 +131,6 @@ fun AccountManagementScreen(
                         text = "Emergency",
                         selected = superadminView == 1
                     ) { superadminView = 1 }
-                    SuperadminTabButton(
-                        modifier = Modifier.weight(1f),
-                        text = "Talaan",
-                        selected = superadminView == 2
-                    ) { superadminView = 2 }
-                    SuperadminTabButton(
-                        modifier = Modifier.weight(1f),
-                        text = "Settings",
-                        selected = superadminView == 3
-                    ) { superadminView = 3 }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -155,32 +147,6 @@ fun AccountManagementScreen(
                         Text("Bumalik sa Mga Account", fontSize = 12.sp)
                     }
                     EmergencyListView(superadminViewModel)
-                }
-
-                isSuperadmin && superadminView == 2 -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { superadminView = 0 }) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Bumalik"
-                            )
-                        }
-                        Text("Bumalik sa Mga Account", fontSize = 12.sp)
-                    }
-                    ActivityLogView(superadminViewModel)
-                }
-
-                isSuperadmin && superadminView == 3 -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { superadminView = 0 }) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Bumalik"
-                            )
-                        }
-                        Text("Bumalik sa Mga Account", fontSize = 12.sp)
-                    }
-                    SettingsView(superadminViewModel)
                 }
 
                 else -> {

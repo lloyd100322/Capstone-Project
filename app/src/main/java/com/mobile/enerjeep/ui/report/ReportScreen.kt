@@ -151,67 +151,24 @@ private fun HeaderRow() {
 fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyIncome>, historyData: List<IncomeHistory>) {
     /*
      * Fase 5: ang dating Buwanang/Taunang LISTA ay naging LABELED
-     * CHARTS (view-only), at ang tab/search ay pinalitan ng isang
-     * "Kasaysayan" na may PLATE filter at date filter.
+     * CHARTS (view-only), at ang tab ay pinalitan ng isang
+     * "Kasaysayan" na may SEARCH (gaya ng ibang report) at date
+     * filter - walang dropdown ng plaka.
      * Ayon sa hiling: KASAYSAYAN MUNA (nasa taas) at ang charts ay
      * nasa IBABA.
      */
-    var plateFilter by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
-    val plateOptions = remember(historyData) {
-        historyData.map { it.plateNumber }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .sorted()
-    }
     Column(Modifier.fillMaxWidth()) {
         Text("Kasaysayan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Spacer(Modifier.height(12.dp))
-        if (plateOptions.size > 1) {
-            var expandedPlate by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = expandedPlate,
-                onExpandedChange = { expandedPlate = !expandedPlate }
-            ) {
-                OutlinedTextField(
-                    value = plateFilter.ifBlank { "Lahat ng plaka" },
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(
-                            expanded = expandedPlate
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                    singleLine = true
-                )
-                ExposedDropdownMenu(
-                    expanded = expandedPlate,
-                    onDismissRequest = { expandedPlate = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Lahat ng plaka") },
-                        onClick = {
-                            plateFilter = ""
-                            expandedPlate = false
-                        }
-                    )
-                    plateOptions.forEach { plate ->
-                        DropdownMenuItem(
-                            text = { Text(plate) },
-                            onClick = {
-                                plateFilter = plate
-                                expandedPlate = false
-                            }
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
+        SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka o driver")
+        Spacer(Modifier.height(8.dp))
         HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
         val filteredPlates = historyData.filter {
-            plateFilter.isBlank() || it.plateNumber == plateFilter
+            searchQuery.isBlank() ||
+                    it.plateNumber.contains(searchQuery, ignoreCase = true) ||
+                    it.driverName.contains(searchQuery, ignoreCase = true)
         }
         val history = filterHistoryRecords(filteredPlates, { it.date }, historyFilter)
         Spacer(Modifier.height(12.dp))

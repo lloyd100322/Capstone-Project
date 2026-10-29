@@ -14,8 +14,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -165,6 +167,21 @@ fun ProfileScreen(
                                 onSignOutClick = {
                                     viewModel.signOut()
                                     onSignOut()
+                                },
+                                isSuperadmin =
+                                    state.profile.role.equals(
+                                        "superadmin",
+                                        ignoreCase = true
+                                    ),
+                                onSettingsClick = {
+                                    currentView =
+                                        "Settings"
+                                    viewModel.clearMessage()
+                                },
+                                onTalaanClick = {
+                                    currentView =
+                                        "Talaan"
+                                    viewModel.clearMessage()
                                 }
                             )
                         }
@@ -223,6 +240,94 @@ fun ProfileScreen(
                                 }
                             )
                         }
+
+                        "Settings" -> {
+
+                            val superadminViewModel:
+                                    com.mobile.enerjeep.ui.home.SuperadminViewModel =
+                                hiltViewModel()
+
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                            ) {
+
+                                Row(
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
+                                ) {
+
+                                    IconButton(
+                                        onClick = {
+                                            currentView =
+                                                "Main"
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default
+                                                .ArrowBack,
+                                            contentDescription =
+                                                "Bumalik"
+                                        )
+                                    }
+
+                                    Text(
+                                        "Bumalik sa Profile",
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                com.mobile.enerjeep.ui.home
+                                    .SettingsView(
+                                        superadminViewModel
+                                    )
+                            }
+                        }
+
+                        "Talaan" -> {
+
+                            val superadminViewModel:
+                                    com.mobile.enerjeep.ui.home.SuperadminViewModel =
+                                hiltViewModel()
+
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                            ) {
+
+                                Row(
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
+                                ) {
+
+                                    IconButton(
+                                        onClick = {
+                                            currentView =
+                                                "Main"
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default
+                                                .ArrowBack,
+                                            contentDescription =
+                                                "Bumalik"
+                                        )
+                                    }
+
+                                    Text(
+                                        "Bumalik sa Profile",
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                com.mobile.enerjeep.ui.home
+                                    .ActivityLogView(
+                                        superadminViewModel
+                                    )
+                            }
+                        }
                     }
                 }
             }
@@ -236,7 +341,10 @@ fun ProfileMainContent(
     updateMessage: String?,
     onEditClick: () -> Unit,
     onSecurityClick: () -> Unit,
-    onSignOutClick: () -> Unit
+    onSignOutClick: () -> Unit,
+    isSuperadmin: Boolean = false,
+    onSettingsClick: () -> Unit = {},
+    onTalaanClick: () -> Unit = {}
 ) {
 
     Column(
@@ -467,6 +575,46 @@ fun ProfileMainContent(
                     onClick =
                         onSecurityClick
                 )
+
+                /*
+                 * Superadmin lang: ang Settings (oras ng reset, bawas
+                 * kada upuan) at ang Talaan ng Aktibidad (audit log) ay
+                 * nasa ilalim ng "Seguridad" sa Profile tab.
+                 */
+                if (isSuperadmin) {
+
+                    HorizontalDivider(
+                        color =
+                            ProfileBorder
+                    )
+
+                    MenuRow(
+                        icon =
+                            Icons.Default.Settings,
+                        title =
+                            "Mga Setting",
+                        subtitle =
+                            "Oras ng reset at bawas kada upuan",
+                        onClick =
+                            onSettingsClick
+                    )
+
+                    HorizontalDivider(
+                        color =
+                            ProfileBorder
+                    )
+
+                    MenuRow(
+                        icon =
+                            Icons.Default.History,
+                        title =
+                            "Talaan ng Aktibidad",
+                        subtitle =
+                            "Sino ang gumawa ng bawat aksyon at kailan",
+                        onClick =
+                            onTalaanClick
+                    )
+                }
             }
         }
 

@@ -73,7 +73,7 @@ stored value means no wallet to hack.
 1. Admin "Maria" deletes a driver account at 2 PM.
 2. That same minute the app writes an audit entry: action
    **"Binura ang Account"**, actor **"Maria Santos"**, timestamp.
-3. Next day the superadmin opens **Mga Account → Talaan** and sees
+3. Next day the superadmin opens **Profile → Talaan ng Aktibidad (sa ilalim ng "Seguridad")** and sees
    exactly who deleted what — and **cannot be edited away** (rules
    block even the superadmin from rewriting it).
 
@@ -104,7 +104,7 @@ reset hour is data-driven:
 
 - Stored in Firestore at `settings/queueRotation.cutoffHour`
   (0–23; default 21 = 9 PM).
-- Editable by the superadmin in **Mga Account → Settings** ("Oras ng
+- Editable by the superadmin in **Profile → Mga Setting (sa ilalim ng "Seguridad")** ("Oras ng
   Reset") — no code change, no rebuild, no redeploy.
 - Example (the adviser's exact case): commuters increase at night →
   superadmin changes 21 → 22 (or 23) in Settings → **the Pila screen

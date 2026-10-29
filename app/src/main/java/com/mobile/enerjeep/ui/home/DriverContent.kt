@@ -588,7 +588,7 @@ fun DriverDashboardContent(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "$openIncidentCount bukas",
+                                text = "$openIncidentCount",
                                 modifier = Modifier.padding(
                                     horizontal = 12.dp,
                                     vertical = 6.dp

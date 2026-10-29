@@ -66,11 +66,15 @@ Login bilang admin (`+639171000002`).
 
 ## 3. SUPERADMIN (patakaran + pananagutan) — ~5 min
 
-Login bilang superadmin (`+639171000001`) → **Mga Account**.
+Login bilang superadmin (`+639171000001`).
+
+> Ang **Settings** at **Talaan** ay nasa **Profile tab → ilalim ng
+> "Seguridad"** ("Mga Setting" at "Talaan ng Aktibidad"). Ang
+> **Mga Account** naman ay may superadmin-only na **Emergency** list.
 
 ### 3a. LIVE na sagot sa "operating hours" challenge
-1. Pindutin ang **Settings** → ipakita ang **"Oras ng Reset (0-23)"**
-   na naka-21.
+1. **Profile tab** → **Mga Setting** → ipakita ang
+   **"Oras ng Reset (0-23)"** na naka-21.
 2. Baguhin sa **22** → **I-save**.
 3. Bumalik sa **Pila** tab: *"Kitang-kita — 'Reset ng Pila • 10:00 PM'
    na. **Walang binagong code. Walang rebuild.** Kapag dumami ang
@@ -79,8 +83,8 @@ Login bilang superadmin (`+639171000001`) → **Mga Account**.
 ### 3b. LIVE na sagot sa "sino ang liable?"
 1. Sa **Mga Account**, gamitin ang basurahan ng isang account →
    burahin (hindi ang sarili).
-2. Pindutin ang **Talaan** → ipakita ang bagong entry:
-   **"Binura ang Account — Ni: [pangalan]"** may oras.
+2. **Profile tab** → **Talaan ng Aktibidad** → ipakita ang bagong
+   entry: **"Binura ang Account — Ni: [pangalan]"** may oras.
 3. *"Ang log na ito ay **append-only** — kahit ako bilang superadmin,
    hindi ko ito kayang i-edit o burahin (Firestore rules mismo ang
    humaharang). Kaya kung may mawala, may mananagot."*

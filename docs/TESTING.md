@@ -96,9 +96,11 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 
 **Superadmin account (+639171000001):**
 - [ ] Mga Account: kita ang 8 accounts
-- [ ] **Settings** → baguhin ang **Oras ng Reset (0-23)** → I-save →
-      buksan ang Pila → dapat nagbago ang "Reset ng Pila • HH:00 __"
-- [ ] **Talaan**: may listahan ng lahat ng ginawa (may pangalan)
+- [ ] **Profile tab → Mga Setting** (sa ilalim ng "Seguridad") →
+      baguhin ang **Oras ng Reset (0-23)** → I-save → buksan ang Pila →
+      dapat nagbago ang "Reset ng Pila • HH:00 __"
+- [ ] **Profile tab → Talaan ng Aktibidad**: may listahan ng lahat ng
+      ginawa (may pangalan)
 
 ### 4. Kapag may problema (troubleshooting)
 
