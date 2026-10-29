@@ -313,6 +313,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsView(viewModel: SuperadminViewModel) {
     val tiers by viewModel.tiers.collectAsStateWithLifecycle()
@@ -342,23 +343,63 @@ fun SettingsView(viewModel: SuperadminViewModel) {
                 Text("Reset ng Pila", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Awtomatiko ang reset sa oras na ito (24-hour). " +
-                            "Halimbawa: 21 = 9:00 PM. Walang manual na reset.",
+                    "Awtomatiko ang reset sa oras na ito. " +
+                            "Halimbawa: 9:00 PM. Walang manual na reset.",
                     fontSize = 11.sp,
                     color = Color.Gray
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = cutoffHour,
-                    onValueChange = { viewModel.updateCutoffHour(it) },
-                    label = { Text("Oras ng Reset (0-23)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                /*
+                 * 12-hour format ang pagpili ng oras (hal. "9:00 PM")
+                 * imbes na 0-23 na numero.
+                 */
+                var expandedCutoff by remember { mutableStateOf(false) }
+                val cutoffValue = cutoffHour
+                    .trim()
+                    .toIntOrNull()
+                    ?.coerceIn(0, 23)
+                    ?: com.mobile.enerjeep.ui.queue.QueueViewModel.CUTOFF_HOUR
+                ExposedDropdownMenuBox(
+                    expanded = expandedCutoff,
+                    onExpandedChange = { expandedCutoff = !expandedCutoff }
+                ) {
+                    OutlinedTextField(
+                        value = com.mobile.enerjeep.ui.queue.QueueViewModel
+                            .formatCutoffHour(cutoffValue),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Oras ng Reset") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(
+                                expanded = expandedCutoff
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expandedCutoff,
+                        onDismissRequest = { expandedCutoff = false }
+                    ) {
+                        (0..23).forEach { hour ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        com.mobile.enerjeep.ui.queue.QueueViewModel
+                                            .formatCutoffHour(hour)
+                                    )
+                                },
+                                onClick = {
+                                    viewModel.updateCutoffHour(hour.toString())
+                                    expandedCutoff = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
 

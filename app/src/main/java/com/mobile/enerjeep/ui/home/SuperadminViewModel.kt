@@ -301,7 +301,7 @@ class SuperadminViewModel @Inject constructor(
 
         val cutoff = _cutoffHour.value.trim().toIntOrNull()
         if (cutoff == null || cutoff !in 0..23) {
-            _message.value = "Ang oras ng reset ay dapat 0 hanggang 23."
+            _message.value = "Pumili ng tamang oras ng reset."
             return
         }
         _cutoffHour.value = cutoff.toString()
@@ -329,7 +329,10 @@ class SuperadminViewModel @Inject constructor(
                 ActivityLogger.log(
                     firestore, userSession,
                     "Settings",
-                    "Oras ng reset: $cutoff:00 | Bawas kada upuan: " +
+                    "Oras ng reset: " +
+                            com.mobile.enerjeep.ui.queue.QueueViewModel
+                                .formatCutoffHour(cutoff) +
+                            " | Bawas kada upuan: " +
                             tierMap.entries.joinToString(", ") {
                                 "${it.key}=${it.value}"
                             }

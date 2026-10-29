@@ -74,8 +74,8 @@ Login bilang superadmin (`+639171000001`).
 
 ### 3a. LIVE na sagot sa "operating hours" challenge
 1. **Profile tab** → **Mga Setting** → ipakita ang
-   **"Oras ng Reset (0-23)"** na naka-21.
-2. Baguhin sa **22** → **I-save**.
+   **"Oras ng Reset"** na naka-**9:00 PM** (12-hour format).
+2. Baguhin sa **10:00 PM** → **I-save**.
 3. Bumalik sa **Pila** tab: *"Kitang-kita — 'Reset ng Pila • 10:00 PM'
    na. **Walang binagong code. Walang rebuild.** Kapag dumami ang
    commuter hanggang 11 PM, ilagay lang ang 23."*
