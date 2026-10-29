@@ -89,7 +89,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                     OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth().height(48.dp)) {
-                        IncidentTabButton(Modifier.weight(1f), "Di-Naayos", selectedTab == 0) { selectedTab = 0 }
+                        IncidentTabButton(Modifier.weight(1f), "Di-naayos", selectedTab == 0) { selectedTab = 0 }
                         IncidentTabButton(Modifier.weight(1f), "Naayos", selectedTab == 1) { selectedTab = 1 }
                     }
                     if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))

@@ -112,7 +112,7 @@ fun ResetPasswordScreen(
             ) {
                 Text(
                     text =
-                        "Tagumpay! Na-reset ang password. Mag-sign in.",
+                        "Tagumpay! Na-reset ang password. Mag-sign In.",
                     color = Color(0xFF166534),
                     fontSize = 14.sp,
                     modifier =

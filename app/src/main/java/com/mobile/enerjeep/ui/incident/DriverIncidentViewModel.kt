@@ -159,7 +159,7 @@ class DriverIncidentViewModel @Inject constructor(
         val currentState = _uiState.value
 
         /*
-         * "Di-Naayos" shows only the incidents that are still open.
+         * "Di-naayos" shows only the incidents that are still open.
          * "Naayos" shows only the resolved incidents.
          */
         val tabIncidents = currentState.allIncidents.filter { incident ->

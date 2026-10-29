@@ -892,7 +892,7 @@ fun DispatchAlertsSheet(
             Spacer(Modifier.height(16.dp))
             if (alerts.isEmpty()) {
                 Text(
-                    "Wala pang alerto. Ipapakita dito kapag na-dispatch ka.",
+                    "Wala pang abiso. Ipapakita dito kapag na-dispatch ka.",
                     color = TextSecondary,
                     fontSize = 14.sp
                 )

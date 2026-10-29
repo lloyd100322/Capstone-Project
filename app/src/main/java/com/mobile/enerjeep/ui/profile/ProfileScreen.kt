@@ -139,7 +139,7 @@ fun ProfileScreen(
                                             ProfileBlue
                                     )
                         ) {
-                            Text("Subukan", maxLines = 1)
+                            Text("Isara", maxLines = 1)
                         }
                     }
                 }

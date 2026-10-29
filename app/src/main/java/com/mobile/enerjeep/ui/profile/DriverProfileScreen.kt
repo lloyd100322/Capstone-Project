@@ -36,6 +36,11 @@ import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
+
+/** Initials ng driver para sa avatar (hal. "JS" para Juan Santos). */
+private fun profileInitials(first: String, last: String): String =
+    (first.take(1) + last.take(1)).uppercase().ifBlank { "?" }
+
 @Composable
 fun DriverProfileScreen(
     appNavigator: AppNavigator,
@@ -179,7 +184,7 @@ fun DriverProfileMainContent(
                             Alignment.Center
                     ) {
                         Text(
-                            text = "JD",
+                            text = profileInitials(uiState.firstName, uiState.lastName),
                             color = Color.White,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
@@ -503,7 +508,7 @@ fun DriverEditProfileContent(
                                     Alignment.Center
                             ) {
                                 Text(
-                                    text = "JD",
+                                    text = profileInitials(uiState.firstName, uiState.lastName),
                                     color = Color.White,
                                     fontSize = 24.sp,
                                     fontWeight =

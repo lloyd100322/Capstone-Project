@@ -206,7 +206,7 @@ fun AccountManagementScreen(
             ) {
                 Text(
                     text = if (uiState.searchQuery.isBlank()) {
-                        "Wala pang account."
+                        "Wala pang account. Pindutin ang \"+ Bago\" para gumawa."
                     } else {
                         "Walang nahanap na account."
                     },

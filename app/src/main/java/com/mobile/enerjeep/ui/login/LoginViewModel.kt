@@ -302,7 +302,7 @@ class LoginViewModel @Inject constructor(
                 if (!userDocument.exists() || data == null) {
                     auth.signOut()
                     _uiState.value = LoginUiState.Error(
-                        "Maling numero o password"
+                        "Maling numero o password. Subukan muli."
                     )
                     return@launch
                 }
@@ -312,7 +312,7 @@ class LoginViewModel @Inject constructor(
                 if (!verifyPassword(phone, typedPassword, userDocument.reference, data)) {
                     auth.signOut()
                     _uiState.value = LoginUiState.Error(
-                        "Maling numero o password"
+                        "Maling numero o password. Subukan muli."
                     )
                     return@launch
                 }
@@ -338,7 +338,7 @@ class LoginViewModel @Inject constructor(
                 ) {
                     auth.signOut()
                     _uiState.value = LoginUiState.Error(
-                        "Hindi aktibo ang account na ito."
+                        "Hindi aktibo ang account na ito. Kontakin ang admin."
                     )
                     return@launch
                 }

@@ -72,7 +72,7 @@ fun TerminalFeeFormContent(
                 drivers.forEach { driver -> DropdownMenuItem(text = { Text("${driver.plateNumber} — ${driver.driverName}") }, onClick = { selectedDriver = driver; expandedDriver = false }) }
             }
         }
-        if (drivers.isEmpty()) Text("Walang driver account na may nakatalang plaka. Gumawa muna ng driver account.", color = Color.Red, fontSize = 12.sp)
+        if (drivers.isEmpty()) Text("Wala pang driver account na may plaka. Gumawa muna ng account sa Mga Account.", color = Color.Red, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
         Text("Uri ng Bayad", fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(8.dp))

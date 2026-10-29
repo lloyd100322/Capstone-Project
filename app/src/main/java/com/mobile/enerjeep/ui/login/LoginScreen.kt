@@ -411,7 +411,7 @@ fun LoginScreen(
 
                         if (resendCooldownSeconds > 0) {
                             Text(
-                                text = "Maaari muling magpadala sa " +
+                                text = "Maaaring magpadala muli pagkalipas ng " +
                                         "${resendCooldownSeconds}s",
                                 color = TextSecondary,
                                 fontSize = 12.sp

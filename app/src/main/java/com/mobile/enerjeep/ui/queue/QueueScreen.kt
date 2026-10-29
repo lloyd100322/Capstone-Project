@@ -149,7 +149,7 @@ fun QueueScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Awtomatiko: ang #1 ngayon ay huli na bukas; ang kasunod ang mauuna.",
+                            text = "Sa reset, ang #1 ngayon ay mapupunta sa dulo; ang kasunod nito ang mauuna.",
                             fontSize = 11.sp,
                             color = TextSecondary
                         )
@@ -232,7 +232,7 @@ fun QueueScreen(
                      * pinch OUT = normal na laki.
                      */
                     Text(
-                        text = "I-pinch para mag-zoom • kapag maliit, pindutin nang matagal at hilahin ang kahon para lumipat ng posisyon.",
+                        text = "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon.",
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
@@ -419,7 +419,7 @@ fun QueueScreen(
 
                         if (filteredHistory.isEmpty()) {
                             Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                Text("Walang kasaysayan.", color = TextSecondary)
+                                Text("Wala pang kasaysayan ng dispatch.", color = TextSecondary)
                             }
                         } else {
                             filteredHistory.forEach { history ->
