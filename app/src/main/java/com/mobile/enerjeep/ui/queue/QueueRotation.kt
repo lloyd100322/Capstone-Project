@@ -27,6 +27,9 @@ object QueueRotation {
 
     data class Result(val rotated: Boolean, val cutoffHour: Int)
 
+    /** Default na cut-off (21 = 9 PM) - pareho ng QueueViewModel.CUTOFF_HOUR. */
+    const val CUTOFF_HOUR = QueueViewModel.CUTOFF_HOUR
+
     fun metaReference(firestore: FirebaseFirestore) =
         firestore
             .collection(FirestoreCollections.SETTINGS)
