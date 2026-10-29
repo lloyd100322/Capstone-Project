@@ -51,6 +51,11 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 
 ### 1. I-download at i-install
 
+> ⚠️ **ANDROID LANG po ang app na ito (Android 10 pataas).**
+> **Hindi ito gagana sa iPhone/iOS** — ang `.apk` ay Android format.
+> Kung iPhone ang gamit, humiram na lang ng Android phone para
+> masubukan (o panoorin ang demo).
+
 1. Buksan ang link sa **phone browser** → **Download** ang APK
 2. Kapag in-install: papayagan ang **"Install unknown apps"** ng browser
    (Settings → allow) → **Install** → **Open**
