@@ -103,9 +103,9 @@ Ang "website" = isang **download page/link** — dalawang paraan:
       ginawa (may pangalan)
 - [ ] **Talaan filter**: subukan ang search box (aksyon/tao/detalye),
       ang dropdown na **"Aksyon"** (hal. "Dispatch"), at ang filter ng
-      petsa (Lahat/Ngayon/pumili ng petsa) — dapat tama ang resulta at
-      lumalabas ang "Walang tugmang talaan sa napiling filter." kapag
-      walang tugma
+      petsa (default: **"Ngayon"**; palitan sa Lahat/pumili ng petsa) —
+      dapat tama ang resulta at lumalabas ang "Walang tugmang talaan sa
+      napiling filter." kapag walang tugma
 
 ### 4. Kapag may problema (troubleshooting)
 

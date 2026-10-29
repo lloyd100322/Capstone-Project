@@ -20,7 +20,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
-import com.mobile.enerjeep.ui.components.HistoryPeriod
 import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
@@ -249,13 +248,13 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
 
     /*
      * Mga filter ng talaan: text search (aksyon/tao/detalye), uri ng
-     * aksyon, at petsa (HistoryDateFilterBar - Lahat ng petsa ang default
-     * dahil audit trail ito).
+     * aksyon, at petsa (HistoryDateFilterBar - "Ngayon" ang default,
+     * pareho ng ibang history list sa app).
      */
     var searchQuery by remember { mutableStateOf("") }
     var selectedAction by remember { mutableStateOf("") }
     var historyFilter by remember {
-        mutableStateOf(HistoryFilterState(period = HistoryPeriod.ALL))
+        mutableStateOf(HistoryFilterState())
     }
     var expandedAction by remember { mutableStateOf(false) }
 
