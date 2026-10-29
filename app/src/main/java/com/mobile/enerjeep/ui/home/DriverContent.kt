@@ -679,7 +679,7 @@ fun DriverDashboardContent(
                         modifier = Modifier.size(32.dp)
                     )
                     Text(
-                        text = "Walang bukas na insidente.",
+                        text = "Walang di-naayos na insidente.",
                         fontWeight = FontWeight.Medium,
                         fontSize = 15.sp,
                         color = WarningOrange

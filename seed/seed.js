@@ -450,7 +450,10 @@ async function seedIncidents() {
     });
   }
   await batch.commit();
-  console.log("  incidents: 2 bukas + 2 naayos (may multa ang isa)");
+  console.log(
+    "  incidents: 2 bukas + 2 naayos (may multa ang isa) — "
+      + "sentToDriver: true sa lahat = nakikita ng driver"
+  );
 }
 
 async function seedKitaAndLedger() {
@@ -602,6 +605,24 @@ async function seedEmergency() {
   console.log("  emergencyContacts: 3 entries");
 }
 
+/*
+ * I-verify ang aktwal na laman ng incidents collection pagkatapos
+ * mag-seed: ipinapakita kung alin ang nakikita ng driver (sentToDriver)
+ * at kung resolved o hindi. Ito ang totoong estado sa database.
+ */
+async function verifyIncidents() {
+  const snap = await db.collection("incidents").get();
+  console.log("  verify (aktwal sa database):");
+  snap.docs.forEach((d) => {
+    const x = d.data();
+    const resolved = x.isResolved === true || x.status === "resolved";
+    const sent = x.sentToDriver !== false;
+    console.log(
+      `    ${d.id} | ${resolved ? "Naayos" : "Di-naayos"} | sentToDriver: ${x.sentToDriver === undefined ? "wala" : x.sentToDriver} -> ${sent ? "NAKIKITA ng driver" : "HIDDEN (draft)"}`
+    );
+  });
+}
+
 async function seedLogs() {
   let batch = db.batch();
   const logs = [
@@ -643,6 +664,7 @@ async function seedLogs() {
     await seedSettings();
     await seedEmergency();
     await seedLogs();
+    await verifyIncidents();
     console.log("\nDone. Demo login: any seeded phone number, password " + DEMO_PASSWORD);
     console.log("(Use Firebase Phone Auth TEST NUMBERS for the OTP - see seed/README.md)");
     process.exit(0);
