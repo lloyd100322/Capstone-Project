@@ -1,6 +1,8 @@
 package com.mobile.enerjeep.ui.report
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +72,7 @@ fun ReportScreen(
         is ReportUiState.Error -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { Text(state.message, color = ErrorRed) }
         is ReportUiState.Success -> {
             val listState = rememberLazyListState()
+            val sectionScope = rememberCoroutineScope()
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize().background(LightGrayBackground),
@@ -80,7 +84,26 @@ fun ReportScreen(
                     Text("Mga Ulat", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
                     Spacer(Modifier.height(4.dp))
                     Text("Buong estadistika ng kooperatiba sa isang screen.", fontSize = 14.sp, color = TextSecondary)
-                    Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(16.dp))
+                    /*
+                     * Mabilis na lipat sa bawat seksyon - hindi na kailangang
+                     * i-scroll ang buong page para makarating sa Donasyon.
+                     */
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SectionChip("Kita") {
+                            sectionScope.launch { listState.scrollToItem(1) }
+                        }
+                        SectionChip("Insidente") {
+                            sectionScope.launch { listState.scrollToItem(2) }
+                        }
+                        SectionChip("Multa") {
+                            sectionScope.launch { listState.scrollToItem(3) }
+                        }
+                        SectionChip("Donasyon") {
+                            sectionScope.launch { listState.scrollToItem(4) }
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
                 }
                 item {
                     ReportSectionHeader(Icons.Default.AccountBalanceWallet, EnerjeepBlue, EnerjeepBlueLight, "Ulat ng Kita")
@@ -125,6 +148,24 @@ fun ReportScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SectionChip(label: String, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, FieldBorderColor)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = EnerjeepBlue
+        )
     }
 }
 
