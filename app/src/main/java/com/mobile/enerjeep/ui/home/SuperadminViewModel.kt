@@ -32,7 +32,8 @@ data class ActivityLogItem(
     val actorRole: String = "",
     val action: String = "",
     val detail: String = "",
-    val time: String = ""
+    val time: String = "",
+    val createdAtMillis: Long = 0L
 )
 
 data class DeductionTier(
@@ -130,7 +131,9 @@ class SuperadminViewModel @Inject constructor(
                                     "MMM dd, yyyy hh:mm a",
                                     Locale.getDefault()
                                 ).format(it)
-                            }.orEmpty()
+                            }.orEmpty(),
+                            createdAtMillis =
+                                timestamp?.toDate()?.time ?: 0L
                         )
                     }
                     .orEmpty()

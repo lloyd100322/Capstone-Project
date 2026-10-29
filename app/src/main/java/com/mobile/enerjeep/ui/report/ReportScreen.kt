@@ -30,6 +30,7 @@ import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.LabeledBarChart
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -345,11 +346,6 @@ private fun ReportTabs(selected: Int, onSelected: (Int) -> Unit) {
         TabButton(Modifier.weight(1f), "Ngayon", selected == 0) { onSelected(0) }
         TabButton(Modifier.weight(1f), "Kasaysayan", selected == 1) { onSelected(1) }
     }
-}
-
-@Composable
-private fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
-    OutlinedTextField(value, onValueChange, modifier = Modifier.fillMaxWidth(), placeholder = { Text(placeholder, color = Color.LightGray) }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) }, shape = RoundedCornerShape(12.dp), singleLine = true, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue, unfocusedContainerColor = Color.White, focusedContainerColor = Color.White))
 }
 
 @Composable

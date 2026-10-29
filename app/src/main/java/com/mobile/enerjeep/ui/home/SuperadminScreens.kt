@@ -18,6 +18,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.HistoryPeriod
+import com.mobile.enerjeep.ui.components.SearchField
+import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
 
 /*
@@ -237,9 +242,51 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityLogView(viewModel: SuperadminViewModel) {
     val logs by viewModel.activityLogs.collectAsStateWithLifecycle()
+
+    /*
+     * Mga filter ng talaan: text search (aksyon/tao/detalye), uri ng
+     * aksyon, at petsa (HistoryDateFilterBar - Lahat ng petsa ang default
+     * dahil audit trail ito).
+     */
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedAction by remember { mutableStateOf("") }
+    var historyFilter by remember {
+        mutableStateOf(HistoryFilterState(period = HistoryPeriod.ALL))
+    }
+    var expandedAction by remember { mutableStateOf(false) }
+
+    val actionOptions = remember(logs) {
+        logs.map { it.action }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
+
+    val visible = remember(
+        logs, searchQuery, selectedAction, historyFilter
+    ) {
+        val searched = logs.filter {
+            searchQuery.isBlank() ||
+                    it.action.contains(searchQuery, ignoreCase = true) ||
+                    it.actorName.contains(searchQuery, ignoreCase = true) ||
+                    it.actorRole.contains(searchQuery, ignoreCase = true) ||
+                    it.detail.contains(searchQuery, ignoreCase = true)
+        }
+        val byAction = if (selectedAction.isBlank()) {
+            searched
+        } else {
+            searched.filter { it.action == selectedAction }
+        }
+        filterHistoryRecords(
+            byAction,
+            { it.time },
+            historyFilter
+        ) { it.createdAtMillis }
+    }
 
     Column(
         modifier = Modifier
@@ -260,10 +307,84 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
+        SearchField(
+            searchQuery,
+            { searchQuery = it },
+            "Hanapin ayon sa aksyon, tao, o detalye"
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        /*
+         * Filter ng uri ng aksyon (hal. "Settings", "Dispatch"). Mula sa
+         * mga aktwal na talaan ang mga pagpipilian kaya kumpleto lagi.
+         */
+        ExposedDropdownMenuBox(
+            expanded = expandedAction,
+            onExpandedChange = { expandedAction = !expandedAction }
+        ) {
+            OutlinedTextField(
+                value = if (selectedAction.isBlank()) {
+                    "Lahat ng aksyon"
+                } else {
+                    selectedAction
+                },
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Aksyon") },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expandedAction
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+            ExposedDropdownMenu(
+                expanded = expandedAction,
+                onDismissRequest = { expandedAction = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Lahat ng aksyon") },
+                    onClick = {
+                        selectedAction = ""
+                        expandedAction = false
+                    }
+                )
+                actionOptions.forEach { action ->
+                    DropdownMenuItem(
+                        text = { Text(action) },
+                        onClick = {
+                            selectedAction = action
+                            expandedAction = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
+        HistoryDateFilterBar(
+            historyFilter,
+            { historyFilter = it },
+            Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(12.dp))
+
         if (logs.isEmpty()) {
             Text("Wala pang naitatalang aktibidad.", color = Color.Gray)
+        } else if (visible.isEmpty()) {
+            Text(
+                "Walang tugmang talaan sa napiling filter.",
+                color = Color.Gray
+            )
         } else {
-            logs.forEach { log ->
+            visible.forEach { log ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
