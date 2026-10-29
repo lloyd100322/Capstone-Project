@@ -63,7 +63,7 @@ data class DriverDashboardUiState(
     // The doc id of the driver's own active queue entry ("Tapos Na").
     val activeQueueDocId: String = "",
     val isCancelledInQueue: Boolean = false,
-    // "Tapos Na Bumyahe": tapos na ang biyahe NGAYON - berde ang button
+    // "Tapos Na Bumyahe": tapos na ang biyahe NGAYON - pula ang button
     // at lalabas sa ibaba ang buong kita sa araw.
     val travelEndedToday: Boolean = false,
     // Buong kita ng driver sa buong araw (malinis na kita, gaya ng Kita tab).
@@ -212,7 +212,7 @@ class DriverViewModel @Inject constructor(
 
         /*
          * "Tapos Na Bumyahe" state: kapag tapos na ang biyahe ngayon
-         * (completed + endTravelAt ngayong araw), berde ang button at
+         * (completed + endTravelAt ngayong araw), pula ang button at
          * lalabas ang buong kita ng araw - kahit i-reopen ang app.
          */
         val endedToday = driverDocs.any {
@@ -378,7 +378,7 @@ class DriverViewModel @Inject constructor(
                 )
 
                 /*
-                 * "Tapos Na Bumyahe": berde ang button at lalabas sa
+                 * "Tapos Na Bumyahe": pula ang button at lalabas sa
                  * ibaba nito ang buong kita ng driver sa buong araw -
                  * hindi na kailangang pumunta sa Kita tab.
                  */

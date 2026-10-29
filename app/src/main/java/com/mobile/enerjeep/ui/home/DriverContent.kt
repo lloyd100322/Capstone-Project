@@ -738,10 +738,10 @@ fun DriverDashboardContent(
 
         /*
          * "Tapos Na Bumyahe" - aalis ang driver sa pila (Kasaysayan).
-         * May confirm para walang aksidenteng pindot. PULA muna ang
-         * button ("hindi pa tapos"); pagkatapos pindutin at tapos na
-         * ang biyahe ngayon, BERDE na ito ("tapos na") at lalabas sa
-         * ibaba ang buong kita ng araw.
+         * May confirm para walang aksidenteng pindot. BERDE muna ang
+         * button; pagkatapos pindutin at tapos na ang biyahe ngayon,
+         * PULA na ito ("tapos na") at lalabas sa ibaba ang buong kita
+         * ng araw.
          */
         if (isInQueue || travelEnded) {
             val doneToday = travelEnded && !isInQueue
@@ -758,8 +758,8 @@ fun DriverDashboardContent(
                 shape = RoundedCornerShape(16.dp),
                 enabled = !doneToday,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ErrorRed,
-                    disabledContainerColor = SuccessGreen,
+                    containerColor = SuccessGreen,
+                    disabledContainerColor = ErrorRed,
                     disabledContentColor = Color.White
                 )
             ) {

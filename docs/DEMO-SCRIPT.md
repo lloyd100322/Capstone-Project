@@ -32,8 +32,8 @@ test code).
 1. **Home** — "Musta, Roger!" → ipakita ang **blue status card**
    (posisyon #, plaka, ruta), **"Posisyon BUKAS"**, at ang
    **"Pila Ngayon"** (#1 at kasunod — sino ang mauuna).
-2. **"Tapos Na Bumyahe"** (pula muna ang button) — pindutin → "Oo" →
-   **berde** na ang button ("tapos na") at
+2. **"Tapos Na Bumyahe"** (berde muna ang button) — pindutin → "Oo" →
+   **pula** na ang button ("tapos na") at
    lalabas sa ibaba ang **"Buong Kita Ngayon"** (₱) — *"hindi na
    kailangan pumunta sa Kita tab."*
 3. **Insidente tab** — ipakita ang card na may kumpletong detalye +
