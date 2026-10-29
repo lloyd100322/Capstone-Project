@@ -76,7 +76,8 @@ Phone login needs an SMS OTP. For development and presentations, use
 ## Notes
 
 - Re-running the script without `--wipe` overwrites the same seeded
-  documents (fixed IDs) — safe to repeat.
+  documents (fixed IDs) — safe to repeat. The old mock accounts
+  (Juan/Pedro/Jose/Ana/Rafael/Miguel) are cleaned up automatically.
 - The seed writes with the Admin SDK, which bypasses Firestore rules —
   this is a maintainer tool, not an app feature.
 - Do not mix seed data with real records (see
