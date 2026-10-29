@@ -32,7 +32,7 @@ data class IncidentItem(
     val penalty: String,
     val description: String,
     val sentToDriver: String = "Oo",
-    val status: String = "Bukas",
+    val status: String = "Di-naayos",
     val createdAtMillis: Long = 0L
 )
 
@@ -663,7 +663,7 @@ class IncidentViewModel @Inject constructor(
                 ) {
                     "Naayos"
                 } else {
-                    "Bukas"
+                    "Di-naayos"
                 },
 
             createdAtMillis = createdAtMillis

@@ -62,7 +62,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         Text("Insidente", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth()) {
-            IncidentSummaryCard(Modifier.weight(1f), uiState.openCount, "Bukas", WarningOrange, WarningOrange) { Icon(Icons.Default.Warning, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(24.dp)) }
+            IncidentSummaryCard(Modifier.weight(1f), uiState.openCount, "Di-naayos", WarningOrange, WarningOrange) { Icon(Icons.Default.Warning, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(24.dp)) }
             Spacer(Modifier.width(16.dp))
             IncidentSummaryCard(Modifier.weight(1f), uiState.resolvedCount, "Naayos", SuccessGreen, SuccessGreen) { Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(24.dp)) }
         }
@@ -154,7 +154,7 @@ fun DriverIncidentCard(
                     Spacer(Modifier.height(6.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.AccessTime, null, tint = Color.Gray, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text(incident.date, fontSize = 12.sp, color = Color.Gray) }
                 }
                 Surface(color = if (incident.isResolved) SuccessGreen.copy(alpha = .1f) else WarningOrangeLight, shape = RoundedCornerShape(8.dp)) {
-                    Text(if (incident.isResolved) "Naayos" else "Bukas", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(if (incident.isResolved) "Naayos" else "Di-naayos", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
             if (callNumber.isNotBlank()) {

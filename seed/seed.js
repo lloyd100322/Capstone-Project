@@ -383,7 +383,7 @@ async function seedIncidents() {
       daysBack: 0,
       hour: 7,
       multiya: 0,
-      sent: false,
+      sent: true, // lahat ng seeded incident ay naipadala na -> nakikita ng driver
     },
     {
       id: "incident_seed_2",
@@ -397,7 +397,7 @@ async function seedIncidents() {
       daysBack: 0,
       hour: 9,
       multiya: 0,
-      sent: false,
+      sent: true,
     },
     {
       id: "incident_seed_3",

@@ -46,7 +46,7 @@ object DashboardSummary {
     /**
      * "Insidente": the number of the incidents that are still open. An
      * incident is closed when it is marked as resolved, which is the same
-     * rule the Insidente screen uses to split "Bukas" from "Naayos".
+     * rule the Insidente screen uses to split "Di-naayos" from "Naayos".
      */
     fun openIncidentCount(entries: List<DashboardIncidentEntry>): Int =
         entries.count { entry ->

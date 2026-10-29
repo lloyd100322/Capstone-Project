@@ -80,7 +80,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                 is IncidentUiState.Error -> Text(state.message, color = Color.Red, modifier = Modifier.padding(16.dp))
                 is IncidentUiState.Success -> {
                     Row(Modifier.fillMaxWidth()) {
-                        IncidentStatCard(Modifier.weight(1f), "Bukas", state.openCount.toString()) { Icon(Icons.Default.Warning, null, tint = WarningOrange) }
+                        IncidentStatCard(Modifier.weight(1f), "Di-naayos", state.openCount.toString()) { Icon(Icons.Default.Warning, null, tint = WarningOrange) }
                         Spacer(Modifier.width(16.dp))
                         IncidentStatCard(Modifier.weight(1f), "Naayos", state.resolvedCount.toString()) { Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen) }
                     }
