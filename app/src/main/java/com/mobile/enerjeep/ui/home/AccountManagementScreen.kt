@@ -322,9 +322,9 @@ fun AccountCard(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     val roleBgColor =
-                        when (account.role) {
-                            "Superadmin" -> Color(0xFF6D28D9)
-                            "Admin" -> Color(0xFF1B49B5)
+                        when {
+                            account.role == "Superadmin" -> Color(0xFF6D28D9)
+                            account.role.startsWith("Admin") -> Color(0xFF1B49B5)
                             else -> Color(0xFFFEF3C7)
                         }
 

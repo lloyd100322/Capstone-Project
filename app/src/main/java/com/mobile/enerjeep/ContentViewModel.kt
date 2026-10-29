@@ -123,7 +123,8 @@ class ContentViewModel @Inject constructor(
                         emergencyContactNumber =
                             (data?.get("emergencyContactNumber") as? String)
                                 ?.takeIf { it.isNotBlank() }
-                                ?: legacyEmergency.number.takeIf { it.isNotBlank() }
+                                ?: legacyEmergency.number.takeIf { it.isNotBlank() },
+                        adminStation = data?.get("adminStation") as? String
                     )
                     
                     userSession.setUser(profile)

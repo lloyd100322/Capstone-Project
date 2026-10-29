@@ -179,6 +179,7 @@ const users = [
     firstName: "Maria",
     lastName: "Santos",
     role: "admin",
+    adminStation: "marilao", // "Admin - Marilao" ang badge
   },
   // Drivers - tunay na pangalan at plate mula sa listahan ng terminal.
   ...roster.map(([name, plate], i) => ({
@@ -272,6 +273,9 @@ async function seedUsers() {
       doc.emergencyContact =
         "Bahay ni " + u.firstName + " - +6391755500" + u.phone.slice(-2);
       doc.isVehicleActive = true;
+    }
+    if (u.adminStation) {
+      doc.adminStation = u.adminStation;
     }
     await db.collection("users").doc(u.phone).set(doc);
 

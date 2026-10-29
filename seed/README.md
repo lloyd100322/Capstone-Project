@@ -25,7 +25,7 @@ Password for **all** seeded accounts: `Demo123!`
 | Role | Phone number |
 |---|---|
 | Superadmin | `+639171000001` (Ramon Villanueva) |
-| Admin | `+639171000002` (Maria Santos) |
+| Admin | `+639171000002` (Maria Santos — **Admin - Marilao**) |
 | Drivers | `+639171000003` … `+639171000035` (33 tunay na drayber: Roger TXA 448, Jess DGT 463, Joel PWU 904, … , Marlon DLH 781 — tingnan ang `roster` sa `seed.js`) |
 
 > The password hash is generated with the same algorithm as the app

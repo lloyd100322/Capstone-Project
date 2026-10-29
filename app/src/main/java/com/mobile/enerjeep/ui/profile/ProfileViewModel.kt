@@ -291,7 +291,8 @@ class ProfileViewModel @Inject constructor(
                         } else {
                             oldProfile.emergencyContactNumber
                                 .orEmpty()
-                        }
+                        },
+                    adminStation = oldProfile.adminStation
                 )
 
             } catch (e: Exception) {
@@ -416,7 +417,8 @@ class ProfileViewModel @Inject constructor(
                     oldProfile.role,
                     "Password updated successfully!",
                     oldProfile.emergencyContactName.orEmpty(),
-                    oldProfile.emergencyContactNumber.orEmpty()
+                    oldProfile.emergencyContactNumber.orEmpty(),
+                    oldProfile.adminStation
                 )
 
                 ToastFeedback.show(
@@ -470,7 +472,8 @@ class ProfileViewModel @Inject constructor(
             current.role,
             null,
             current.emergencyContactName.orEmpty(),
-            current.emergencyContactNumber.orEmpty()
+            current.emergencyContactNumber.orEmpty(),
+            current.adminStation
         )
     }
 
@@ -521,7 +524,8 @@ class ProfileViewModel @Inject constructor(
             document
                 .getString("emergencyContactNumber")
                 ?.takeIf { it.isNotBlank() }
-                ?: legacyEmergency.number
+                ?: legacyEmergency.number,
+            document.getString("adminStation")
         )
     }
 
@@ -532,7 +536,8 @@ class ProfileViewModel @Inject constructor(
         role: UserRole,
         message: String?,
         emergencyContactName: String = "",
-        emergencyContactNumber: String = ""
+        emergencyContactNumber: String = "",
+        adminStation: String? = null
     ) {
 
         _uiState.value =
@@ -541,7 +546,7 @@ class ProfileViewModel @Inject constructor(
                     firstName = firstName,
                     lastName = lastName,
                     phoneNumber = phone,
-                    role = role.name,
+                    role = role.displayName(adminStation),
                     emergencyContactName = emergencyContactName,
                     emergencyContactNumber = emergencyContactNumber
                 ),

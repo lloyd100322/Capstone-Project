@@ -10,6 +10,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -132,7 +133,9 @@ class AccountManagementViewModel @Inject constructor(
 
                         role = when (roleLower) {
                             "superadmin" -> "Superadmin"
-                            "admin" -> "Admin"
+                            "admin" -> UserRole.Admin.displayName(
+                                document.getString("adminStation")
+                            )
                             else -> "Driver"
                         },
 

@@ -377,7 +377,8 @@ class LoginViewModel @Inject constructor(
                     emergencyContactNumber =
                         (data["emergencyContactNumber"] as? String)
                             ?.takeIf { it.isNotBlank() }
-                            ?: legacyEmergency.number.takeIf { it.isNotBlank() }
+                            ?: legacyEmergency.number.takeIf { it.isNotBlank() },
+                    adminStation = data["adminStation"] as? String
                 ))
 
                 _uiState.value = LoginUiState.Success

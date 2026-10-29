@@ -61,5 +61,8 @@ data class UserProfile(
     val plateNumber: String? = null,
     val emergencyContact: String? = null,
     val emergencyContactName: String? = null,
-    val emergencyContactNumber: String? = null
+    val emergencyContactNumber: String? = null,
+    // Istasyon ng admin (Marilao/Monumento) - display lang, walang
+    // epekto sa role/permiso. Wala nito ang driver at superadmin.
+    val adminStation: String? = null
 )

@@ -67,7 +67,8 @@ class CreateAccountViewModel @Inject constructor(
         plateNumber: String = "",
         emergencyContactName: String = "",
         emergencyContactNumber: String = "",
-        seater: String = ""
+        seater: String = "",
+        adminStation: String = ""
     ) {
         /*
          * User-level rule: only a superadmin can create an admin.
@@ -91,6 +92,14 @@ class CreateAccountViewModel @Inject constructor(
         val cleanSeater = seater.trim()
         val seaterCount = cleanSeater.toIntOrNull()
 
+        /*
+         * Istasyon ng admin ("marilao"/"monumento") - display lang ito
+         * (badge "Admin - Marilao"), ang "role" field ay "admin" pa rin.
+         */
+        val cleanAdminStation = adminStation
+            .trim()
+            .lowercase(Locale.ROOT)
+
         if (
             cleanFirstName.isBlank() ||
             cleanLastName.isBlank() ||
@@ -106,6 +115,17 @@ class CreateAccountViewModel @Inject constructor(
         if (!PH_PHONE_REGEX.matches(cleanPhoneNumber)) {
             _uiState.value = CreateAccountUiState.Error(
                 "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
+            )
+            return
+        }
+
+        if (
+            effectiveRole == UserRole.Admin &&
+            cleanAdminStation != UserRole.STATION_MARILAO &&
+            cleanAdminStation != UserRole.STATION_MONUMENTO
+        ) {
+            _uiState.value = CreateAccountUiState.Error(
+                "Piliin ang istasyon ng admin (Marilao o Monumento)"
             )
             return
         }
@@ -243,6 +263,10 @@ class CreateAccountViewModel @Inject constructor(
 
                     // New drivers are active unless an admin deactivates them.
                     userMap["isVehicleActive"] = true
+                }
+
+                if (effectiveRole == UserRole.Admin) {
+                    userMap["adminStation"] = cleanAdminStation
                 }
 
                 val batch = firestore.batch()

@@ -28,6 +28,17 @@ import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.ui.theme.*
 
+/**
+ * Pagpipilian sa "Tungkulin" dropdown. Ang label ang nakikita ng user;
+ * ang role + station ang isinusulat sa account ("role" = admin pa rin,
+ * "adminStation" = marilao/monumento).
+ */
+private data class TungkulinOption(
+    val label: String,
+    val role: UserRole,
+    val station: String = ""
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateAccountScreen(
@@ -38,7 +49,9 @@ fun CreateAccountScreen(
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf(UserRole.Driver) }
+    var selectedTungkulin by remember {
+        mutableStateOf(TungkulinOption(UserRole.Driver.name, UserRole.Driver))
+    }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -55,11 +68,23 @@ fun CreateAccountScreen(
      * User levels: only a superadmin can create an admin. An admin can
      * create driver accounts only.
      */
-    val roles =
+    val tungkulinOptions =
         if (viewModel.canCreateAdmin()) {
-            listOf(UserRole.Admin, UserRole.Driver)
+            listOf(
+                TungkulinOption(
+                    UserRole.Admin.displayName(UserRole.STATION_MARILAO),
+                    UserRole.Admin,
+                    UserRole.STATION_MARILAO
+                ),
+                TungkulinOption(
+                    UserRole.Admin.displayName(UserRole.STATION_MONUMENTO),
+                    UserRole.Admin,
+                    UserRole.STATION_MONUMENTO
+                ),
+                TungkulinOption(UserRole.Driver.name, UserRole.Driver)
+            )
         } else {
-            listOf(UserRole.Driver)
+            listOf(TungkulinOption(UserRole.Driver.name, UserRole.Driver))
         }
 
     LaunchedEffect(uiState) {
@@ -208,7 +233,7 @@ fun CreateAccountScreen(
                         }
                     ) {
                         OutlinedTextField(
-                            value = role.name,
+                            value = selectedTungkulin.label,
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = {
@@ -232,13 +257,13 @@ fun CreateAccountScreen(
                                 expanded = false
                             }
                         ) {
-                            roles.forEach { selectionOption ->
+                            tungkulinOptions.forEach { selectionOption ->
                                 DropdownMenuItem(
                                     text = {
-                                        Text(selectionOption.name)
+                                        Text(selectionOption.label)
                                     },
                                     onClick = {
-                                        role = selectionOption
+                                        selectedTungkulin = selectionOption
                                         expanded = false
                                     }
                                 )
@@ -298,7 +323,7 @@ fun CreateAccountScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Driver Details Card
-                    if (role == UserRole.Driver) {
+                    if (selectedTungkulin.role == UserRole.Driver) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -450,12 +475,13 @@ fun CreateAccountScreen(
                                     lastName,
                                     "+63$phoneNumber",
                                     password,
-                                    role,
+                                    selectedTungkulin.role,
                                     licenseNumber,
                                     plateNumber,
                                     emergencyContactName,
                                     emergencyContactNumber,
-                                    seater
+                                    seater,
+                                    selectedTungkulin.station
                                 )
                             },
                             modifier = Modifier
