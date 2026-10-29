@@ -35,6 +35,7 @@ import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 
 
 /** Initials ng driver para sa avatar (hal. "JS" para Juan Santos). */
@@ -220,7 +221,7 @@ fun DriverProfileMainContent(
                     )
 
                     Surface(
-                        color = Color(0xFFFEF3C7),
+                        color = WarningOrangeLight,
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(

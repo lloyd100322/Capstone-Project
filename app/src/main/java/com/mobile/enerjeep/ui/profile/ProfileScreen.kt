@@ -37,19 +37,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.ui.theme.EnerjeepBlue
+import com.mobile.enerjeep.ui.theme.ErrorRedText
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
-private val ProfileLightGray =
-    Color(0xFFF8F9FA)
-
-private val ProfileBlue =
-    Color(0xFF194287)
-
-private val ProfileBorder =
-    Color(0xFFE5E7EB)
-
-private val ProfileError =
-    Color(0xFFB91C1C)
+private val ProfileLightGray = LightGrayBackground
+private val ProfileBlue = EnerjeepBlue
+private val ProfileBorder = FieldBorderColor
+private val ProfileError = ErrorRedText
 
 @Composable
 fun ProfileScreen(

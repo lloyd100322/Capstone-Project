@@ -24,7 +24,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.ErrorRedLight
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +95,7 @@ fun AccountManagementScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF1B49B5)
                     ),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(16.dp),
                     contentPadding = PaddingValues(
                         horizontal = 16.dp
                     )
@@ -327,7 +329,7 @@ fun AccountCard(
                         when {
                             account.role == "Superadmin" -> Color(0xFF6D28D9)
                             account.role.startsWith("Admin") -> Color(0xFF1B49B5)
-                            else -> Color(0xFFFEF3C7)
+                            else -> WarningOrangeLight
                         }
 
                     val roleTextColor =
@@ -410,7 +412,7 @@ fun AccountCard(
                         .size(40.dp)
                         .border(
                             1.dp,
-                            Color(0xFFFEE2E2),
+                            ErrorRedLight,
                             RoundedCornerShape(12.dp)
                         )
                 ) {
@@ -451,7 +453,7 @@ fun SuperadminTabButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         border = BorderStroke(
             1.dp,
             if (selected) Color(0xFF6D28D9) else TextSecondary

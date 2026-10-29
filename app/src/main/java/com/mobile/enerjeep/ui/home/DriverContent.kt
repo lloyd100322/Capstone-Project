@@ -754,8 +754,8 @@ fun DriverDashboardContent(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(24.dp),
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
                 enabled = !doneToday,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ErrorRed,
@@ -834,8 +834,8 @@ fun DriverDashboardContent(
             onClick = onEmergencyClick,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(24.dp),
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ErrorRed
             )

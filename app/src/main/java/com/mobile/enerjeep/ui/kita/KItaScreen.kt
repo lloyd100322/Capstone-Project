@@ -25,6 +25,8 @@ import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.HistoryPeriod
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
+import com.mobile.enerjeep.ui.theme.ErrorRed
+import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
@@ -177,7 +179,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                                 Spacer(Modifier.height(2.dp))
                                 Text(record.date, fontSize = 12.sp, color = TextSecondary)
                             }
-                            Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (record.type == "Kita") Color(0xFF10B981) else Color(0xFFEF4444))
+                            Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (record.type == "Kita") SuccessGreen else ErrorRed)
                         }
                     }
                 }

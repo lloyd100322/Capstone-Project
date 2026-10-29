@@ -69,10 +69,10 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                             showMultaModal = true
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
-                        shape = RoundedCornerShape(22.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) { Text("Multa", fontSize = 12.sp, color = Color.White) }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(22.dp)) { Text("I-report", maxLines = 1) }
+                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text("I-report", maxLines = 1) }
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -220,8 +220,8 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).height(56.dp)) { Text("Kanselahin") }; Spacer(Modifier.width(16.dp))
-            Button(onClick = { if (!submitted && selectedDriver != null) { showSendPrompt = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin") }; Spacer(Modifier.width(16.dp))
+            Button(onClick = { if (!submitted && selectedDriver != null) { showSendPrompt = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
         }
         if (submitted) {
             Spacer(Modifier.height(16.dp))
@@ -358,7 +358,7 @@ fun IncidentDetailsContent(
             OutlinedButton(
                 onClick = onCallDriver,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     SuccessGreen
@@ -385,7 +385,7 @@ fun IncidentDetailsContent(
                 onClick = onRecordPayment,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(16.dp)
             ) {
                 PesoIcon(modifier = Modifier.size(16.dp), color = Color.White)
                 Spacer(Modifier.width(8.dp))

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
 import java.util.Locale
+import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /*
@@ -32,7 +33,7 @@ import com.mobile.enerjeep.ui.theme.TextSecondary
 fun LabeledBarChart(
     title: String,
     bars: List<Pair<String, Double>>,
-    barColor: Color = Color(0xFF194287),
+    barColor: Color = EnerjeepBlue,
     modifier: Modifier = Modifier,
     /*
      * isMoney=false para sa mga BILANG (hal: bilang ng insidente) -

@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -136,7 +137,7 @@ fun QueueScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(14.dp),
@@ -231,11 +232,20 @@ fun QueueScreen(
                      * button). Pinch IN = maliit na box (zoom out),
                      * pinch OUT = normal na laki.
                      */
-                    Text(
-                        text = "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon.",
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon.",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -649,7 +659,7 @@ fun QueueItem(
                     onClick = onDispatchClick,
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
-                    shape = RoundedCornerShape(22.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     NavigationIcon(modifier = Modifier.size(16.dp), color = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -759,7 +769,7 @@ fun ActionButton(modifier: Modifier = Modifier, text: String? = null, icon: @Com
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(44.dp),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
         contentPadding = PaddingValues(horizontal = 12.dp)
     ) {
@@ -858,13 +868,13 @@ fun DispatchCollectionContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(28.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor)) { Text("Kanselahin", color = Color.Black) }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor)) { Text("Kanselahin", color = Color.Black) }
             Spacer(modifier = Modifier.width(16.dp))
             Button(
                 onClick = { onDispatch(income.toDoubleOrNull() ?: 0.0, otherFees.toDoubleOrNull() ?: 0.0) },
                 modifier = Modifier.weight(1f).height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
-                shape = RoundedCornerShape(28.dp)
+                shape = RoundedCornerShape(16.dp)
             ) { Text("I-dispatch") }
         }
     }

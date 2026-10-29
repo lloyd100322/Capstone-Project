@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,7 +170,7 @@ fun LoginScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = Color.White
                 ),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(
                     defaultElevation = 2.dp
                 )
@@ -207,13 +209,23 @@ fun LoginScreen(
                             modifier = Modifier.height(8.dp)
                         )
 
+                        val phoneInteraction = remember {
+                            MutableInteractionSource()
+                        }
+                        val phoneFocused by phoneInteraction
+                            .collectIsFocusedAsState()
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
                                 .border(
                                     1.dp,
-                                    FieldBorderColor,
+                                    if (phoneFocused) {
+                                        EnerjeepBlue
+                                    } else {
+                                        FieldBorderColor
+                                    },
                                     RoundedCornerShape(12.dp)
                                 )
                                 .padding(horizontal = 16.dp),
@@ -255,6 +267,7 @@ fun LoginScreen(
                                     focusedIndicatorColor = Color.Transparent,
                                     unfocusedIndicatorColor = Color.Transparent
                                 ),
+                                interactionSource = phoneInteraction,
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Phone
                                 ),
@@ -454,7 +467,7 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .height(56.dp),
                         enabled = !isBusy,
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EnerjeepBlue
                         )

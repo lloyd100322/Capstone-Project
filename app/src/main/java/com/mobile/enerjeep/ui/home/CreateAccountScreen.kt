@@ -455,7 +455,7 @@ fun CreateAccountScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(
                                 1.dp,
                                 FieldBorderColor
@@ -488,7 +488,7 @@ fun CreateAccountScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = EnerjeepBlue
                             ),

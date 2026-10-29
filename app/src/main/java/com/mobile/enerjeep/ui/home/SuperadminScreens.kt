@@ -47,7 +47,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text(
             "Emergency List",
@@ -135,7 +135,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EnerjeepBlue
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -283,7 +283,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text(
             "Talaan ng Aktibidad",
@@ -429,7 +429,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp)
+            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(
@@ -576,7 +576,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
 
                 OutlinedButton(
                     onClick = { viewModel.addTier() },
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
@@ -598,7 +598,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
                 containerColor = EnerjeepBlue
             ),
             shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth().height(52.dp)
+            modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text("I-save", maxLines = 1) }
     }
 }

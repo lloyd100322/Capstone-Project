@@ -79,14 +79,15 @@ fun SummaryCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
                         color = TextSecondary
                     )
                     if (onClick != null) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "›",
-                            fontSize = 16.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextSecondary
                         )

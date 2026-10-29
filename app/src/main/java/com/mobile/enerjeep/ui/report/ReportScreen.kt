@@ -36,19 +36,19 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.mobile.enerjeep.ui.theme.EnerjeepBlue
+import com.mobile.enerjeep.ui.theme.EnerjeepBlueLight
+import com.mobile.enerjeep.ui.theme.ErrorRed
+import com.mobile.enerjeep.ui.theme.ErrorRedLight
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.HeartPink
+import com.mobile.enerjeep.ui.theme.HeartPinkLight
+import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.WarningOrange
+import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 
-val LightGrayBackground = Color(0xFFF8F9FA)
-val EnerjeepBlue = Color(0xFF194287)
-val EnerjeepBlueLight = Color(0xFFE0E7FF)
-val WarningOrange = Color(0xFFB45309)
-val WarningOrangeLight = Color(0xFFFEF3C7)
-val ErrorRed = Color(0xFFB91C1C)
-val ErrorRedLight = Color(0xFFFEE2E2)
-val HeartPink = Color(0xFFBE185D)
-val HeartPinkLight = Color(0xFFFCE7F3)
-val SuccessGreenText = Color(0xFF16A34A)
-val FieldBorderColor = Color(0xFFE5E7EB)
 
 fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
 
@@ -194,7 +194,7 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
         LabeledBarChart(
             title = "Taunang Kita",
             bars = yearlyData.map { it.year to it.amount },
-            barColor = Color(0xFF16A34A)
+            barColor = SuccessGreen
         )
     }
 }
@@ -223,7 +223,7 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
         LabeledBarChart(
             title = "Bilang ng Insidente kada Plaka",
             bars = incidentBars,
-            barColor = Color(0xFFB45309),
+            barColor = WarningOrange,
             isMoney = false // Bilang ito, hindi pera - walang peso sign.
         )
         Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa uri, plaka, o lokasyon")
@@ -260,7 +260,7 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
         LabeledBarChart(
             title = "Multa kada Plaka",
             bars = multiyaBars,
-            barColor = Color(0xFFB91C1C)
+            barColor = ErrorRed
         )
         Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -326,7 +326,7 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
         LabeledBarChart(
             title = "Donasyon kada Source",
             bars = sourceBars,
-            barColor = Color(0xFFBE185D)
+            barColor = HeartPink
         )
         Spacer(Modifier.height(16.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa donor o source"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -362,7 +362,7 @@ private fun EmptyHistory() { Box(Modifier.fillMaxWidth().padding(32.dp), content
 fun MonthlyIncomeRow(data: MonthlyIncome) {
     Row(Modifier.fillMaxWidth().padding(24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column { Text(data.period, fontWeight = FontWeight.Bold, fontSize = 14.sp); Spacer(Modifier.height(2.dp)); Text("${data.trips} trips", fontSize = 12.sp, color = TextSecondary) }
-        Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(data.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 16.sp); data.growthPercentage?.let { Text("+$it%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreenText) } }
+        Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(data.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 16.sp); data.growthPercentage?.let { Text("+$it%", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = SuccessGreen) } }
     }
 }
 
@@ -414,7 +414,7 @@ fun DonasyonCardItem(donasyon: DonasyonItem) {
                 (if (isGamit) "−" else "+") + formatCurrency(donasyon.amount).replace(".00", ""),
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
-                color = if (isGamit) Color(0xFFEF4444) else Color(0xFF10B981)
+                color = if (isGamit) ErrorRed else SuccessGreen
             )
         }
     }

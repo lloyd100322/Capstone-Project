@@ -20,11 +20,12 @@ import androidx.compose.ui.unit.sp
 import com.mobile.enerjeep.ui.components.PesoIcon
 import java.text.NumberFormat
 import java.util.Locale
+import com.mobile.enerjeep.ui.theme.EnerjeepBlue
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.SuccessGreen
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
-val LightGrayBackground = Color(0xFFF8F9FA)
-val EnerjeepBlue = Color(0xFF194287)
-val SuccessGreenText = Color(0xFF16A34A)
-val FieldBorderColor = Color(0xFFE5E7EB)
 
 fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
 
@@ -98,10 +99,10 @@ fun TerminalFeeFormContent(
         )
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(28.dp)) { Text("Kanselahin", color = Color.Black) }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin", color = Color.Black) }
             Spacer(Modifier.width(16.dp))
             val finalAmount = amount.toDoubleOrNull() ?: 0.0
-            Button(onClick = { selectedDriver?.let { if (finalAmount > 0.0) onSubmit(it, finalAmount, selectedFeeType) } }, enabled = selectedDriver != null && finalAmount > 0.0, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(28.dp)) { Text("Ipasa") }
+            Button(onClick = { selectedDriver?.let { if (finalAmount > 0.0) onSubmit(it, finalAmount, selectedFeeType) } }, enabled = selectedDriver != null && finalAmount > 0.0, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text("Ipasa") }
         }
     }
 }

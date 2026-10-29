@@ -31,6 +31,7 @@ import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
+import com.mobile.enerjeep.ui.theme.ErrorRedText
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.WarningOrange
@@ -84,7 +85,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         Spacer(Modifier.height(16.dp))
         if (uiState.errorMessage != null) {
             Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-                Text(uiState.errorMessage ?: "", color = Color(0xFFB91C1C), fontSize = 14.sp)
+                Text(uiState.errorMessage ?: "", color = ErrorRedText, fontSize = 14.sp)
             }
         } else if (uiState.isLoading) {
             Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
