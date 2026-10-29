@@ -223,6 +223,34 @@ async function wipeSeeded() {
   }
 }
 
+/*
+ * Linisin ang mga doc mula sa lumang mock data (bago pa ang tunay na
+ * listahan ng terminal). Para hindi na kailangan ng --wipe tuwing
+ * magre-run laban sa may datos nang database. Walang epekto kung wala
+ * na ang mga doc na ito.
+ */
+async function cleanupLegacyMockDocs() {
+  const legacyUserIds = [
+    "seed-uid-juan",
+    "seed-uid-pedro",
+    "seed-uid-jose",
+    "seed-uid-ana",
+    "seed-uid-rafael",
+    "seed-uid-miguel",
+  ];
+  const refs = [];
+  legacyUserIds.forEach((id) => {
+    refs.push(db.collection("users").doc(id));
+    refs.push(db.collection("userSecrets").doc(id));
+  });
+  // Lumang kita doc na walang katumbas sa bagong seed.
+  refs.push(db.collection("kitaHistory").doc("queue_seed_ma_2_kita"));
+  let batch = db.batch();
+  refs.forEach((r) => batch.delete(r));
+  await batch.commit();
+  console.log("  cleanup: inalis ang lumang mock accounts (kung mayroon)");
+}
+
 async function seedUsers() {
   for (const u of users) {
     const isDriver = u.role === "driver";
@@ -606,6 +634,7 @@ async function seedLogs() {
       console.log("Wiping seeded collections first (--wipe)...");
       await wipeSeeded();
     }
+    await cleanupLegacyMockDocs();
     await seedUsers();
     await seedQueue();
     await seedIncidents();
