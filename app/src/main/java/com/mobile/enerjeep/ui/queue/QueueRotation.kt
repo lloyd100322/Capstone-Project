@@ -74,6 +74,20 @@ object QueueRotation {
      * magbukas ng app.
      */
     suspend fun rotateOnce(firestore: FirebaseFirestore): Result {
+        val queueCollection = firestore.collection(FirestoreCollections.QUEUE)
+
+        /*
+         * Kolektahin muna ang mga ID ng pila (isang simpleng basa). Ang
+         * bawat dokumento ay binabasa SA LOOB ng transaction gamit ang
+         * transaction.get(document) - per document ang basa dahil walang
+         * transaction.get(query) ang mobile SDK.
+         */
+        val queueIds = queueCollection
+            .get()
+            .await()
+            .documents
+            .map { it.id }
+
         return firestore.runTransaction { transaction ->
             val metaReference = metaReference(firestore)
             val meta = transaction.get(metaReference)
@@ -90,13 +104,14 @@ object QueueRotation {
                 return@runTransaction Result(false, hour)
             }
 
-            // Basahin ang buong pila SA LOOB ng transaction (laging sariwa).
-            val queueSnapshot =
-                transaction.get(firestore.collection(FirestoreCollections.QUEUE))
+            // Basahin ang bawat entry SA LOOB ng transaction (laging sariwa).
+            val queueDocs = queueIds.map { id ->
+                transaction.get(queueCollection.document(id))
+            }.filter { it.exists() }
 
             listOf(QueueViewModel.ROUTE_MA, QueueViewModel.ROUTE_AM)
                 .forEach { route ->
-                    val active = queueSnapshot.documents
+                    val active = queueDocs
                         .filter {
                             QueueViewModel.isActiveStatus(it.getString("status")) &&
                                     it.getBoolean("isCancelled") != true &&
