@@ -32,7 +32,8 @@ test code).
 1. **Home** — "Musta, Roger!" → ipakita ang **blue status card**
    (posisyon #, plaka, ruta), **"Posisyon BUKAS"**, at ang
    **"Pila Ngayon"** (#1 at kasunod — sino ang mauuna).
-2. **"Tapos Na Bumyahe"** — pindutin → "Oo" → **pula** ang button at
+2. **"Tapos Na Bumyahe"** (pula muna ang button) — pindutin → "Oo" →
+   **berde** na ang button ("tapos na") at
    lalabas sa ibaba ang **"Buong Kita Ngayon"** (₱) — *"hindi na
    kailangan pumunta sa Kita tab."*
 3. **Insidente tab** — ipakita ang card na may kumpletong detalye +
@@ -51,7 +52,7 @@ test code).
 Login bilang admin (`+639171000002`).
 
 1. **Home** — dashboard stats (kita, insidente, drivers, donasyon).
-2. **Pila** — ang dalawang ruta (**Marilao–Monumento** muna;
+2. **Pila** — ang dalawang ruta (**MARILAO** muna [Marilao–Monumento];
    **Monumento–Marilao** ay may laman na dahil may na-dispatch na sa
    seed). Mag-**dispatch** ng #1 → mapupunta siya sa kabila bilang #1.
    Ipakita ang **Kanselahin** (Nakansela = out) at **Ibalik sa Pila**

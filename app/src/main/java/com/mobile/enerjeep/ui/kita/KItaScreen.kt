@@ -3,8 +3,8 @@ package com.mobile.enerjeep.ui.kita
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -62,7 +62,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     }
     val totals = remember(finalRecords) { KitaHistory.totals(finalRecords) }
 
-    Column(Modifier.fillMaxSize().background(LightGrayBackground).padding(horizontal = 24.dp)) {
+    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep App Logo", modifier = Modifier.size(60.dp))
@@ -152,7 +152,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
         Spacer(Modifier.height(16.dp))
         if (finalRecords.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
                 Text(
                     if (historyFilter.period == HistoryPeriod.TODAY)
                         "Wala pang kita ngayon. Piliin ang \"Lahat ng petsa\" para makita ang nakaraang kita."
@@ -163,8 +163,12 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                 )
             }
         } else {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(finalRecords, key = { it.id }) { record ->
+            /*
+             * Buong page ang scrollable (hindi lang ang listahan) kaya
+             * hindi nacucut ang mga record sa ilalim ng navigation bar.
+             */
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                finalRecords.forEach { record ->
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(1.dp)) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {

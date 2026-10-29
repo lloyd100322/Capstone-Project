@@ -4,8 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
@@ -51,7 +51,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         { it.createdAtMillis.takeIf { millis -> millis > 0 } }
     ) else uiState.filteredIncidents
 
-    Column(Modifier.fillMaxSize().background(LightGrayBackground).padding(horizontal = 24.dp)) {
+    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep App Logo", modifier = Modifier.size(60.dp))
@@ -81,18 +81,22 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         if (isResolvedTab) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
         if (uiState.errorMessage != null) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
                 Text(uiState.errorMessage ?: "", color = Color(0xFFB91C1C), fontSize = 14.sp)
             }
         } else if (uiState.isLoading) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = EnerjeepBlue)
             }
         } else if (visibleIncidents.isEmpty()) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = Color.Gray, fontSize = 14.sp) }
+            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = Color.Gray, fontSize = 14.sp) }
         } else {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
-                items(visibleIncidents, key = { it.id }) { incident ->
+            /*
+             * Buong page ang scrollable (hindi lang ang listahan) kaya
+             * hindi nacucut ang mga card sa ilalim ng navigation bar.
+             */
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                visibleIncidents.forEach { incident ->
                     DriverIncidentCard(
                         incident = incident,
                         fallbackPhone = uiState.officePhone

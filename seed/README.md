@@ -15,7 +15,7 @@ working immediately, without manual data entry.
 | `kita` + `ledger` | Pamasahe/Diesel/Multa/Bawas records + dispatch ledger (3 araw) |
 | `donations` | 5 entries (3 donate, 2 gamit - fund up/down) |
 | `settings` | `deductionTiers` (16→₱32, 22→₱44) + `queueRotation` (cutoffHour 21) |
-| `emergencyContacts` | 911 + 2 lokal na contact |
+| `emergencyContacts` | 911 + Dispatcher + 2 lokal na contact |
 | `activityLogs` | 5 audit entries |
 
 ## Demo logins

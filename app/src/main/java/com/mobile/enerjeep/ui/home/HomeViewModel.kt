@@ -212,6 +212,14 @@ class HomeViewModel @Inject constructor(
                                         )
                                             as? Number
                                     )
+                                        ?.toDouble(),
+                            otherFees =
+                                (
+                                        document.get(
+                                            "otherFees"
+                                        )
+                                            as? Number
+                                    )
                                         ?.toDouble()
                         )
                     }

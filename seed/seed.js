@@ -336,7 +336,11 @@ async function seedQueue() {
     batch.set(db.collection("queue").doc(`queue_seed_ma_${i + 1}`), entry);
   });
 
-  // Isang tapos na biyahe ngayong araw (Kasaysayan).
+  /*
+   * Isang tapos na biyahe kahapon (Kasaysayan). HINDI ito ngayong araw -
+   * ang tapos na bumyahe ngayon ay bawal nang i-dispatch, kaya hindi
+   * dapat may "completed ngayon" na nasa aktibong pila.
+   */
   batch.set(db.collection("queue").doc("queue_seed_hist_1"), {
     id: "queue_seed_hist_1",
     driverId: drivers[0].userId,
@@ -346,10 +350,10 @@ async function seedQueue() {
     position: 0,
     status: "completed",
     isCancelled: false,
-    time: timeLabel(daysAgo(0, 4, 50)),
-    createdAt: ts(daysAgo(0, 4, 50)),
-    endTravelAt: ts(daysAgo(0, 12, 30)),
-    updatedAt: ts(daysAgo(0, 12, 30)),
+    time: timeLabel(daysAgo(1, 4, 50)),
+    createdAt: ts(daysAgo(1, 4, 50)),
+    endTravelAt: ts(daysAgo(1, 12, 30)),
+    updatedAt: ts(daysAgo(1, 12, 30)),
   });
 
   // Isang nakanselang entry (Nakansela, nakikita pa rin sa listahan).
@@ -595,6 +599,7 @@ async function seedEmergency() {
   let batch = db.batch();
   const contacts = [
     ["Emergency Hotline (National)", "911"],
+    ["Dispatcher", "+639171234502"],
     ["Marilao Police Station", "+639171234567"],
     ["Barangay Marilao Hall", "+639181234567"],
   ];
@@ -606,7 +611,7 @@ async function seedEmergency() {
     });
   });
   await batch.commit();
-  console.log("  emergencyContacts: 3 entries");
+  console.log("  emergencyContacts: 4 entries (kasama ang Dispatcher)");
 }
 
 /*
@@ -631,7 +636,7 @@ async function seedLogs() {
   let batch = db.batch();
   const logs = [
     ["Maria Santos", "Admin", "Dispatch", `${drivers[17].plate} → Monumento – Marilao`, 0, 7, 40],
-    ["Maria Santos", "Admin", "Tapos Na", drivers[0].plate, 0, 12, 30],
+    [`${drivers[0].firstName} ${drivers[0].lastName}`, "Driver", "Tapos Na Bumyahe", drivers[0].plate, 0, 12, 30],
     ["Ramon Villanueva", "Superadmin", "Settings", "Oras ng reset: 9:00 PM | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
     ["Ramon Villanueva", "Superadmin", "Bagong Account", "Maria Santos (admin)", 20, 9, 0],
     ["Maria Santos", "Admin", "Insidente", "Inayos: Minor collision sa Monumento", 1, 16, 45],

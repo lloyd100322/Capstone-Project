@@ -62,6 +62,7 @@ fun DriverContent(
     val dispatchAlert by viewModel.dispatchAlert.collectAsStateWithLifecycle()
     val recentAlerts by viewModel.recentAlerts.collectAsStateWithLifecycle()
     val hasUnreadAlerts by viewModel.hasUnreadAlerts.collectAsStateWithLifecycle()
+    val unreadAlertCount by viewModel.unreadAlertCount.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     /*
@@ -78,6 +79,23 @@ fun DriverContent(
             } catch (_: Exception) {
                 // Tahimik lang kung hindi available ang audio.
             }
+        }
+    }
+
+    /*
+     * Timer ng dispatch notification: awtomatikong magsasara ang
+     * banner pagkalipas ng 5 segundo. May countdown sa banner kaya
+     * nakikita ng driver kung kailan ito mawawala.
+     */
+    var alertSecondsLeft by remember { mutableStateOf(5) }
+    LaunchedEffect(dispatchAlert?.id) {
+        if (dispatchAlert != null) {
+            alertSecondsLeft = 5
+            while (alertSecondsLeft > 0) {
+                kotlinx.coroutines.delay(1000)
+                alertSecondsLeft--
+            }
+            viewModel.dismissDispatchAlert()
         }
     }
 
@@ -168,7 +186,9 @@ fun DriverContent(
                         travelEnded = uiState.travelEndedToday,
                         dailyEarnings = uiState.dailyEarnings,
                         dispatchAlert = dispatchAlert,
+                        dispatchSecondsLeft = alertSecondsLeft,
                         hasUnreadAlerts = hasUnreadAlerts,
+                        unreadAlertCount = unreadAlertCount,
                         onBellClick = {
                             viewModel.markAlertsRead()
                             showAlertsSheet = true
@@ -237,7 +257,9 @@ fun DriverDashboardContent(
     travelEnded: Boolean = false,
     dailyEarnings: Double? = null,
     dispatchAlert: DriverDispatchAlert? = null,
+    dispatchSecondsLeft: Int = 5,
     hasUnreadAlerts: Boolean = false,
+    unreadAlertCount: Int = 0,
     onBellClick: () -> Unit = {},
     onDismissAlert: () -> Unit = {},
     onTaposNa: () -> Unit = {},
@@ -296,18 +318,35 @@ fun DriverDashboardContent(
                 Box {
                     Icon(
                         imageVector = Icons.Default.Notifications,
-                        contentDescription = "Mga Alerto",
+                        contentDescription = "Mga Abiso",
                         tint = Color.Black,
                         modifier = Modifier.size(28.dp)
                     )
                     if (hasUnreadAlerts) {
+                        /*
+                         * Badge na may BILANG ng bagong abiso (hal. "1",
+                         * "2", ... "9+") - hindi lang pulang tuldok.
+                         */
                         Surface(
                             modifier = Modifier
-                                .size(10.dp)
+                                .size(16.dp)
                                 .align(Alignment.TopEnd),
-                            shape = RoundedCornerShape(5.dp),
+                            shape = RoundedCornerShape(8.dp),
                             color = ErrorRed
-                        ) {}
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = if (unreadAlertCount > 9) {
+                                        "9+"
+                                    } else {
+                                        unreadAlertCount.toString()
+                                    },
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -367,6 +406,11 @@ fun DriverDashboardContent(
                                 .joinToString(" • "),
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 13.sp
+                        )
+                        Text(
+                            text = "Magsasara sa $dispatchSecondsLeft segundo",
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 11.sp
                         )
                     }
                     IconButton(onClick = onDismissAlert) {
@@ -693,9 +737,10 @@ fun DriverDashboardContent(
 
         /*
          * "Tapos Na Bumyahe" - aalis ang driver sa pila (Kasaysayan).
-         * May confirm para walang aksidenteng pindot. Kapag tapos na
-         * ang biyahe ngayon, pula ang button at lalabas sa ibaba ang
-         * buong kita ng araw.
+         * May confirm para walang aksidenteng pindot. PULA muna ang
+         * button ("hindi pa tapos"); pagkatapos pindutin at tapos na
+         * ang biyahe ngayon, BERDE na ito ("tapos na") at lalabas sa
+         * ibaba ang buong kita ng araw.
          */
         if (isInQueue || travelEnded) {
             val doneToday = travelEnded && !isInQueue
@@ -712,8 +757,8 @@ fun DriverDashboardContent(
                 shape = RoundedCornerShape(24.dp),
                 enabled = !doneToday,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SuccessGreen,
-                    disabledContainerColor = ErrorRed,
+                    containerColor = ErrorRed,
+                    disabledContainerColor = SuccessGreen,
                     disabledContentColor = Color.White
                 )
             ) {
@@ -835,7 +880,7 @@ fun DispatchAlertsSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Mga Alerto",
+                    "Mga Abiso",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )

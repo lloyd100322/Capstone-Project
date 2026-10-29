@@ -87,7 +87,7 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 
 **Admin account (+639171000002):**
 - [ ] Home: dashboard (kita, insidente, drivers, donasyon)
-- [ ] Pila: mag-dispatch ng #1 sa Marilao–Monumento → mapupunta sa
+- [ ] Pila: mag-dispatch ng #1 sa tab na MARILAO → mapupunta sa
       kabila bilang #1
 - [ ] Kanselahin / Ibalik sa Pila ang isang entry
 - [ ] Mga Ulat: Kasaysayan sa taas, charts sa ibaba

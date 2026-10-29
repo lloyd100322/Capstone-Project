@@ -655,6 +655,29 @@ class QueueViewModel @Inject constructor(
                 }
 
                 /*
+                 * Bawal ang dispatch kapag TAPOS NA BUMYAHE na ang driver
+                 * NGAYONG ARAW ("Tapos Na Bumyahe") - kahit bumalik pa
+                 * siya sa pila (hal. roster heal o rotation), isang
+                 * biyahe lang siya bawat araw.
+                 */
+                val doneForToday = queueSnapshot.documents.any { doc ->
+                    doc.getString("driverId") == driverId &&
+                            doc.getString("status")
+                                .equals("completed", ignoreCase = true) &&
+                            sameDayMillis(
+                                doc.safeTimestamp("endTravelAt")
+                                    ?.toDate()?.time ?: 0L,
+                                System.currentTimeMillis()
+                            )
+                }
+                if (doneForToday) {
+                    throw IllegalStateException(
+                        "Tapos na bumyahe ang driver na ito ngayong araw. " +
+                                "Hindi na siya pwedeng i-dispatch."
+                    )
+                }
+
+                /*
                  * Check the latest driver settings before deciding whether
                  * this vehicle should be requeued after dispatch.
                  */
@@ -1312,7 +1335,7 @@ class QueueViewModel @Inject constructor(
                 ActivityLogger.log(
                     firestore,
                     userSession,
-                    "Tapos Na",
+                    "Tapos Na Bumyahe",
                     target.getString("plateNumber").orEmpty()
                 )
 
@@ -1326,6 +1349,12 @@ class QueueViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** True kapag pareho ang petsa ng dalawang timestamp (millis). */
+    private fun sameDayMillis(a: Long, b: Long): Boolean {
+        val fmt = SimpleDateFormat("yyyyMMdd", Locale.US)
+        return fmt.format(Date(a)) == fmt.format(Date(b))
     }
 
     private fun formatTimestamp(

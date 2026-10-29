@@ -202,17 +202,17 @@ fun QueueScreen(
                     ) {
                         TabButton(
                             modifier = Modifier.weight(1f),
-                            text = "Marilao–Monumento",
+                            text = "MARILAO",
                             isSelected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            fontSize = 10.sp
+                            fontSize = 13.sp
                         )
                         TabButton(
                             modifier = Modifier.weight(1f),
-                            text = "Monumento–Marilao",
+                            text = "MONUMENTO",
                             isSelected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            fontSize = 10.sp
+                            fontSize = 13.sp
                         )
                         TabButton(
                             modifier = Modifier.weight(1f),

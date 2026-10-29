@@ -71,7 +71,7 @@ fun ReportScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize().background(LightGrayBackground),
-                contentPadding = PaddingValues(24.dp)
+                contentPadding = PaddingValues(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 48.dp)
             ) {
                 item {
                     HeaderRow()
@@ -85,19 +85,25 @@ fun ReportScreen(
                     ReportSectionHeader(Icons.Default.AccountBalanceWallet, EnerjeepBlue, EnerjeepBlueLight, "Ulat ng Kita")
                     Spacer(Modifier.height(16.dp))
                     UlatNgKitaContent(state.monthlyData, state.yearlyData, state.historyData)
-                    Spacer(Modifier.height(36.dp))
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+                    Spacer(Modifier.height(20.dp))
                 }
                 item {
                     ReportSectionHeader(Icons.Default.Warning, WarningOrange, WarningOrangeLight, "Ulat ng Insidente")
                     Spacer(Modifier.height(16.dp))
                     UlatNgInsidenteContent(state.currentIncidents, state.allIncidents, state.totalIncidentPenalty)
-                    Spacer(Modifier.height(36.dp))
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+                    Spacer(Modifier.height(20.dp))
                 }
                 item {
                     ReportSectionHeader(Icons.Default.PrivacyTip, ErrorRed, ErrorRedLight, "Ulat ng Multa")
                     Spacer(Modifier.height(16.dp))
                     UlatNgMultiyaContent(state.currentMultiya, state.allMultiya, state.multiyaNgayon, state.kabuuangMultiya)
-                    Spacer(Modifier.height(36.dp))
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+                    Spacer(Modifier.height(20.dp))
                 }
                 item {
                     ReportSectionHeader(Icons.Default.FavoriteBorder, HeartPink, HeartPinkLight, "Donasyon ng Koop")

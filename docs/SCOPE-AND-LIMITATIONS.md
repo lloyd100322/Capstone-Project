@@ -90,13 +90,29 @@ question in review, so each has a stated reason.
    "Iskedyul" tab was removed as unnecessary.)
 7. **No offline mode.** The app requires internet (Firestore). A failed
    write is reported to the user instead of being queued silently.
-8. **SMS OTP costs money.** Firebase Phone Auth billing
-   (~USD 0.01–0.06 per verification) is on the project owner; **test
-   phone numbers** in the Firebase console are used for development and
-   demos so no SMS cost is incurred (see `seed/README.md`).
-9. **App Check enforcement is a console setting.** Play Integrity
-   covers real devices; development devices must register debug tokens
-   (a 403 before registration is expected behavior, not a bug).
+8. **SMS OTP is unreliable while the app is NOT on the Play Store.**
+   Firebase Phone Auth verifies the *app* before it sends real SMS.
+   An app installed from the **Play Store** passes this check
+   automatically (Play Integrity); an app **sideloaded from an APK**
+   (our current distribution) cannot be verified, so Google's abuse
+   protection limits it: real SMS may arrive late or not at all, and
+   number/quotas can be rejected ("invalid phone number", too many
+   requests). This is a **distribution status**, not a bug in the
+   login code. **For demos and testing we use Firebase test phone
+   numbers with fixed codes** (no SMS is sent, no cost — see
+   `seed/README.md`); real SMS OTP becomes reliable once the app is
+   published on the Play Store. (Firebase Phone Auth billing,
+   ~USD 0.01–0.06 per verification, is on the project owner.)
+9. **The reCAPTCHA ("captcha") on OTP is Google's app-integrity check,
+   not a bug.** When the app cannot prove its integrity (sideloaded
+   APK — see #8), Firebase opens a **reCAPTCHA challenge before
+   sending SMS** as an anti-abuse fallback: without it, anyone could
+   clone an app and trigger SMS spam. On a Play Store build, Play
+   Integrity verifies the install source and the captcha step
+   disappears for most users. **App Check enforcement is also a
+   console setting** — Play Integrity covers real devices, and
+   development devices must register debug tokens (a 403 before
+   registration is expected behavior, not a bug).
 10. **Android only** (minSdk 29 / Android 10). No iOS or web client.
 11. **Password recovery** is handled by an in-app reset flow (not email
     links), because the login identity is a phone number, not an email.
