@@ -287,6 +287,7 @@ class CreateAccountViewModel @Inject constructor(
                     mapOf(
                         "passwordHash" to saltedPassword.hash,
                         "passwordSalt" to saltedPassword.salt,
+                        "iterations" to saltedPassword.iterations,
                         "createdAt" to FieldValue.serverTimestamp()
                     )
                 )

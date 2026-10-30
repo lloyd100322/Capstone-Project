@@ -636,6 +636,10 @@ class DriverProfileViewModel @Inject constructor(
                 val savedHash =
                     secrets.getString("passwordHash")
 
+                val savedIterations =
+                    secrets.getLong("iterations")?.toInt()
+                        ?: PasswordHasher.LEGACY_ITERATIONS
+
                 val passwordMatches = if (
                     !salt.isNullOrBlank() &&
                     !savedHash.isNullOrBlank()
@@ -643,7 +647,8 @@ class DriverProfileViewModel @Inject constructor(
                     PasswordHasher.verify(
                         state.oldPassword,
                         salt,
-                        savedHash
+                        savedHash,
+                        savedIterations
                     )
                 } else {
                     // Legacy account that still has the plaintext field.
@@ -668,6 +673,7 @@ class DriverProfileViewModel @Inject constructor(
                     mapOf(
                         "passwordHash" to salted.hash,
                         "passwordSalt" to salted.salt,
+                        "iterations" to salted.iterations,
                         "updatedAt" to
                                 FieldValue.serverTimestamp()
                     )

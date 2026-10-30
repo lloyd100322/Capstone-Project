@@ -3,7 +3,6 @@ package com.mobile.enerjeep.data
 import java.util.UUID
 
 object FirestoreCollections {
-    const val DISPATCHES = "dispatches"
     const val USERS = "users"
 
     /**

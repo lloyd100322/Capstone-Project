@@ -328,6 +328,7 @@ class ResetPasswordViewModel @Inject constructor(
                     mapOf(
                         "passwordHash" to salted.hash,
                         "passwordSalt" to salted.salt,
+                        "iterations" to salted.iterations,
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 )

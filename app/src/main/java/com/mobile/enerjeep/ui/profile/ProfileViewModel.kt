@@ -360,12 +360,17 @@ class ProfileViewModel @Inject constructor(
 
                 val salt = secrets.getString("passwordSalt")
                 val savedHash = secrets.getString("passwordHash")
+                val savedIterations =
+                    secrets.getLong("iterations")?.toInt()
+                        ?: PasswordHasher.LEGACY_ITERATIONS
 
                 val passwordMatches = if (
                     !salt.isNullOrBlank() &&
                     !savedHash.isNullOrBlank()
                 ) {
-                    PasswordHasher.verify(oldPass, salt, savedHash)
+                    PasswordHasher.verify(
+                        oldPass, salt, savedHash, savedIterations
+                    )
                 } else {
                     // Legacy account that still has the old plaintext field.
                     document.getString("password") == oldPass
@@ -389,6 +394,7 @@ class ProfileViewModel @Inject constructor(
                     mapOf(
                         "passwordHash" to salted.hash,
                         "passwordSalt" to salted.salt,
+                        "iterations" to salted.iterations,
                         "updatedAt" to
                                 FieldValue.serverTimestamp()
                     )

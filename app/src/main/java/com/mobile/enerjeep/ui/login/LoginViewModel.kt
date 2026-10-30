@@ -397,6 +397,8 @@ class LoginViewModel @Inject constructor(
      * /userSecrets. Older accounts still have a plaintext `password`
      * field on the profile document; those are verified once and
      * immediately migrated to a hash (the plaintext field is deleted).
+     * Hashes written at the older, weaker work factor are silently
+     * upgraded to the current one after a successful login.
      */
     private suspend fun verifyPassword(
         phone: String,
@@ -413,8 +415,25 @@ class LoginViewModel @Inject constructor(
         val salt = secrets.getString("passwordSalt")
         val hash = secrets.getString("passwordHash")
 
+        // Documents carry the work factor they were written with;
+        // documents from before the field existed used the legacy one.
+        val storedIterations = secrets.getLong("iterations")?.toInt()
+            ?: PasswordHasher.LEGACY_ITERATIONS
+
         if (!salt.isNullOrBlank() && !hash.isNullOrBlank()) {
-            return PasswordHasher.verify(typedPassword, salt, hash)
+            val matched = PasswordHasher.verify(
+                typedPassword, salt, hash, storedIterations
+            )
+
+            if (matched && storedIterations < PasswordHasher.ITERATIONS) {
+                try {
+                    persistPasswordHash(phone, typedPassword, userReference)
+                } catch (e: Exception) {
+                    // Login still succeeds; the next login tries again.
+                    Log.w("Login", "Password upgrade failed", e)
+                }
+            }
+            return matched
         }
 
         // Legacy plaintext account: verify, then migrate to a hash.
@@ -423,7 +442,7 @@ class LoginViewModel @Inject constructor(
 
         if (matched) {
             try {
-                migrateLegacyPassword(phone, typedPassword, userReference)
+                persistPasswordHash(phone, typedPassword, userReference)
             } catch (e: Exception) {
                 // Login still succeeds; the next login tries again.
                 Log.w("Login", "Password migration failed", e)
@@ -433,7 +452,12 @@ class LoginViewModel @Inject constructor(
         return matched
     }
 
-    private suspend fun migrateLegacyPassword(
+    /**
+     * Writes the salted hash to /userSecrets (at the current work
+     * factor) and removes any leftover plaintext password from the
+     * profile document.
+     */
+    private suspend fun persistPasswordHash(
         phone: String,
         plainPassword: String,
         userReference: DocumentReference
@@ -449,6 +473,7 @@ class LoginViewModel @Inject constructor(
             mapOf(
                 "passwordHash" to salted.hash,
                 "passwordSalt" to salted.salt,
+                "iterations" to salted.iterations,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
         )

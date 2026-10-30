@@ -29,7 +29,7 @@ Password for **all** seeded accounts: `Demo123!`
 | Drivers | `+639171000003` … `+639171000035` (33 tunay na drayber: Roger TXA 448, Jess DGT 463, Joel PWU 904, … , Marlon DLH 781 — tingnan ang `roster` sa `seed.js`) |
 
 > The password hash is generated with the same algorithm as the app
-> (PBKDF2-HMAC-SHA256, 12,000 iterations) — the accounts work on the
+> (PBKDF2-HMAC-SHA256, 210,000 iterations) — the accounts work on the
 > real login screen.
 
 ## OTP without SMS cost (IMPORTANT for demos)

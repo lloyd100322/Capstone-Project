@@ -18,9 +18,51 @@ class PasswordHasherTest {
     fun theSamePasswordWithTheSameSaltGivesTheSameHash() {
         val salted = PasswordHasher.hash("secret-password")
 
-        val again = PasswordHasher.hashWithSalt("secret-password", salted.salt)
+        val again = PasswordHasher.hashWithSalt(
+            "secret-password",
+            salted.salt,
+            salted.iterations
+        )
 
         assertEquals(salted.hash, again)
+    }
+
+    @Test
+    fun newHashesCarryTheCurrentWorkFactor() {
+        val salted = PasswordHasher.hash("secret-password")
+
+        assertEquals(PasswordHasher.ITERATIONS, salted.iterations)
+    }
+
+    @Test
+    fun legacyHashesVerifyOnlyAtTheirStoredWorkFactor() {
+        val salt = "00112233445566778899aabbccddeeff"
+
+        val legacyHash = PasswordHasher.hashWithSalt(
+            "secret-password",
+            salt,
+            PasswordHasher.LEGACY_ITERATIONS
+        )
+
+        // Verifies at the stored (legacy) work factor ...
+        assertTrue(
+            PasswordHasher.verify(
+                "secret-password",
+                salt,
+                legacyHash,
+                PasswordHasher.LEGACY_ITERATIONS
+            )
+        )
+
+        // ... but never at a different one.
+        assertFalse(
+            PasswordHasher.verify(
+                "secret-password",
+                salt,
+                legacyHash,
+                PasswordHasher.ITERATIONS
+            )
+        )
     }
 
     @Test

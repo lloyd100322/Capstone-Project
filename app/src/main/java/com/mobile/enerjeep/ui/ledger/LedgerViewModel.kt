@@ -170,8 +170,18 @@ class LedgerViewModel @Inject constructor(
         return LedgerDriverOption(userId, plateNumber, name)
     }
 
-    /** Adds one real ledger record. The driverId is users.userId, not the Firestore document ID. */
+    /**
+     * Adds one real ledger record. The driverId is users.userId, not the
+     * Firestore document ID.
+     */
+
+    // In-flight guard: a double tap must not record the payment twice.
+    private var savingCollection = false
+
     fun addCollection(plateNumber: String, driverName: String, amount: Double, feeType: String) {
+        if (savingCollection) return
+        savingCollection = true
+
         viewModelScope.launch {
             try {
                 val cleanPlateNumber = plateNumber.trim()
@@ -239,6 +249,8 @@ class LedgerViewModel @Inject constructor(
                 )
             } catch (e: Exception) {
                 _uiState.value = LedgerUiState.Error(e.message ?: "Hindi na-save ang collection")
+            } finally {
+                savingCollection = false
             }
         }
     }

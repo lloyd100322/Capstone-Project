@@ -130,35 +130,74 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
 
       // Admins manage the pila. A driver may also end his OWN travel
-      // ("Tapos Na") - only the status/position fields can change.
+      // ("Tapos Na Bumyahe") - under these limits:
+      //
+      //   (a) own entry: only status/position/endTravelAt/updatedAt may
+      //       change; if the status changes it must become "completed",
+      //       and if the position changes it must become 0 (out of the
+      //       active pila). A modified client can no longer move itself
+      //       up the queue or fake its status.
+      //   (b) other entries: finishing travel renumbers the pila behind
+      //       the driver - a pure position reflow. Identity and status
+      //       fields stay untouchable, and a driver can never use this
+      //       clause on his own entry (that is (a) above).
       allow update: if isAdmin()
         || (isMember()
             && resource.data.driverId ==
                get(/databases/$(database)/documents/users/$(authPhone())).data.userId
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['status', 'position', 'endTravelAt',
-                           'updatedAt']));
+                           'updatedAt'])
+            && (!request.resource.data.diff(resource.data).affectedKeys()
+                   .hasAny(['status'])
+                 || request.resource.data.status == 'completed')
+            && (!request.resource.data.diff(resource.data).affectedKeys()
+                   .hasAny(['position'])
+                 || request.resource.data.position == 0))
+        || (isMember()
+            && resource.data.driverId !=
+               get(/databases/$(database)/documents/users/$(authPhone())).data.userId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['position', 'updatedAt'])
+            && request.resource.data.position is number
+            && request.resource.data.position >= 0);
     }
 
     // ------------------------------------------------------------------
     // /settings - app settings (queue rotation cutoff, deduction tiers)
+    //
+    // Ang cut-off hour ay SUPERADMIN lang ang maaaring magbago. Ang
+    // admin ay pinapayagang i-maintain ang ibang fields (hal. ang
+    // lastQueueDay/routesNormalized na isinusulat ng auto-reset engine
+    // kahit naka-login lang ang admin) - basta hindi cutoffHour.
     // ------------------------------------------------------------------
     match /settings/{docId} {
       allow read: if isMember();
-      allow write: if isAdmin();
+
+      allow create: if isSuperadmin()
+        || (isAdmin()
+            && !request.resource.data.keys().hasAny(['cutoffHour']));
+
+      allow update: if isSuperadmin()
+        || (isAdmin()
+            && !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['cutoffHour']));
+
+      allow delete: if isSuperadmin();
     }
 
     // ------------------------------------------------------------------
     // /activityLogs - audit log (accountability)
     //
     // EVERY admin action is recorded here (dispatch, cancel, create
-    // account, donations, ...). Only the SUPERADMIN can read the log -
-    // auditing the admins is the oversight power of the level above.
-    // Entries can never be edited or deleted, so the trail is honest.
+    // account, donations, ...) pati ang "Tapos Na Bumyahe" ng driver.
+    // Only the SUPERADMIN can read the log - auditing the admins is the
+    // oversight power of the level above. Entries can never be edited
+    // or deleted, so the trail is honest.
     // ------------------------------------------------------------------
     match /activityLogs/{logId} {
       allow read: if isSuperadmin();
-      allow create: if isAdmin();
+      allow create: if isMember();
       allow update, delete: if false;
     }
 
@@ -201,14 +240,16 @@ service cloud.firestore {
 
     // ------------------------------------------------------------------
     // /kita - manual earnings of a driver
+    //
+    // Basa lang ang driver (sariling kita). Ang pagsulat ay ADMIN lang -
+    // hindi maaaring baguhin ng driver ang sarili niyang earnings record
+    // kahit sariling dokumento pa ito (laban sa inflation ng kita).
     // ------------------------------------------------------------------
     match /kita/{entryId} {
       allow read: if isAdmin()
                   || (isMember() && resource.data.driverId ==
                        get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
-      allow create, update, delete: if isAdmin()
-                  || (isMember() && request.resource.data.driverId ==
-                       get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
+      allow create, update, delete: if isAdmin();
     }
 
     // ------------------------------------------------------------------

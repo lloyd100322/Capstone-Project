@@ -1,22 +1,17 @@
 package com.mobile.enerjeep.ui.kita
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.safeTimestamp
-import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -263,50 +258,6 @@ class KitaViewModel @Inject constructor(
             createdAtMillis = millis,
             sourceId = "ledger:${document.id}"
         )
-    }
-
-    fun addKita(
-        driverId: String,
-        title: String,
-        amount: Double,
-        type: String,
-        date: String
-    ) {
-        if (driverId.isBlank() || title.isBlank() || amount <= 0.0) {
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                val id = FirestoreIds.kita()
-                val cleanType = type.trim().ifBlank { "Kita" }
-
-                val data = mapOf<String, Any>(
-                    "id" to id,
-                    "driverId" to driverId.trim(),
-                    "title" to title.trim(),
-                    "amount" to amount,
-                    "type" to cleanType,
-                    "date" to date.trim().ifBlank {
-                        SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
-                    },
-                    "isHistory" to false,
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-
-                firestore
-                    .collection(FirestoreCollections.KITA)
-                    .document(id)
-                    .set(data)
-                    .await()
-            } catch (e: Exception) {
-                // Never swallow a failed save: the user must know the
-                // record was not written so they can try again.
-                ToastFeedback.show(
-                    e.message ?: "Hindi na-save ang kita. Subukan muli."
-                )
-            }
-        }
     }
 
     fun onTabSelected(tab: KitaTabType) {

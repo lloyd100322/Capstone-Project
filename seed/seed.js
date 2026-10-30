@@ -16,9 +16,9 @@
  *              (DANGEROUS - never on a project with real data)
  *
  * The password hash matches the app's PasswordHasher exactly:
- * PBKDF2-HMAC-SHA256, 12,000 iterations, 16-byte salt, 256-bit output,
- * hex-encoded. The demo password is plain ASCII so the Java and Node
- * encodings are byte-identical.
+ * PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte salt, 256-bit
+ * output, hex-encoded. The demo password is plain ASCII so the Java
+ * and Node encodings are byte-identical.
  *
  * NEVER commit the service-account key. Keep it outside the repo.
  */
@@ -45,9 +45,18 @@ if (serviceAccountPath) {
 const db = admin.firestore();
 
 // ------------------------------------------------------------- helpers
+// Must match PasswordHasher.ITERATIONS in the Android app.
+const PBKDF2_ITERATIONS = 210_000;
+
 function pbkdf2(password, saltHex) {
   return crypto
-    .pbkdf2Sync(password, Buffer.from(saltHex, "hex"), 12_000, 32, "sha256")
+    .pbkdf2Sync(
+      password,
+      Buffer.from(saltHex, "hex"),
+      PBKDF2_ITERATIONS,
+      32,
+      "sha256"
+    )
     .toString("hex");
 }
 
@@ -60,6 +69,7 @@ function makeSecrets(password) {
   return {
     passwordHash: pbkdf2(password, salt),
     passwordSalt: salt,
+    iterations: PBKDF2_ITERATIONS,
   };
 }
 

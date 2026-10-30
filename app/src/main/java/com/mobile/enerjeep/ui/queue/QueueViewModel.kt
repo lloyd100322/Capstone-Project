@@ -735,33 +735,16 @@ class QueueViewModel @Inject constructor(
                         .data
                 )
 
-                val remainingActive = queueSnapshot.documents
-                    .filter {
-                        it.id != vehicleId &&
-                                isActiveStatus(it.getString("status"))
-                    }
-                    .sortedWith(
-                        compareBy<DocumentSnapshot> {
-                            if (it.getBoolean("isCancelled") == true) 1 else 0
-                        }.thenBy {
-                            it.getLong("position") ?: Long.MAX_VALUE
-                        }.thenBy {
-                            it.safeTimestamp("createdAt")?.seconds
-                                ?: Long.MAX_VALUE
-                        }
-                    )
-
-                // Avoid creating another active entry if one already exists.
-                val alreadyQueuedAfterDispatch =
-                    remainingActive.any {
-                        it.getString("driverId") == driverId
-                    }
-
-                val shouldRequeue =
-                    driverAccount.getBoolean("isVehicleActive") != false &&
-                            !alreadyQueuedAfterDispatch
-
                 val queueReference = currentDocument.reference
+
+                /*
+                 * Lahat ng reference ng queue doc - ang FRESH na listahan
+                 * ay binabasa SA LOOB ng transaction sa ibaba (pareho ng
+                 * QueueRotation), kaya kahit sabay ang dalawang admin ay
+                 * hindi nagkakamali ang renumbering mula sa lumang listahan.
+                 */
+                val queueReferencesById =
+                    queueSnapshot.documents.associate { it.id to it.reference }
 
                 /*
                  * A Firestore transaction is used so the dispatch is only
@@ -779,6 +762,40 @@ class QueueViewModel @Inject constructor(
                             "Ang sasakyang ito ay wala na sa aktibong pila."
                         )
                     }
+
+                    /*
+                     * FRESH read of the whole pila inside the transaction
+                     * (per-doc get - walang transaction.get(Query) sa
+                     * mobile SDK).
+                     */
+                    val remainingActive = queueReferencesById
+                        .filterKeys { it != vehicleId }
+                        .values
+                        .map { transaction.get(it) }
+                        .filter {
+                            it.exists() &&
+                                    isActiveStatus(it.getString("status"))
+                        }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> {
+                                if (it.getBoolean("isCancelled") == true) 1 else 0
+                            }.thenBy {
+                                it.getLong("position") ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.safeTimestamp("createdAt")?.seconds
+                                    ?: Long.MAX_VALUE
+                            }
+                        )
+
+                    // Avoid creating another active entry if one already exists.
+                    val alreadyQueuedAfterDispatch =
+                        remainingActive.any {
+                            it.getString("driverId") == driverId
+                        }
+
+                    val shouldRequeue =
+                        driverAccount.getBoolean("isVehicleActive") != false &&
+                                !alreadyQueuedAfterDispatch
 
                     // Mark the dispatched queue entry as historical.
                     transaction.update(
@@ -799,7 +816,7 @@ class QueueViewModel @Inject constructor(
                  * route, so the drivers behind it in the SAME route move
                  * up one spot.
                  */
-                val currentRoute = currentDocument.getString("route")
+                val currentRoute = freshEntry.getString("route")
 
                 val sameRouteRemaining = remainingActive.filter {
                     sameRoute(it.getString("route"), currentRoute)
@@ -854,7 +871,7 @@ class QueueViewModel @Inject constructor(
                      * is dispatched he becomes #1 of the other route".
                      */
                     val route = oppositeRoute(
-                        currentDocument.getString("route")
+                        freshEntry.getString("route")
                     )
 
                     val requeueData = mapOf<String, Any>(
@@ -971,27 +988,12 @@ class QueueViewModel @Inject constructor(
                     )
                 }
 
-                val targetRoute = target.getString("route")
-
-                val remaining = queueSnapshot.documents
-                    .filter {
-                        it.id != vehicleId &&
-                                isActiveStatus(it.getString("status")) &&
-                                sameRoute(
-                                    it.getString("route"),
-                                    targetRoute
-                                )
-                    }
-                    .sortedWith(
-                        compareBy<DocumentSnapshot> {
-                            if (it.getBoolean("isCancelled") == true) 1 else 0
-                        }.thenBy {
-                            it.getLong("position") ?: Long.MAX_VALUE
-                        }.thenBy {
-                            it.safeTimestamp("createdAt")?.seconds
-                                ?: Long.MAX_VALUE
-                        }
-                    )
+                /*
+                 * Lahat ng reference - ang FRESH na listahan ay binabasa
+                 * SA LOOB ng transaction (pareho ng QueueRotation).
+                 */
+                val queueReferencesById =
+                    queueSnapshot.documents.associate { it.id to it.reference }
 
                 /*
                  * Transaction: only cancel if the entry is still active
@@ -1007,6 +1009,30 @@ class QueueViewModel @Inject constructor(
                             "Ang sasakyang ito ay wala na sa aktibong pila."
                         )
                     }
+
+                    // Fresh same-route list computed inside the transaction.
+                    val remaining = queueReferencesById
+                        .filterKeys { it != vehicleId }
+                        .values
+                        .map { transaction.get(it) }
+                        .filter {
+                            it.exists() &&
+                                    isActiveStatus(it.getString("status")) &&
+                                    sameRoute(
+                                        it.getString("route"),
+                                        freshEntry.getString("route")
+                                    )
+                        }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> {
+                                if (it.getBoolean("isCancelled") == true) 1 else 0
+                            }.thenBy {
+                                it.getLong("position") ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.safeTimestamp("createdAt")?.seconds
+                                    ?: Long.MAX_VALUE
+                            }
+                        )
 
                     // The cancelled entry stays in the queue at the bottom.
                     transaction.update(
@@ -1079,37 +1105,12 @@ class QueueViewModel @Inject constructor(
                     )
                 }
 
-                val targetRoute = target.getString("route")
-
-                val remaining = queueSnapshot.documents
-                    .filter {
-                        it.id != vehicleId &&
-                                isActiveStatus(it.getString("status")) &&
-                                sameRoute(
-                                    it.getString("route"),
-                                    targetRoute
-                                )
-                    }
-                    .sortedWith(
-                        compareBy<DocumentSnapshot> {
-                            if (it.getBoolean("isCancelled") == true) 1 else 0
-                        }.thenBy {
-                            it.getLong("position") ?: Long.MAX_VALUE
-                        }.thenBy {
-                            it.safeTimestamp("createdAt")?.seconds
-                                ?: Long.MAX_VALUE
-                        }
-                    )
-
                 /*
-                 * The restored entry joins the END of the normal
-                 * (non-cancelled) group, before any cancelled entries.
+                 * Lahat ng reference - ang FRESH na listahan ay binabasa
+                 * SA LOOB ng transaction (pareho ng QueueRotation).
                  */
-                val ordered = remaining.filter {
-                    it.getBoolean("isCancelled") != true
-                } + listOf(target) + remaining.filter {
-                    it.getBoolean("isCancelled") == true
-                }
+                val queueReferencesById =
+                    queueSnapshot.documents.associate { it.id to it.reference }
 
                 firestore.runTransaction { transaction ->
                     val freshEntry = transaction.get(target.reference)
@@ -1120,6 +1121,40 @@ class QueueViewModel @Inject constructor(
                         throw IllegalStateException(
                             "Ang sasakyang ito ay wala na sa aktibong pila."
                         )
+                    }
+
+                    // Fresh same-route list computed inside the transaction.
+                    val remaining = queueReferencesById
+                        .filterKeys { it != vehicleId }
+                        .values
+                        .map { transaction.get(it) }
+                        .filter {
+                            it.exists() &&
+                                    isActiveStatus(it.getString("status")) &&
+                                    sameRoute(
+                                        it.getString("route"),
+                                        freshEntry.getString("route")
+                                    )
+                        }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> {
+                                if (it.getBoolean("isCancelled") == true) 1 else 0
+                            }.thenBy {
+                                it.getLong("position") ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.safeTimestamp("createdAt")?.seconds
+                                    ?: Long.MAX_VALUE
+                            }
+                        )
+
+                    /*
+                     * The restored entry joins the END of the normal
+                     * (non-cancelled) group, before any cancelled entries.
+                     */
+                    val ordered = remaining.filter {
+                        it.getBoolean("isCancelled") != true
+                    } + listOf(freshEntry) + remaining.filter {
+                        it.getBoolean("isCancelled") == true
                     }
 
                     ordered.forEachIndexed { index, document ->

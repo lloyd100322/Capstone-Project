@@ -312,30 +312,13 @@ class DriverViewModel @Inject constructor(
                     )
                 }
 
-                val route = target.getString("route")
                 val queueSnapshot = firestore
                     .collection(FirestoreCollections.QUEUE)
                     .get()
                     .await()
 
-                val remaining = queueSnapshot.documents
-                    .filter {
-                        it.id != docId &&
-                                isActiveQueueStatus(it.getString("status")) &&
-                                QueueViewModel.sameRoute(
-                                    it.getString("route"), route
-                                )
-                    }
-                    .sortedWith(
-                        compareBy<DocumentSnapshot> {
-                            if (it.getBoolean("isCancelled") == true) 1 else 0
-                        }.thenBy {
-                            it.getLong("position") ?: Long.MAX_VALUE
-                        }.thenBy {
-                            it.safeTimestamp("createdAt")?.seconds
-                                ?: Long.MAX_VALUE
-                        }
-                    )
+                val queueReferencesById =
+                    queueSnapshot.documents.associate { it.id to it.reference }
 
                 firestore.runTransaction { transaction ->
                     val fresh = transaction.get(target.reference)
@@ -346,6 +329,34 @@ class DriverViewModel @Inject constructor(
                             "Wala na sa pila ang sasakyang ito."
                         )
                     }
+
+                    /*
+                     * FRESH read of the pila inside the transaction
+                     * (per-doc get - pareho ng QueueRotation) kaya tama
+                     * ang renumbering kahit sabay-sabay ang galaw.
+                     */
+                    val remaining = queueReferencesById
+                        .filterKeys { it != docId }
+                        .values
+                        .map { transaction.get(it) }
+                        .filter {
+                            it.exists() &&
+                                    isActiveQueueStatus(it.getString("status")) &&
+                                    QueueViewModel.sameRoute(
+                                        it.getString("route"),
+                                        fresh.getString("route")
+                                    )
+                        }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> {
+                                if (it.getBoolean("isCancelled") == true) 1 else 0
+                            }.thenBy {
+                                it.getLong("position") ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.safeTimestamp("createdAt")?.seconds
+                                    ?: Long.MAX_VALUE
+                            }
+                        )
 
                     transaction.update(
                         target.reference,

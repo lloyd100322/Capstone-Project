@@ -348,6 +348,9 @@ class IncidentViewModel @Inject constructor(
         }
     }
 
+    // In-flight flag for reportIncident (double-tap protection).
+    private var reportingIncident = false
+
     fun reportIncident(
         plateNumber: String,
         type: String,
@@ -371,6 +374,10 @@ class IncidentViewModel @Inject constructor(
                 "MMM dd, yyyy",
                 Locale.getDefault()
             ).format(Date())
+
+        // In-flight guard: a double tap must not record the incident twice.
+        if (reportingIncident) return
+        reportingIncident = true
 
         viewModelScope.launch {
 
@@ -512,6 +519,8 @@ class IncidentViewModel @Inject constructor(
                     e.message
                         ?: "Hindi ma-save ang insidente"
                 )
+            } finally {
+                reportingIncident = false
             }
         }
     }

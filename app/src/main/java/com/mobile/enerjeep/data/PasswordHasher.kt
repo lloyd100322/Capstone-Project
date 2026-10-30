@@ -20,16 +20,35 @@ import javax.crypto.spec.PBEKeySpec
 object PasswordHasher {
 
     private const val ALGORITHM = "PBKDF2WithHmacSHA256"
-    private const val ITERATIONS = 12_000
+
+    /**
+     * Work factor for NEW hashes - OWASP guidance for
+     * PBKDF2-HmacSHA256 starts at 210,000 iterations. Older
+     * /userSecrets documents were written with LEGACY_ITERATIONS; they
+     * keep verifying through their stored `iterations` field and are
+     * silently rewritten at the current work factor after a successful
+     * login (see LoginViewModel.verifyPassword).
+     */
+    const val ITERATIONS = 210_000
+
+    /** Pre-upgrade default (documents without an `iterations` field). */
+    const val LEGACY_ITERATIONS = 12_000
+
     private const val SALT_BYTES = 16
     private const val HASH_BITS = 256
 
     private const val HEX_DIGITS = "0123456789abcdef"
 
-    /** A fresh random salt together with the hash of the password. */
+    /**
+     * A fresh random salt together with the hash of the password and
+     * the work factor it was computed with. Persist `iterations` next
+     * to the hash so the value can be changed later without breaking
+     * older documents.
+     */
     data class SaltedHash(
         val salt: String,
-        val hash: String
+        val hash: String,
+        val iterations: Int = ITERATIONS
     )
 
     /** Hashes a password with a brand-new random salt. */
@@ -39,16 +58,24 @@ object PasswordHasher {
         val saltHex = toHex(saltBytes)
         return SaltedHash(
             salt = saltHex,
-            hash = hashWithSalt(password, saltHex)
+            hash = hashWithSalt(password, saltHex, ITERATIONS),
+            iterations = ITERATIONS
         )
     }
 
-    /** Hashes a password with an existing salt (hex encoded). */
-    fun hashWithSalt(password: String, saltHex: String): String {
+    /**
+     * Hashes a password with an existing salt (hex encoded) at the
+     * given work factor.
+     */
+    fun hashWithSalt(
+        password: String,
+        saltHex: String,
+        iterations: Int = ITERATIONS
+    ): String {
         val spec = PBEKeySpec(
             password.toCharArray(),
             fromHex(saltHex),
-            ITERATIONS,
+            iterations,
             HASH_BITS
         )
         val factory = SecretKeyFactory.getInstance(ALGORITHM)
@@ -59,11 +86,16 @@ object PasswordHasher {
      * True when the password matches the stored hash. Compares in
      * constant time so a timing attack cannot guess the hash.
      */
-    fun verify(password: String, saltHex: String, hashHex: String): Boolean {
+    fun verify(
+        password: String,
+        saltHex: String,
+        hashHex: String,
+        iterations: Int = ITERATIONS
+    ): Boolean {
         if (saltHex.isBlank() || hashHex.isBlank()) return false
 
         val candidate = try {
-            hashWithSalt(password, saltHex)
+            hashWithSalt(password, saltHex, iterations)
         } catch (_: Exception) {
             return false
         }
