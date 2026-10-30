@@ -13,11 +13,13 @@ import java.util.Locale
 /**
  * AWTOMATIKONG RESET NG PILA (cut-off) - shared engine.
  *
- * Dalawang lugar ang tumatawag nito:
+ * PANGUNAHIN: isang NAKA-SCHEDULE na Cloud Function (functions/index.js
+ * - dailyQueueReset, bawat oras, Asia/Manila) ang nagre-reset ng pila
+ * kahit SARADO ang app. Pareho ng logic nito.
+ *
+ * PANTULONG (fallback) sa Android - dalawang lugar ang tumatawag:
  *   1. ContentViewModel - AGAD sa pag-login (kahit anong screen ang
- *      buksan) + isang watch habang naka-bukas ang app. Kaya kahit
- *      ADMIN lang ang naka-login (hindi kailangang superadmin) at kahit
- *      nasa Home lang, nagre-reset ang pila sa tamang oras.
+ *      buksan) + isang watch habang naka-bukas ang app.
  *   2. QueueViewModel (Pila tab) - catch-up + live reset habang nakabukas.
  *
  * Idempotent ito: ang unang makaka-transaction ang nagre-reset, ang

@@ -65,12 +65,12 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 
 | Role | Numero | Password |
 |---|---|---|
-| Superadmin | `+639171000001` | `Demo123!` |
-| Admin | `+639171000002` | `Demo123!` |
-| Driver (Roger) | `+639171000003` | `Demo123!` |
-| Driver (Jess) | `+639171000004` | `Demo123!` |
-| Driver (Joel) | `+639171000005` | `Demo123!` |
-| ... (33 tunay na drayber ng terminal) | `+639171000006` … `+639171000035` | `Demo123!` |
+| Superadmin | `+639171000001` | `Enerjeep@2026` |
+| Admin | `+639171000002` | `Enerjeep@2026` |
+| Driver (Roger) | `+639171000003` | `Enerjeep@2026` |
+| Driver (Jess) | `+639171000004` | `Enerjeep@2026` |
+| Driver (Joel) | `+639171000005` | `Enerjeep@2026` |
+| ... (33 tunay na drayber ng terminal) | `+639171000006` … `+639171000035` | `Enerjeep@2026` |
 
 - Ang login ay **numero + password + OTP** (SMS verification).
 - Dahil test accounts ang nasa itaas, ang OTP ay **`123456`** lang —
@@ -109,9 +109,9 @@ Ang "website" = isang **download page/link** — dalawang paraan:
 | Problema | Sanhi | Solusyon |
 |---|---|---|
 | "App Check"/403 error, hindi makakita ng datos | Naka-ON ang App Check enforcement | Sa Firebase console → App Check → Enforcement → i-allow muna ang unverified requests (testing lang) |
-| Hindi natatanggap ang OTP | Hindi naka-setup ang test numbers | Tingnan ang **Part D** (Part A ng `seed/README.md`) |
-| Blangko ang app / walang laman | Hindi pa na-seed ang data | Patakbuhin ang `seed/seed.js --wipe` (tingnan `seed/README.md`) |
-| "Invalid password" | Mali ang password | `Demo123!` (may `!` sa dulo) |
+| Hindi natatanggap ang OTP | Hindi naka-setup ang test numbers | Tingnan ang **Part D** (OTP setup sa `seed/README.md`) |
+| Blangko ang app / walang laman | Wala pang datos sa database | Patakbuhin ang `seed/setup.js --wipe` (tingnan `seed/README.md`) |
+| "Invalid password" | Mali ang password | `Enerjeep@2026` (may `!` sa dulo) |
 
 ---
 
@@ -134,6 +134,6 @@ numero ng test account (na hindi pagmamay-ari ng mga tester).
 
 3. **Save** — walang SMS na ipapadala kahit kailan, walang bayad.
 
-Bago i-share ang APK, tiyaking: (1) na-run ang `seed/seed.js`, (2)
+Bago i-share ang APK, tiyaking: (1) na-run ang `seed/setup.js`, (2)
 naka-setup ang test numbers, (3) na-check na makaka-login kayo sa
 inyong sariling phone gamit ang test account.

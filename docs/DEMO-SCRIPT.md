@@ -13,7 +13,7 @@ audit/liability) nang live.
       `911ab31` pataas ang build
 - [ ] Sync + Build sa Android Studio; i-run sa **totoong cellphone**
       (mas kapani-paniwala kaysa emulator)
-- [ ] **Patakbuhin ang `seed/seed.js`** (tingnan ang `seed/README.md`)
+- [ ] **Patakbuhin ang `seed/setup.js`** (tingnan ang `seed/README.md`)
       — hindi pwedeng blangko ang app ("minus points" sabi ng adviser)
 - [ ] Firebase console → Authentication → Phone → **Phone numbers for
       testing** (para walang SMS cost sa OTP)
@@ -26,7 +26,7 @@ audit/liability) nang live.
 
 ## 1. DRIVER muna (ang perspective na hiniling ng adviser) — ~5 min
 
-Login bilang driver (hal. `+639171000003`, password `Demo123!`, OTP sa
+Login bilang driver (hal. `+639171000003`, password `Enerjeep@2026`, OTP sa
 test code).
 
 1. **Home** — "Musta, Roger!" → ipakita ang **blue status card**
@@ -53,8 +53,8 @@ Login bilang admin (`+639171000002`).
 
 1. **Home** — dashboard stats (kita, insidente, drivers, donasyon).
 2. **Pila** — ang dalawang ruta (**MARILAO** muna [Marilao–Monumento];
-   **Monumento–Marilao** ay may laman na dahil may na-dispatch na sa
-   seed). Mag-**dispatch** ng #1 → mapupunta siya sa kabila bilang #1.
+   **Monumento–Marilao** ay may laman na dahil may na-dispatch na).
+   Mag-**dispatch** ng #1 → mapupunta siya sa kabila bilang #1.
    Ipakita ang **Kanselahin** (Nakansela = out) at **Ibalik sa Pila**
    (dulo).
 3. **Insidente** — "Ayusin" ang isang bukas na insidente.
@@ -106,13 +106,13 @@ Login bilang superadmin (`+639171000001`).
 | "May pera ba dyan? Cashless? GCash?" | `docs/SCOPE-AND-LIMITATIONS.md` #1 (bookkeeping lang ng pisikal na pera) |
 | "Pwede bang palitan ang oras nang walang code?" | `docs/ARCHITECTURE.md` §2 + live demo 3a |
 | "Ano ang limitasyon?" | `docs/SCOPE-AND-LIMITATIONS.md` (13 items) |
-| "Saan galing ang datos?" | `seed/README.md` (realistic demo data) |
+| "Saan galing ang datos?" | Tunay na listahan ng terminal — tingnan ang `seed/README.md` |
 
 ---
 
 ## Mga dapat iwasan sa demo
 
 - Huwag puro admin screens lang (ang #1 na puna ng adviser).
-- Huwag i-demo sa blangkong database (laging may seed data).
+- Huwag i-presenta sa blangkong database (laging handa ang datos).
 - Huwag sabihing "pwede pa itong idagdag" — sabihin ang nasa scope
   doc: kung ano ang hindi sakop, bakit hindi sakop.
