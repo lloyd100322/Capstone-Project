@@ -11,9 +11,8 @@ import java.util.Locale
 /**
  * Checks the "Ulat ng Multa" (Multa report):
  *
- *  - a fine that is saved in the "kita" collection is in the report
- *  - a fine that is saved in the "ledger" collection is in the report
- *  - a normal Kita, dispatch, terminal fee or donation is NOT a fine
+ *  - a fine recorded in the "ledger" (Talaan) is in the report
+ *  - a normal dispatch earning or terminal fee is NOT a fine
  *  - a fine that is written twice is only counted once
  */
 class MultiyaReportTest {
@@ -38,22 +37,6 @@ class MultiyaReportTest {
     )
 
     @Test
-    fun aKitaRecordOfTypeMultaIsAFine() {
-        assertTrue(MultiyaReport.isKitaMultiya("Multa"))
-        assertTrue(MultiyaReport.isKitaMultiya("multa"))
-        // The old wording of older records.
-        assertTrue(MultiyaReport.isKitaMultiya("Multiya"))
-    }
-
-    @Test
-    fun aKitaRecordOfAnotherTypeIsNotAFine() {
-        assertFalse(MultiyaReport.isKitaMultiya("Kita"))
-        assertFalse(MultiyaReport.isKitaMultiya("Bayad"))
-        assertFalse(MultiyaReport.isKitaMultiya(null))
-        assertFalse(MultiyaReport.isKitaMultiya(""))
-    }
-
-    @Test
     fun onlyTheMultaFeeTypeOfTheLedgerIsAFine() {
         assertTrue(MultiyaReport.isLedgerMultiya("Multa"))
         assertFalse(MultiyaReport.isLedgerMultiya("Terminal Fee"))
@@ -64,8 +47,7 @@ class MultiyaReportTest {
     @Test
     fun aFineFromTheLedgerIsInTheReport() {
         val summary = MultiyaReport.build(
-            kitaMultiya = emptyList(),
-            ledgerMultiya = listOf(item(amount = 250.0))
+            listOf(item(amount = 250.0))
         )
 
         assertEquals(1, summary.current.size)
@@ -74,21 +56,12 @@ class MultiyaReportTest {
     }
 
     @Test
-    fun aFineFromTheKitaCollectionIsInTheReport() {
+    fun aFineThatIsWrittenTwiceIsCountedOnce() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(amount = 750.0)),
-            ledgerMultiya = emptyList()
-        )
-
-        assertEquals(1, summary.current.size)
-        assertEquals(750.0, summary.total, 0.001)
-    }
-
-    @Test
-    fun aFineThatIsWrittenInBothCollectionsIsCountedOnce() {
-        val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(amount = 500.0)),
-            ledgerMultiya = listOf(item(amount = 500.0))
+            listOf(
+                item(amount = 500.0),
+                item(amount = 500.0)
+            )
         )
 
         assertEquals(1, summary.current.size)
@@ -98,8 +71,10 @@ class MultiyaReportTest {
     @Test
     fun twoDifferentFinesAreBothCounted() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(amount = 500.0)),
-            ledgerMultiya = listOf(item(amount = 300.0))
+            listOf(
+                item(amount = 500.0),
+                item(plate = "XYZ9876", name = "Pedro Santos", amount = 300.0)
+            )
         )
 
         assertEquals(2, summary.current.size)
@@ -109,8 +84,7 @@ class MultiyaReportTest {
     @Test
     fun anOlderFineGoesToTheHistory() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(date = earlier(), amount = 500.0)),
-            ledgerMultiya = emptyList()
+            listOf(item(date = earlier(), amount = 500.0))
         )
 
         assertEquals(0, summary.current.size)
@@ -121,12 +95,10 @@ class MultiyaReportTest {
     @Test
     fun theTotalOfTheReportIsTheSumOfEveryFine() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(
+            listOf(
                 item(date = today(), amount = 100.0),
-                item(date = earlier(), amount = 200.0)
-            ),
-            ledgerMultiya = listOf(
-                item(date = today(), amount = 300.0)
+                item(date = earlier(), amount = 200.0),
+                item(plate = "XYZ9876", name = "Pedro Santos", date = today(), amount = 300.0)
             )
         )
 
@@ -137,17 +109,15 @@ class MultiyaReportTest {
     @Test
     fun theCompleteListHasEveryFineAndCountsAFineThatIsWrittenTwiceOnlyOnce() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(
+            listOf(
                 item(date = today(), amount = 100.0),
-                item(date = earlier(), amount = 200.0)
-            ),
-            ledgerMultiya = listOf(
+                item(date = earlier(), amount = 200.0),
                 item(date = today(), amount = 100.0)
             )
         )
 
-        // The fine of today is in the list, the older fine is in the list,
-        // and the fine that is written in both collections is there once.
+        // The fine of today is in the list, the older fine is in the
+        // list, and the fine that is written twice is there once.
         assertEquals(2, summary.all.size)
         assertEquals(300.0, summary.total, 0.001)
     }
@@ -163,7 +133,7 @@ class MultiyaReportTest {
         val day = 24L * 60L * 60L * 1000L
 
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(
+            listOf(
                 ReportMultiyaItem(
                     plateNumber = "ABC1234",
                     driverName = "Juan Dela Cruz",
@@ -178,8 +148,7 @@ class MultiyaReportTest {
                     amount = 200.0,
                     createdAtMillis = now - 2L * day
                 )
-            ),
-            ledgerMultiya = emptyList()
+            )
         )
 
         assertEquals(2, summary.history.size)

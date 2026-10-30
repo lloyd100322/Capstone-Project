@@ -14,7 +14,6 @@ object FirestoreCollections {
     const val QUEUE = "queue"
     const val INCIDENTS = "incidents"
     const val LEDGER = "ledger"
-    const val KITA = "kita"
     const val DONATIONS = "donations"
 
     /** App settings (queue rotation cutoff, deduction tiers, ...). */
@@ -38,12 +37,6 @@ object FirestoreIds {
 
     fun incident(): String =
         "incident_${UUID.randomUUID()}"
-
-    fun ledger(): String =
-        "ledger_${UUID.randomUUID()}"
-
-    fun kita(): String =
-        "kita_${UUID.randomUUID()}"
 
     fun donation(): String =
         "donation_${UUID.randomUUID()}"

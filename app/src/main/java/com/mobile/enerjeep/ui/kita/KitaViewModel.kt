@@ -17,12 +17,16 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
+/**
+ * Isang record ng kita ng driver. Ang bawat record ay dispatch
+ * earning (galing sa ledger record ng isang dinispatch na biyahe).
+ * Walang gastos o multa na nire-record sa kita ng driver.
+ */
 data class KitaRecord(
     val id: String,
     val title: String,
     val date: String,
     val amount: Double,
-    val type: String,
     val isHistory: Boolean,
     val createdAtMillis: Long = 0L,
     // The ledger document this record was derived from, when there is one.
@@ -30,20 +34,8 @@ data class KitaRecord(
     val sourceId: String? = null
 )
 
-enum class KitaTabType {
-    NGAYON,
-    KASAYSAYAN
-}
-
 data class KitaUiState(
-    val netEarnings: Double = 0.0,
-    val totalKita: Double = 0.0,
-    val totalBayad: Double = 0.0,
-    val totalMultiya: Double = 0.0,
-    val selectedTab: KitaTabType = KitaTabType.NGAYON,
-    val searchQuery: String = "",
-    val records: List<KitaRecord> = emptyList(),
-    val filteredRecords: List<KitaRecord> = emptyList()
+    val records: List<KitaRecord> = emptyList()
 )
 
 @HiltViewModel
@@ -55,11 +47,9 @@ class KitaViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(KitaUiState())
     val uiState: StateFlow<KitaUiState> = _uiState.asStateFlow()
 
-    private var kitaListener: ListenerRegistration? = null
     private var ledgerListener: ListenerRegistration? = null
     private val ledgerPlateListeners = mutableListOf<ListenerRegistration>()
 
-    private var kitaDocuments: List<DocumentSnapshot> = emptyList()
     private var driverLedgerDocuments: List<DocumentSnapshot> = emptyList()
     private val plateLedgerSnapshots = mutableMapOf<String, List<DocumentSnapshot>>()
     private var dispatchLedgerDocuments: List<DocumentSnapshot> = emptyList()
@@ -85,13 +75,10 @@ class KitaViewModel @Inject constructor(
     }
 
     private fun stopListeners() {
-        kitaListener?.remove()
         ledgerListener?.remove()
         ledgerPlateListeners.forEach { it.remove() }
         ledgerPlateListeners.clear()
-        kitaListener = null
         ledgerListener = null
-        kitaDocuments = emptyList()
         driverLedgerDocuments = emptyList()
         plateLedgerSnapshots.clear()
         dispatchLedgerDocuments = emptyList()
@@ -118,21 +105,10 @@ class KitaViewModel @Inject constructor(
             return
         }
 
-        // Existing manual Kita/Bayad/Multiya entries for this driver.
-        kitaListener = firestore
-            .collection(FirestoreCollections.KITA)
-            .whereEqualTo("driverId", userId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    reportListenerError(error)
-                    return@addSnapshotListener
-                }
-
-                kitaDocuments = snapshot.documents
-                rebuild()
-            }
-
-        // Primary lookup: dispatch ledger records linked by the driver's users.userId.
+        /*
+         * Ang kita ng driver ay nagmumula lang sa mga dispatch record
+         * sa "ledger" - walang hiwalay na manual entries collection.
+         */
         ledgerListener = firestore
             .collection(FirestoreCollections.LEDGER)
             .whereEqualTo("driverId", userId)
@@ -183,6 +159,12 @@ class KitaViewModel @Inject constructor(
                 owner.isBlank() || owner == listeningUserId
             }
             .filter { document ->
+                /*
+                 * Dispatch records lang ang kita ng driver. Ang mga
+                 * bayad ng multa (feeType "Multa") na isinusulat ng
+                 * Talaan ay para sa "Ulat ng Multa" ng admin - hindi
+                 * kasama sa kita ng driver.
+                 */
                 val source = document.getString("source").orEmpty().trim()
                 val feeType = document.getString("feeType").orEmpty().trim()
 
@@ -200,40 +182,10 @@ class KitaViewModel @Inject constructor(
     }
 
     private fun rebuild() {
-        val manualRecords = kitaDocuments.map { mapKitaDocument(it) }
-        val dispatchRecords = dispatchLedgerDocuments.map { mapDispatchLedger(it) }
-
-        // The same earning can be described by more than one document. The
-        // sourceId of a record is the identity of the transaction, so the
-        // merge keeps one row per earning. A retry, a reopened screen or a
-        // listener that fires again therefore never adds the same earning
-        // twice and never changes a valid balance.
-        val records = KitaHistory.merge(
-            dispatchRecords = dispatchRecords,
-            manualRecords = manualRecords
-        )
-
-        updateMetricsAndFilter(
-            allRecords = records,
-            tab = _uiState.value.selectedTab,
-            query = _uiState.value.searchQuery
-        )
-    }
-
-    private fun mapKitaDocument(document: DocumentSnapshot): KitaRecord {
-        val millis = getCreatedAtMillis(document)
-        return KitaRecord(
-            id = document.id,
-            title = document.getString("title") ?: "Record",
-            date = document.getString("date")?.takeIf { it.isNotBlank() }
-                ?: formatMillis(millis),
-            amount = getNumericValue(document, "amount") ?: 0.0,
-            type = document.getString("type")
-                ?.let { if (it.equals("Multiya", ignoreCase = true)) "Multa" else it }
-                ?: "Kita",
-            isHistory = !isToday(millis),
-            createdAtMillis = millis,
-            sourceId = "kita:${document.id}"
+        _uiState.value = KitaUiState(
+            records = KitaHistory.merge(
+                dispatchLedgerDocuments.map { mapDispatchLedger(it) }
+            )
         )
     }
 
@@ -253,73 +205,9 @@ class KitaViewModel @Inject constructor(
             title = if (plate.isBlank()) "Dispatch" else "Dispatch • $plate",
             date = displayDate,
             amount = amount,
-            type = "Kita",
             isHistory = !isToday(millis),
             createdAtMillis = millis,
             sourceId = "ledger:${document.id}"
-        )
-    }
-
-    fun onTabSelected(tab: KitaTabType) {
-        updateMetricsAndFilter(
-            allRecords = _uiState.value.records,
-            tab = tab,
-            query = _uiState.value.searchQuery
-        )
-    }
-
-    fun onSearchQueryChanged(query: String) {
-        updateMetricsAndFilter(
-            allRecords = _uiState.value.records,
-            tab = _uiState.value.selectedTab,
-            query = query
-        )
-    }
-
-    private fun updateMetricsAndFilter(
-        allRecords: List<KitaRecord>,
-        tab: KitaTabType,
-        query: String
-    ) {
-        val showHistory = tab == KitaTabType.KASAYSAYAN
-
-        /*
-         * "Ngayon" keeps showing the earnings of today only.
-         * "Kasaysayan" is the complete history: every earning that was
-         * saved, including the ones of today, so a driver who just
-         * earned money sees it in both views. Once the day has passed,
-         * the record automatically stays only in the history.
-         */
-        /*
-         * The "today" check is redone here every time the list is
-         * rebuilt, so records regroup correctly even when the app was
-         * left open past midnight.
-         */
-        val refreshedRecords = allRecords.map { record ->
-            record.copy(isHistory = !isToday(record.createdAtMillis))
-        }
-
-        val currentTabRecords = KitaHistory.visible(
-            records = refreshedRecords,
-            showHistory = showHistory
-        )
-
-        val totals = KitaHistory.totals(currentTabRecords)
-
-        val filtered = currentTabRecords.filter {
-            it.title.contains(query, ignoreCase = true) ||
-                    it.date.contains(query, ignoreCase = true)
-        }
-
-        _uiState.value = _uiState.value.copy(
-            netEarnings = totals.net,
-            totalKita = totals.kita,
-            totalBayad = totals.bayad,
-            totalMultiya = totals.multa,
-            selectedTab = tab,
-            searchQuery = query,
-            records = allRecords,
-            filteredRecords = filtered
         )
     }
 
@@ -382,7 +270,6 @@ class KitaViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        kitaListener?.remove()
         ledgerListener?.remove()
         ledgerPlateListeners.forEach { it.remove() }
         super.onCleared()

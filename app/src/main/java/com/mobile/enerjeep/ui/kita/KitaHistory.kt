@@ -3,31 +3,34 @@ package com.mobile.enerjeep.ui.kita
 /**
  * Pure helpers for the Kita (earnings) list.
  *
- * The list is built from the Firestore collections "kita" and "ledger",
- * so the earnings are saved in the database and they are still there after
- * the app is closed or the driver signs out and signs in again.
+ * ANG KITA NG DRIVER AY DISPATCH EARNINGS LAMANG - ang halagang
+ * natatanggap niya tuwing dinidispatch ang biyahe. Walang gastos
+ * (diesel, toll, atbp.), walang multa, at walang anumang ibang
+ * record na binabawas dito ("walang bawas na kahit ano"). Ang mga
+ * sariling gastos ng driver ay hindi na nire-record sa app.
  *
- * These helpers are plain functions on purpose: they can be checked with
- * unit tests without a device or a Firestore connection.
+ * Ang listahan ay galing sa Firestore collection na "ledger" (mga
+ * dispatch record), kaya nasa database ang kita at naroroon pa rin
+ * kahit isara ang app o mag-sign out at mag-sign in muli ang driver.
+ *
+ * These helpers are plain functions on purpose: they can be checked
+ * with unit tests without a device or a Firestore connection.
  */
 object KitaHistory {
 
     /**
-     * Merges the two sources of earnings into one list.
+     * Keeps one row per earning and returns the newest first.
      *
-     * A record can be described twice: once in "kita" and once in the
-     * "ledger" document of the same dispatch. The sourceId of a record
+     * The same earning can reach the list twice, for example when a
+     * ledger document matches both the driver lookup and the plate
+     * lookup, or when a listener fires again. The sourceId of a record
      * is the identity of the transaction, so the same earning is only
-     * listed once. This keeps the totals correct when a listener fires
-     * again, when the screen is reopened, or when a dispatch was retried.
+     * listed once and never counted twice.
      */
-    fun merge(
-        dispatchRecords: List<KitaRecord>,
-        manualRecords: List<KitaRecord>
-    ): List<KitaRecord> {
+    fun merge(records: List<KitaRecord>): List<KitaRecord> {
         val merged = LinkedHashMap<String, KitaRecord>()
 
-        (dispatchRecords + manualRecords).forEach { record ->
+        records.forEach { record ->
             val key = record.sourceId?.takeIf { it.isNotBlank() } ?: record.id
             if (!merged.containsKey(key)) {
                 merged[key] = record
@@ -39,60 +42,10 @@ object KitaHistory {
     }
 
     /**
-     * The "Kasaysayan" tab shows the complete history, so an earning that
-     * was saved today is visible in the history as well as in "Ngayon".
-     * The "Ngayon" tab keeps showing the earnings of today only.
+     * Ang kabuuang kita = kabuuan ng mga kita. WALANG BAWAS: hindi
+     * binabawas dito ang gastos, multa, o donasyon. Ang donasyon ay
+     * nasa /donations lang (boluntaryo) at hindi kailanman hinahatak
+     * mula sa kita ng driver.
      */
-    fun visible(
-        records: List<KitaRecord>,
-        showHistory: Boolean
-    ): List<KitaRecord> =
-        if (showHistory) {
-            records
-        } else {
-            records.filter { !it.isHistory }
-        }
-
-    /** The three totals of the summary card and the net amount. */
-    data class Totals(
-        val kita: Double = 0.0,
-        val bayad: Double = 0.0,
-        val multa: Double = 0.0
-    ) {
-        /**
-         * Ang donasyon ay HIWALAY sa kita (boluntaryo) - hindi ito
-         * kasama dito. Ang "malinis na kita" ay kita bawas ang
-         * bayad at multa.
-         */
-        val net: Double get() = kita - (bayad + multa)
-    }
-
-    /**
-     * Adds up the earnings, the payments and the fines of the given
-     * records. The way the amounts are added is the way it was before,
-     * so the numbers on the screen do not change.
-     */
-    fun totals(records: List<KitaRecord>): Totals {
-        val kita = records
-            .filter { it.type.equals("Kita", ignoreCase = true) }
-            .sumOf { it.amount }
-
-        val bayad = records
-            .filter { it.type.equals("Bayad", ignoreCase = true) }
-            .sumOf { it.amount }
-
-        val multa = records
-            .filter {
-                // Records saved before the wording change use "Multiya".
-                it.type.equals("Multa", ignoreCase = true) ||
-                        it.type.equals("Multiya", ignoreCase = true)
-            }
-            .sumOf { it.amount }
-
-        return Totals(
-            kita = kita,
-            bayad = bayad,
-            multa = multa
-        )
-    }
+    fun total(records: List<KitaRecord>): Double = records.sumOf { it.amount }
 }

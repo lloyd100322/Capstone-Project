@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +23,6 @@ import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.HistoryPeriod
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
-import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.TextSecondary
@@ -63,7 +60,9 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         plateFilter.isBlank() ||
                 it.title.contains(plateFilter, ignoreCase = true)
     }
-    val totals = remember(finalRecords) { KitaHistory.totals(finalRecords) }
+    // Ang kita = kabuuan ng mga dispatch earnings. WALANG BAWAS na
+    // kahit ano - walang gastos, multa, o donasyon na binabawas dito.
+    val total = remember(finalRecords) { KitaHistory.total(finalRecords) }
 
     Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
@@ -79,15 +78,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
             Column(Modifier.padding(20.dp)) {
                 Text(if (historyFilter.period == HistoryPeriod.TODAY) "Malinis na Kita Ngayon" else "Malinis na Kita", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
                 Spacer(Modifier.height(4.dp))
-                Text("₱${String.format("%,.0f", totals.net)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = Color.White.copy(alpha = .2f))
-                Spacer(Modifier.height(16.dp))
-                SummaryMoneyRow("Kita", totals.kita)
-                Spacer(Modifier.height(8.dp))
-                SummaryMoneyRow("Bayad", totals.bayad)
-                Spacer(Modifier.height(8.dp))
-                SummaryMoneyRow("Multa", totals.multa)
+                Text("₱${String.format("%,.0f", total)}", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -179,7 +170,9 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                                 Spacer(Modifier.height(2.dp))
                                 Text(record.date, fontSize = 12.sp, color = TextSecondary)
                             }
-                            Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (record.type == "Kita") SuccessGreen else ErrorRed)
+                            // Lahat ng record ay kita (dispatch earnings) -
+                            // walang pulang bawas sa listahan na ito.
+                            Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = SuccessGreen)
                         }
                     }
                 }
@@ -188,10 +181,3 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     }
 }
 
-@Composable
-private fun SummaryMoneyRow(label: String, amount: Double) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
-        Text("₱${String.format("%,.0f", amount)}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-    }
-}

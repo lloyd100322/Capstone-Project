@@ -4,9 +4,9 @@
  * kooperatiba para sa unang takbo ng app).
  *
  * Lumilikha ng handa-nang-gamitin na mga account, queue entries sa
- * dalawang ruta, mga insidente, kita (kita), dispatch ledger records,
- * mga donasyon, settings, emergency contacts at audit log — kumpleto
- * ang bawat feature nang walang manwal na pag-encode.
+ * dalawang ruta, mga insidente, dispatch ledger records, mga donasyon,
+ * settings, emergency contacts at audit log — kumpleto ang bawat
+ * feature nang walang manwal na pag-encode.
  *
  * Usage:
  *   node setup.js --serviceAccount /path/to/serviceAccount.json
@@ -232,9 +232,11 @@ async function wipeCollections() {
  * hindi na kailangan ng --wipe tuwing muling tatakbo laban sa may
  * datos nang database. Kasama rito ang:
  *   - mga doc na may "seed" sa id (lumang scheme ng id);
- *   - mga kita/ledger record na nag-uugnay ng donasyon sa kita ng
- *     driver (DAPAT hiwalay ang donasyon - hindi ito binabawas sa
- *     sinuman).
+ *   - LAHAT ng doc sa "kita"/"kitaHistory" (lumang manual entries -
+ *     gastos/multa/pamasahe na binabawas sa kita; ang kita ng driver
+ *     ay dispatch records lang sa "ledger" ngayon);
+ *   - mga ledger record na nag-uugnay ng donasyon sa kita ng driver
+ *     (DAPAT hiwalay ang donasyon - hindi ito binabawas sa sinuman).
  * Walang epekto kung wala na ang mga doc na ito.
  */
 async function cleanupLegacyDocs() {
@@ -259,6 +261,10 @@ async function cleanupLegacyDocs() {
 
     const doomed = snap.docs.filter((doc) => {
       if (doc.id.toLowerCase().includes("seed")) return true;
+
+      // Ang "kita"/"kitaHistory" ay hindi na ginagamit - lahat ng
+      // laman ay legacy (manual entries na binabawas sa kita).
+      if (name === "kita" || name === "kitaHistory") return true;
 
       // Ang donasyon ay nasa /donations lang - walang record sa kita
       // o ledger na dapat magbanggit nito (lalo na bilang bawas).
@@ -587,47 +593,20 @@ async function writeIncidents() {
   );
 }
 
-async function writeKitaAndLedger(dispatchIds) {
+async function writeLedger(dispatchIds) {
   let batch = db.batch();
   let n = 0;
 
-  // Kamal na kita para sa nakaraang 3 araw (ang mga record ngayon ang
-  // lumalabas sa "Buong Kita Ngayon" / Kita tab totals).
-  //
-  // TANDAAN: ang donasyon ay HIWALAY sa kita ng mga driver - walang
-  // record dito na nagbabawas mula sa kita dahil sa donasyon.
-  const entries = [
-    [0, 8, 30, "Kita", "Pamasahe (umaga)", 1450],
-    [0, 13, 10, "Kita", "Pamasahe (hapon)", 1620],
-    [0, 12, 45, "Bayad", "Diesel", 500],
-    [0, 17, 5, "Bayad", "Toll at parking", 50],
-    [1, 8, 25, "Kita", "Pamasahe (umaga)", 1380],
-    [1, 14, 0, "Kita", "Pamasahe (hapon)", 1510],
-    [1, 12, 30, "Bayad", "Diesel", 480],
-    [1, 16, 40, "Multa", "Multa sa counterflow", 150],
-    [2, 8, 15, "Kita", "Pamasahe (umaga)", 1420],
-    [2, 13, 30, "Bayad", "Diesel", 510],
-  ];
-
-  entries.forEach((e, i) => {
-    const [back, hh, mm, type, title, amount] = e;
-    const d = daysAgo(back, hh, mm);
-    const driver = drivers[i % 3];
-    const id = `kita_${tag(401 + i)}`;
-    batch.set(db.collection("kita").doc(id), {
-      id,
-      driverId: driver.userId,
-      title,
-      amount,
-      type,
-      date: dateLabel(d),
-      isHistory: back > 0,
-      createdAt: ts(d),
-    });
-    n++;
-  });
-
   /*
+   * Ang kita ng driver ay nagmumula lang sa mga dispatch record sa
+   * "ledger" (mga "<entryId>_dispatch"). WALANG manual na entries sa
+   * "kita" collection: hindi nire-record sa app ang sariling gastos
+   * ng driver (diesel, toll, atbp.) at walang binabawas sa kita
+   * ("walang bawas na kahit ano").
+   *
+   * TANDAAN: ang donasyon ay HIWALAY sa kita ng mga driver - nasa
+   * /donations lang ito at hindi kailanman binabawas sa kita.
+   *
    * Dispatch ledger records (kaakibat ng mga na-dispatch na queue
    * entry sa itaas). Ang id ay `<entryId>_dispatch` - eksaktong hugis
    * na sinusulat ng app (QueueViewModel.dispatchVehicle), kaya kahit
@@ -664,8 +643,44 @@ async function writeKitaAndLedger(dispatchIds) {
     n++;
   });
 
+  /*
+   * Mga bayad ng multa (Talaan -> "I-record ang Bayad ng Multa").
+   * Nasa ledger ang mga ito (feeType "Multa") - para sa "Ulat ng
+   * Multa" ng admin. HIWALAY ang mga ito sa kita ng driver: hindi
+   * binabawas sa kita kahit na kano. Eksaktong hugis na sinusulat ng
+   * LedgerViewModel.addCollection, kaya lumalabas din ang mga ito sa
+   * Talaan gaya ng totoong record.
+   */
+  const fines = [
+    // Bayad sa multa ng "Minor collision sa Monumento" (insidente).
+    [drivers[1], daysAgo(1, 16, 0), 150],
+    // Multa sa trapiko na diretsong inirekord sa Talaan.
+    [drivers[2], daysAgo(2, 9, 30), 150],
+  ];
+  fines.forEach(([driver, d, amount], i) => {
+    const id = `fee_${tag(801 + i)}`;
+    batch.set(db.collection("ledger").doc(id), {
+      id,
+      driverId: driver.userId,
+      plateNumber: driver.plate,
+      driverName: `${driver.firstName} ${driver.lastName}`.trim(),
+      date: dateLabel(d),
+      amount,
+      grossAmount: amount,
+      otherFees: 0.0,
+      netAmount: amount,
+      feeType: "Multa",
+      status: "Bayad",
+      source: "ledger",
+      createdAt: ts(d),
+    });
+    n++;
+  });
+
   await batch.commit();
-  console.log(`  kita + ledger: ${n} records`);
+  console.log(
+    `  ledger: ${n} records (${dispatches.length} dispatch + ${fines.length} bayad ng multa)`
+  );
 }
 
 async function writeDonations() {
@@ -797,6 +812,37 @@ async function verifyNoDonationDeductions() {
   }
 }
 
+/*
+ * Tseke: ang kita ng driver ay dispatch records lang. Walang manual
+ * entries sa "kita" collection (walang gastos/multa na binabawas) at
+ * walang ledger record na iba pa sa dispatch o bayad ng multa.
+ */
+async function verifyDriverEarnings() {
+  const stray = [];
+
+  const kita = await db.collection("kita").limit(500).get();
+  kita.docs.forEach((d) => stray.push(`kita/${d.id}`));
+
+  const ledger = await db.collection("ledger").limit(500).get();
+  ledger.docs.forEach((d) => {
+    const x = d.data();
+    const source = String(x.source || "").toLowerCase();
+    const feeType = String(x.feeType || "").toLowerCase();
+    const isDispatch = source === "queue_dispatch" || feeType === "dispatch";
+    const isMulta = feeType === "multa";
+    if (!isDispatch && !isMulta) stray.push(`ledger/${d.id}`);
+  });
+
+  if (stray.length === 0) {
+    console.log(
+      "  verify: kita ng driver = dispatch records lang; multa ay nasa Talaan (walang bawas sa kita) ✓"
+    );
+  } else {
+    console.log("  BABALA: may record na hindi dispatch/bayad ng multa:");
+    stray.forEach((id) => console.log(`    ${id}`));
+  }
+}
+
 async function writeLogs() {
   let batch = db.batch();
   const logs = [
@@ -833,12 +879,13 @@ async function writeLogs() {
     await writeUsers();
     const dispatchIds = await writeQueue();
     await writeIncidents();
-    await writeKitaAndLedger(dispatchIds);
+    await writeLedger(dispatchIds);
     await writeDonations();
     await writeSettings();
     await writeEmergency();
     await writeLogs();
     await verifyNoDonationDeductions();
+    await verifyDriverEarnings();
     await verifyIncidents();
     console.log("\nTapos. Login: alinmang numero ng account, password " + ACCOUNT_PASSWORD);
     console.log("(Gamitin ang naka-configure na phone numbers sa Firebase para sa OTP - tingnan ang seed/README.md)");

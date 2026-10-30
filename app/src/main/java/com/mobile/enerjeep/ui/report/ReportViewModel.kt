@@ -133,9 +133,6 @@ class ReportViewModel @Inject constructor(
     private var incidentDocs =
         listOf<DocumentSnapshot>()
 
-    private var kitaDocs =
-        listOf<DocumentSnapshot>()
-
     private var donationDocs =
         listOf<DocumentSnapshot>()
 
@@ -186,23 +183,6 @@ class ReportViewModel @Inject constructor(
                         _ ->
 
                     incidentDocs =
-                        snapshot
-                            ?.documents
-                            .orEmpty()
-
-                    rebuild()
-                }
-
-        listeners +=
-            firestore
-                .collection(
-                    FirestoreCollections.KITA
-                )
-                .addSnapshotListener {
-                        snapshot,
-                        _ ->
-
-                    kitaDocs =
                         snapshot
                             ?.documents
                             .orEmpty()
@@ -457,24 +437,11 @@ class ReportViewModel @Inject constructor(
          *
          * "Ngayon" means today's records.
          *
-         * A fine can be saved in two places in this app. The "kita"
-         * collection keeps records entered with the "Add collection"
-         * button (type = "Multa"); the "ledger" collection is the source
-         * of truth for dispatch earnings, so the ledger also holds a
-         * row when the fee type is "Multa". Both rows describe the same
-         * fine and both must be counted once.
+         * Ang mga multa ay nire-record sa "ledger" kapag pinindot ng
+         * admin ang "I-record ang Bayad ng Multa" sa Talaan. Ang kita
+         * ng driver (dispatch earnings) ay hindi pinagkukunan ng multa
+         * - walang binabawas sa kita.
          */
-        val kitaMultiya =
-            kitaDocs
-                .filter {
-                    MultiyaReport.isKitaMultiya(
-                        it.getString("type")
-                    )
-                }
-                .map(
-                    ::mapReportMultiya
-                )
-
         // Fines written through the "ledger" collection. Only the
         // feeType matters, so a terminal fee or a dispatch earning is
         // never counted as a fine.
@@ -489,10 +456,9 @@ class ReportViewModel @Inject constructor(
                     ::mapReportMultiya
                 )
 
-        // A fine that is written in both collections is only counted once.
+        // A fine that is written twice is only counted once.
         val multiyaSummary =
             MultiyaReport.build(
-                kitaMultiya,
                 ledgerMultiya
             )
 

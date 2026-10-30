@@ -32,11 +32,13 @@ stronger in review than one that pretends to do everything.
   dispatch time) with the net amount written to the ledger.
 
 ### Earnings and reports
-- **Kita**: merged manual entries (Kita / Bayad / Multa) and
-  dispatch ledger records, with date filter (default: all dates) and
-  plate filter; net earnings per day. **Donations are NOT part of
-  this** — they are voluntary and never deducted from anyone's
-  earnings.
+- **Kita**: dispatch earnings only (the driver's take-home per
+  dispatched trip), with date filter (default: all dates) and plate
+  filter. **Nothing is ever deducted from a driver's earnings** —
+  driver expenses (diesel, toll, ...) are not recorded in the app, and
+  fines are tracked separately (Talaan / Ulat ng Multa). **Donations
+  are NOT part of this** — they are voluntary and never deducted from
+  anyone's earnings.
 - **Mga Ulat** (admin): income (Kasaysayan + monthly/yearly charts),
   incident counts per plate (plain counts — no peso sign), fines chart,
   donations (a separate voluntary fund — the balance can go **up or
@@ -67,8 +69,8 @@ question in review, so each has a stated reason.
 1. **No cashless / payment processing (no GCash, no wallet).** Money in
    this cooperative is **physical cash** handed over by the driver. The
    app **holds no money and moves no money** — it is a *record*
-   (bookkeeping) of the cash amounts (Kita, Bayad, Multa, donations,
-   dispatch fees). "Walang pera sa app" is deliberate: no stored value,
+   (bookkeeping) of the cash amounts (driver earnings, fines,
+   donations, dispatch fees). "Walang pera sa app" is deliberate: no stored value,
    no wallet to hack, no remittance partner needed.
 2. **No true background push notifications.** Dispatch alerts work only
    while the app is open (in-app sound/banner/bell). Firebase Cloud

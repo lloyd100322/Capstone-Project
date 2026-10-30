@@ -44,7 +44,8 @@ test code).
 5. **Emergency button** — 911 + ang listahan mula sa kooperatiba.
 
 > **Talking point:** *"Ang driver ay walang ibang gagawin kundi
-> mag-drive, mag-log ng kita, at mag-report ng insidente — ganyan
+> mag-drive at mag-report ng insidente (awtomatikong lumalabas ang
+> kita tuwing dinidispatch) — ganyan
 > ka-simple ang UI."*
 
 ## 2. ADMIN (pang-araw-araw na operator) — ~5 min

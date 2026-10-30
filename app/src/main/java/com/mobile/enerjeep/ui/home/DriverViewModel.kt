@@ -411,8 +411,9 @@ class DriverViewModel @Inject constructor(
 
     /**
      * Buong kita ng driver sa buong araw (malinis na kita - kapareho ng
-     * "Malinis na Kita Ngayon" sa Kita tab). Ipinapakita sa ibaba ng "Tapos Na
-     * Bumyahe" button para hindi na kailangang pumunta sa Kita tab.
+     * "Malinis na Kita Ngayon" sa Kita tab). Dispatch earnings lamang -
+     * walang gastos o multa na binabawas. Ipinapakita sa ibaba ng "Tapos
+     * Na Bumyahe" button para hindi na kailangang pumunta sa Kita tab.
      */
     private fun loadDailyEarnings() {
         val profile = userSession.userProfile ?: return
@@ -420,17 +421,6 @@ class DriverViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val manualDocs = if (userId.isBlank()) {
-                    emptyList()
-                } else {
-                    firestore
-                        .collection(FirestoreCollections.KITA)
-                        .whereEqualTo("driverId", userId)
-                        .get()
-                        .await()
-                        .documents
-                }
-
                 val byDriver = if (userId.isBlank()) {
                     emptyList()
                 } else {
@@ -482,16 +472,11 @@ class DriverViewModel @Inject constructor(
                     }
 
                 val records = KitaHistory.merge(
-                    dispatchRecords = dispatchDocs
-                        .map { mapDispatchLedger(it) },
-                    manualRecords = manualDocs
-                        .map { mapKitaDocument(it) }
+                    dispatchDocs.map { mapDispatchLedger(it) }
                 ).filter { !it.isHistory }
 
-                val totals = KitaHistory.totals(records)
-
                 _uiState.value = _uiState.value.copy(
-                    dailyEarnings = totals.net
+                    dailyEarnings = KitaHistory.total(records)
                 )
             } catch (_: Exception) {
                 // Best effort - 0 lang ang ipapakita kung hindi ma-load.
@@ -500,26 +485,6 @@ class DriverViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    private fun mapKitaDocument(document: DocumentSnapshot): KitaRecord {
-        val millis = getCreatedAtMillis(document)
-        return KitaRecord(
-            id = document.id,
-            title = document.getString("title") ?: "Record",
-            date = document.getString("date")?.takeIf { it.isNotBlank() }
-                ?: formatMillis(millis),
-            amount = getNumericValue(document, "amount") ?: 0.0,
-            type = document.getString("type")
-                ?.let {
-                    if (it.equals("Multiya", ignoreCase = true)) "Multa"
-                    else it
-                }
-                ?: "Kita",
-            isHistory = !isToday(millis),
-            createdAtMillis = millis,
-            sourceId = "kita:${document.id}"
-        )
     }
 
     private fun mapDispatchLedger(document: DocumentSnapshot): KitaRecord {
@@ -539,7 +504,6 @@ class DriverViewModel @Inject constructor(
             else "Dispatch • $plate",
             date = displayDate,
             amount = amount,
-            type = "Kita",
             isHistory = !isToday(millis),
             createdAtMillis = millis,
             sourceId = "ledger:${document.id}"

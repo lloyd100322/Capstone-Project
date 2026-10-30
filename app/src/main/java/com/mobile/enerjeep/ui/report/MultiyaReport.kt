@@ -7,17 +7,15 @@ import java.util.Locale
 /**
  * Pure helpers for the "Ulat ng Multa" (Multa report).
  *
- * A fine can be saved in two places in this app:
+ * Ang mga multa ay nire-record sa "ledger" collection kapag
+ * pinindot ng admin ang "I-record ang Bayad ng Multa" sa Talaan
+ * (feeType = "Multa"). Iyon lang ang tanging pinagkukunan ng ulat.
  *
- *  - in the "kita" collection, with type = "Multa" (or the old wording
- *    "Multiya")
- *  - in the "ledger" collection, with feeType = "Multa" (this is what the
- *    "Talaan" screen writes when the admin picks "Multa" as the type of
- *    the collection)
- *
- * Both are real fines and both belong in the report. Everything else in
- * the ledger (a dispatch earning, a terminal fee, a donation) must NOT be
- * counted as a fine.
+ * Ang "kita" collection (kung may natira man mula sa lumang bersyon)
+ * ay HINDI na pinagkukunan ng multa: ang kita ng driver ay dispatch
+ * earnings lamang at walang anumang binabawas dito. Everything else in
+ * the ledger (a dispatch earning, a terminal fee, a donation) must NOT
+ * be counted as a fine.
  *
  * The helpers are plain functions so they can be checked with unit tests
  * without a device or a Firestore connection.
@@ -26,22 +24,6 @@ object MultiyaReport {
 
     /** The wording used by the ledger screen for a fine. */
     const val LEDGER_FEE_TYPE = "Multa"
-
-    /** The wording used by the "kita" collection. */
-    const val KITA_TYPE = "Multa"
-
-    /** The old wording still found in older records. */
-    const val KITA_TYPE_OLD = "Multiya"
-
-    /**
-     * True when the "kita" record is a fine.
-     */
-    fun isKitaMultiya(type: String?): Boolean {
-        val clean = type?.trim() ?: return false
-
-        return clean.equals(KITA_TYPE, ignoreCase = true) ||
-                clean.equals(KITA_TYPE_OLD, ignoreCase = true)
-    }
 
     /**
      * True when the ledger transaction is a fine. Only the feeType is
@@ -54,9 +36,8 @@ object MultiyaReport {
     }
 
     /**
-     * The identity of a fine that is written in both the "kita" and the
-     * "ledger" collection. The driver, the amount and the day are used
-     * because a fine does not have its own number in the app.
+     * The identity of a fine. The driver, the amount and the day are
+     * used because a fine does not have its own number in the app.
      *
      * When the same fine is written twice, the key is the same, so the
      * report counts it only once.
@@ -121,20 +102,19 @@ object MultiyaReport {
     }
 
     /**
-     * Builds the report from the fines of the "kita" collection and the
-     * fines of the "ledger" collection.
+     * Builds the report from the fines of the "ledger" collection
+     * (feeType "Multa" - ang mga record ng Talaan).
      *
-     * A fine that exists in both collections is only counted once, so the
-     * total of the report is not inflated.
+     * A fine that is written twice is only counted once, so the total
+     * of the report is not inflated.
      */
     fun build(
-        kitaMultiya: List<ReportMultiyaItem>,
-        ledgerMultiya: List<ReportMultiyaItem>
+        fines: List<ReportMultiyaItem>
     ): Summary {
         val seen = LinkedHashSet<String>()
         val all = mutableListOf<ReportMultiyaItem>()
 
-        (kitaMultiya + ledgerMultiya).forEach { item ->
+        fines.forEach { item ->
             if (seen.add(multiyaKey(item))) {
                 all += item
             }

@@ -12,7 +12,7 @@ immediately, without manual data entry.
 | `users` + `userSecrets` | 1 superadmin, 1 admin, 33 drivers — tunay na listahan ng terminal (pangalan at plate totoo, galing sa listahan ng terminal; apelyido/cellphone/lisensya/seater/emergency ay pinunan) — all login-ready |
 | `queue` | 17 sa **Marilao – Monumento**, 16 sa **Monumento – Marilao** (kasama ang muling pila ng na-dispatch), 3 kasaysayan (dispatched/completed), 1 Nakansela |
 | `incidents` | 2 bukas + 2 naayos (may multa ang isa) — mga lugar sa Monumento/Marilao |
-| `kita` + `ledger` | Pamasahe/Diesel/Multa records + dispatch ledger (3 araw) — **walang donasyon na nakabawas sa kita** (hiwalay ang donasyon) |
+| `ledger` | Dispatch records ng 3 kumpletong biyahe (kita ng driver — **dispatch lang, walang bawas**) + 2 bayad ng multa (Talaan, para sa Ulat ng Multa — **hindi binabawas sa kita**) — **walang donasyon na nakabawas sa kita** (hiwalay ang donasyon) |
 | `donations` | 5 entries (3 donate, 2 gamit - fund up/down) |
 | `settings` | `deductionTiers` (16→₱32, 22→₱44) + `queueRotation` (cutoffHour 21) |
 | `emergencyContacts` | 911 + Dispatcher + 2 lokal na contact |
@@ -71,16 +71,21 @@ Phone login needs an SMS OTP. For development and presentations, use
      magsulat. **Huwag** gagamitin sa may totoong datos.
 
 4. Pagkatapos: i-restart ang app — dapat puno na ng datos (pila,
-   insidente, kita, donations, Talaan).
+   insidente, kita (dispatch), donations, Talaan).
 
 ## Notes
 
 - Re-running the script without `--wipe` overwrites the same documents
   (fixed IDs) — safe to repeat. Older leftover documents (lumang id
-  scheme, at mga record na nag-uugnay ng donasyon sa kita) are cleaned
-  up automatically.
+  scheme, mga manual na entries sa `kita`/`kitaHistory`, at mga record
+  na nag-uugnay ng donasyon sa kita) are cleaned up automatically.
 - The script writes with the Admin SDK, which bypasses Firestore rules —
   this is a maintainer tool, not an app feature.
-- Ang bawat record ng kita/ledger ay dumadaan sa isang tseke: walang
-  donasyon ang binabawas sa kita ng driver (tumatakbo ang
-  `verifyNoDonationDeductions` tuwing pagpatakbo).
+- Ang kita ng driver ay dispatch records lang (nasa `ledger`): walang
+  manual entries (gastos/multa) na binabawas sa kita. Ang mga bayad ng
+  multa ay nasa `ledger` (feeType "Multa") para sa Talaan at Ulat ng
+  Multa — hindi hinahatak sa kita ng driver.
+- Ang bawat record ng kita/ledger ay dumadaan sa mga tseke: walang
+  donasyon ang binabawas sa kita ng driver (`verifyNoDonationDeductions`)
+  at dispatch lang ang laman ng kita (`verifyDriverEarnings`) — parehong
+  tumatakbo tuwing pagpatakbo.
