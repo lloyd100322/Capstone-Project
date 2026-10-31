@@ -755,6 +755,47 @@ fun EditProfileContent(
                     Modifier.padding(24.dp)
             ) {
 
+                /*
+                 * Picture frame ng profile - bilog na frame na may
+                 * initials (tulad ng driver profile). Walang camera icon
+                 * (walang photo upload sa app).
+                 */
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(80.dp)
+                                .background(
+                                    ProfileBlue,
+                                    CircleShape
+                                ),
+                        contentAlignment =
+                            Alignment.Center
+                    ) {
+                        Text(
+                            text =
+                                profile.initials,
+                            color =
+                                Color.White,
+                            fontWeight =
+                                FontWeight.Bold,
+                            fontSize =
+                                24.sp
+                        )
+                    }
+                }
+
+                Spacer(
+                    modifier =
+                        Modifier.height(24.dp)
+                )
+
                 OutlinedTextField(
                     value = emergencyContactName,
                     onValueChange = {
