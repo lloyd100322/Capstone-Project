@@ -83,7 +83,7 @@ fun ReportScreen(
                     Spacer(Modifier.height(28.dp))
                     Text("Mga Ulat", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
                     Spacer(Modifier.height(4.dp))
-                    Text("Buong estadistika ng kooperatiba sa isang screen.", fontSize = 14.sp, color = TextSecondary)
+                    Text("Buong estatistika ng kooperatiba sa isang screen.", fontSize = 14.sp, color = TextSecondary)
                     Spacer(Modifier.height(16.dp))
                     /*
                      * Mabilis na lipat sa bawat seksyon - hindi na kailangang

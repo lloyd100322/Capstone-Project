@@ -11,7 +11,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.History

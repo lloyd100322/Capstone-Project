@@ -10,8 +10,18 @@ import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
 class EnerJeepApp : Application() {
+
+    companion object {
+        /**
+         * App context para sa mga helper na walang sariling Context
+         * (hal. DispatchNotifier mula sa isang ViewModel).
+         */
+        lateinit var instance: EnerJeepApp
+    }
+
     override fun onCreate() {
         super.onCreate()
+        instance = this
 
         /*
          * App Check proves that requests come from the real app, so a

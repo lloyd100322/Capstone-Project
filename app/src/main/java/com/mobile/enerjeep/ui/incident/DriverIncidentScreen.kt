@@ -190,7 +190,7 @@ fun DriverIncidentCard(
                 ) {
                     Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Tawag", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("Tawagan", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }

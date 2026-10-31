@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonOutline
@@ -518,33 +517,6 @@ fun DriverEditProfileContent(
                             }
                         }
 
-                        Surface(
-                            modifier =
-                                Modifier
-                                    .size(28.dp)
-                                    .align(
-                                        Alignment.BottomEnd
-                                    ),
-                            shape = CircleShape,
-                            color = EnerjeepBlue
-                        ) {
-                            Box(
-                                contentAlignment =
-                                    Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector =
-                                        Icons.Default.CameraAlt,
-                                    contentDescription =
-                                        null,
-                                    tint = Color.White,
-                                    modifier =
-                                        Modifier.size(
-                                            14.dp
-                                        )
-                                )
-                            }
-                        }
                     }
                 }
 

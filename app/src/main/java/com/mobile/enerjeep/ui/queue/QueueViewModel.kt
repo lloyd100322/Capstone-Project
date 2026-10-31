@@ -6,7 +6,9 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.EnerJeepApp
 import com.mobile.enerjeep.data.ActivityLogger
+import com.mobile.enerjeep.data.DispatchNotifier
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.UserSession
@@ -951,6 +953,24 @@ class QueueViewModel @Inject constructor(
 
                 ToastFeedback.show(
                     "Na-dispatch na ang driver: $dispatchedLabel"
+                )
+
+                /*
+                 * System notification din sa notification tray ng
+                 * admin/superadmin - pareho mismo ng impormasyon sa
+                 * abiso ng driver (plate • ruta • oras).
+                 */
+                DispatchNotifier.post(
+                    EnerJeepApp.instance,
+                    "May na-dispatch",
+                    listOf(
+                        plateNumber,
+                        currentDocument.getString("route") ?: "N/A",
+                        SimpleDateFormat(
+                            "hh:mm a",
+                            Locale.getDefault()
+                        ).format(Date())
+                    ).joinToString(" • ")
                 )
 
             } catch (e: Exception) {

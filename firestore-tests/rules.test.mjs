@@ -25,7 +25,9 @@ import {
 import {
   deleteField,
   doc,
+  collection,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
@@ -255,6 +257,20 @@ test("a user can read ONLY his own password secret", async () => {
   );
   await assertFails(
     getDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), `userSecrets/${ADMIN_PHONE}`))
+  );
+});
+
+test("password hash is readable pre-login (credential check) but never listable", async () => {
+  const anon = testEnv.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(getDocs(collection(anon, "userSecrets")));
+  // writes stay owner-only even pre-login
+  await assertFails(
+    setDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`), {
+      passwordHash: "x",
+      passwordSalt: "y",
+      iterations: 210000,
+    })
   );
 });
 

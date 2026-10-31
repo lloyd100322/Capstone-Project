@@ -211,9 +211,12 @@ class DriverViewModel @Inject constructor(
         )
 
         /*
-         * "Tapos Na Bumyahe" state: kapag tapos na ang biyahe ngayon
-         * (completed + endTravelAt ngayong araw), pula ang button at
-         * lalabas ang buong kita ng araw - kahit i-reopen ang app.
+         * "Tapos Na Bumyahe" state: kapag TAPOS NA ang kasalukuyang
+         * biyahe ngayon (completed + endTravelAt ngayong araw) AT wala
+         * nang bagong aktibong entry sa pila, lalabas ang buong kita ng
+         * araw - kahit i-reopen ang app. Kapag bumalik sa pila ang
+         * driver (bagong biyahe), muling itatago ang kita hangga't
+         * hindi siya muling "tapos".
          */
         val endedToday = driverDocs.any {
             it.getString("status")
@@ -223,11 +226,16 @@ class DriverViewModel @Inject constructor(
                             ?: 0L
                     )
         }
-        if (endedToday && !_uiState.value.travelEndedToday) {
+        val backInQueue = _uiState.value.activeQueueDocId.isNotBlank() &&
+                !_uiState.value.isCancelledInQueue
+        val showEarnings = endedToday && !backInQueue
+        if (_uiState.value.travelEndedToday != showEarnings) {
             _uiState.value = _uiState.value.copy(
-                travelEndedToday = true
+                travelEndedToday = showEarnings
             )
-            loadDailyEarnings()
+            if (showEarnings) {
+                loadDailyEarnings()
+            }
         }
     }
 

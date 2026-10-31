@@ -136,8 +136,13 @@ service cloud.firestore {
     // /userSecrets - salted password hashes, owner-only reads
     // ------------------------------------------------------------------
     match /userSecrets/{phone} {
-      // Only the owner can read their own secret. Never listable.
-      allow get: if isOwner(phone);
+      // Pre-login password check (UX): bago magpadala ng OTP, binabasa
+      // ng app ang hash ng user na ito para matiyak na tama ang password.
+      // `get` lang - HINDI maaaring i-list (walang enumeration); dapat
+      // alam ang numero. PBKDF2 (210k) ang hash kaya mamahal ang offline
+      // cracking; App Check (Play Integrity) ang kalasag laban sa script.
+      // Owner-only pa rin ang lahat ng iba; post-OTP verify ang final.
+      allow get: if request.auth == null || isOwner(phone);
       allow list: if false;
 
       // The owner sets their own secret (register / change / reset) and

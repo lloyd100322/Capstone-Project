@@ -149,11 +149,6 @@ fun QueueScreen(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = "Sa reset, ang #1 ngayon ay mapupunta sa dulo; ang kasunod nito ang mauuna.",
-                            fontSize = 11.sp,
-                            color = TextSecondary
-                        )
                     }
                 }
             }
@@ -204,14 +199,14 @@ fun QueueScreen(
                     ) {
                         TabButton(
                             modifier = Modifier.weight(1f),
-                            text = "MARILAO",
+                            text = "Marilao",
                             isSelected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
                             fontSize = 13.sp
                         )
                         TabButton(
                             modifier = Modifier.weight(1f),
-                            text = "MONUMENTO",
+                            text = "Monumento",
                             isSelected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
                             fontSize = 13.sp

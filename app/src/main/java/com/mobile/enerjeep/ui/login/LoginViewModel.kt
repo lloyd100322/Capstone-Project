@@ -89,11 +89,68 @@ class LoginViewModel @Inject constructor(
         pendingPassword = password
         currentPhoneNumber = cleanPhoneNumber
 
-        triggerSmsVerification(
-            phoneNumber = cleanPhoneNumber,
-            activity = activity,
-            isResend = false
-        )
+        viewModelScope.launch {
+            /*
+             * Password check MUNA bago magpadala ng OTP: hindi dapat
+             * gumastos ng SMS kapag mali ang password. get lang ang
+             * userSecrets (walang listahan - kailangang alam ang
+             * numero). null = walang maayos na hash (legacy o offline),
+             * kaya tuloy sa OTP; ang post-OTP verify pa rin ang
+             * authoritative at buo.
+             */
+            _uiState.value = LoginUiState.Loading
+
+            val preCheck = preCheckPassword(cleanPhoneNumber, password)
+
+            if (preCheck == false) {
+                _uiState.value = LoginUiState.Error(
+                    "Maling numero o password. Subukan muli."
+                )
+                return@launch
+            }
+
+            triggerSmsVerification(
+                phoneNumber = cleanPhoneNumber,
+                activity = activity,
+                isResend = false
+            )
+        }
+    }
+
+    /**
+     * Pre-login password check laban sa userSecrets (PBKDF2). Read-
+     * only: walang anumang ina-upgrade o inililipat bago mag-OTP.
+     * true = tama; false = mali; null = walang matse-check (legacy
+     * o error) - magpapatuloy sa OTP path.
+     */
+    private suspend fun preCheckPassword(
+        phoneNumber: String,
+        typedPassword: String
+    ): Boolean? {
+        return try {
+            val secrets = firestore
+                .collection(FirestoreCollections.USER_SECRETS)
+                .document(phoneNumber)
+                .get()
+                .await()
+
+            val salt = secrets.getString("passwordSalt")
+            val hash = secrets.getString("passwordHash")
+
+            if (salt.isNullOrBlank() || hash.isNullOrBlank()) return null
+
+            val storedIterations = secrets.getLong("iterations")?.toInt()
+                ?: PasswordHasher.LEGACY_ITERATIONS
+
+            PasswordHasher.verify(
+                typedPassword,
+                salt,
+                hash,
+                storedIterations
+            )
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun resendVerificationCode(activity: Activity) {
