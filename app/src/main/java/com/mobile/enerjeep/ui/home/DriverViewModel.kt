@@ -6,7 +6,6 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.safeTimestamp
@@ -152,10 +151,9 @@ class DriverViewModel @Inject constructor(
 
     private fun matchesDriver(document: DocumentSnapshot): Boolean {
         val profile = userSession.userProfile ?: return false
-        val driverId = document.getString("driverId")
-        val plateNumber = document.getString("plateNumber")
-        return driverId == profile.userId ||
-                (!profile.plateNumber.isNullOrBlank() && plateNumber == profile.plateNumber)
+        // Match by stable userId only. A reused plate must never make
+        // another driver's queue entry appear to belong to this account.
+        return document.getString("driverId") == profile.userId
     }
 
     private fun updateQueueState(documents: List<DocumentSnapshot>) {
@@ -182,7 +180,12 @@ class DriverViewModel @Inject constructor(
         val lead = routeFront.getOrNull(0)
         val next = routeFront.getOrNull(1)
 
-        val position = own?.getLong("position")?.toInt() ?: 0
+        // Display a continuous rank from the live route list. The temporary
+        // client fallback cannot rewrite the other drivers' stored positions.
+        val position = routeFront.indexOfFirst { it.id == own?.id }
+            .takeIf { it >= 0 }
+            ?.plus(1)
+            ?: 0
         val total = routeFront.size
 
         /*
@@ -301,11 +304,16 @@ class DriverViewModel @Inject constructor(
      */
     private var endingTravel = false
 
-    /** Completes only this driver's own trip through a trusted transaction. */
+    /**
+     * Temporary no-Cloud-Function fallback. Firestore rules allow this
+     * account to complete only its own eligible queue document; all other
+     * queue edits remain admin-only.
+     */
     fun endTravel() {
+        val profile = userSession.userProfile
         val docId = _uiState.value.activeQueueDocId
-        if (docId.isBlank()) {
-            ToastFeedback.show("Wala ka sa pila ngayon.")
+        if (profile?.userId.isNullOrBlank() || docId.isBlank()) {
+            ToastFeedback.show("Wala kang aktibong entry sa pila ngayon.")
             return
         }
         if (endingTravel) return
@@ -313,9 +321,16 @@ class DriverViewModel @Inject constructor(
         endingTravel = true
         viewModelScope.launch {
             try {
-                FirebaseFunctions.getInstance()
-                    .getHttpsCallable("finishDriverTravel")
-                    .call(mapOf("queueEntryId" to docId))
+                firestore.collection(FirestoreCollections.QUEUE)
+                    .document(docId)
+                    .update(
+                        mapOf(
+                            "status" to "completed",
+                            "endTravelAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp(),
+                            "position" to 0
+                        )
+                    )
                     .await()
 
                 ActivityLogger.log(

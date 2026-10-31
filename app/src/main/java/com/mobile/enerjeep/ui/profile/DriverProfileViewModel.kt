@@ -5,11 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
-import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -285,81 +283,61 @@ class DriverProfileViewModel @Inject constructor(
 
     fun saveProfile() {
 
-        val oldProfile =
-            userSession.userProfile
-                ?: return
+        val oldProfile = userSession.userProfile ?: return
+        val currentPhone = oldProfile.phoneNumber
+        val state = _uiState.value
 
-        val currentPhone =
-            oldProfile.phoneNumber
+        val cleanPhoneDigits = state.phone
+            .filter { it.isDigit() }
+            .take(10)
 
-        val state =
-            _uiState.value
-
-        val cleanPhoneDigits =
-            state.phone
-                .filter {
-                    it.isDigit()
-                }
-                .take(10)
-
-        if (
-            !PH_PHONE_REGEX.matches(
-                cleanPhoneDigits
-            )
-        ) {
+        if (!PH_PHONE_REGEX.matches(cleanPhoneDigits)) {
             ToastFeedback.show(
                 "Ang numero ay dapat 10 digit at nasa format na 9XXXXXXXXX"
             )
             return
         }
 
-        val newPhone =
-            "+63$cleanPhoneDigits"
-
-        /*
-         * Changing the phone number is NOT allowed here. The phone
-         * number is the id of the account document AND the Firebase Auth
-         * identity, so changing it on one side only would sign the user
-         * out and orphan their session. It has to go through a phone
-         * verification flow first (same rule as the admin Profile tab).
-         */
+        val newPhone = "+63$cleanPhoneDigits"
         if (newPhone != currentPhone) {
             ToastFeedback.show(
                 "Hindi muna maaaring palitan ang phone number dito. " +
-                        "Kailangan itong dumaan sa phone verification."
+                    "Kailangan itong dumaan sa phone verification."
             )
             return
         }
 
-        val cleanPlate =
-            state.plateNumber
-                .trim()
-                .uppercase()
+        val cleanFirstName = state.firstName.trim()
+        val cleanLastName = state.lastName.trim()
+        if (cleanFirstName.isBlank() || cleanLastName.isBlank() ||
+            cleanFirstName.length > 50 || cleanLastName.length > 50
+        ) {
+            ToastFeedback.show("Ilagay ang valid na first name at last name.")
+            return
+        }
 
-        // The plate number, the license number and the emergency contact
-        // are checked before anything is saved.
-        PhilippineIdentifiers.plateNumberError(cleanPlate)
-            ?.let { error ->
-                ToastFeedback.show(error)
-                return
-            }
+        val cleanPlate = state.plateNumber.trim().uppercase()
+        val cleanLicense = state.licenseNumber.trim()
+        val oldPlate = oldProfile.plateNumber.orEmpty().trim().uppercase()
+        val oldLicense = oldProfile.licenseNumber.orEmpty().trim()
 
-        PhilippineIdentifiers.licenseNumberError(state.licenseNumber.trim())
-            ?.let { error ->
-                ToastFeedback.show(error)
-                return
-            }
+        // Plate/license changes need server-side uniqueness checks and queue
+        // synchronization. Keep those fields unchanged until functions deploy.
+        if (cleanPlate != oldPlate || cleanLicense != oldLicense) {
+            ToastFeedback.show(
+                "Pansamantalang hindi mababago ang plate number at driver license. " +
+                    "I-enable ulit ito kapag na-deploy na ang Cloud Functions."
+            )
+            return
+        }
 
-        val cleanEmergencyName =
-            state.emergencyContactName.trim()
-
-        val cleanEmergencyNumber =
-            state.emergencyContactNumber.trim()
+        val cleanEmergencyName = state.emergencyContactName.trim()
+        val cleanEmergencyNumber = state.emergencyContactNumber.trim()
 
         if (!EmergencyContact.isValidName(cleanEmergencyName)) {
             ToastFeedback.show(
                 "Ang pangalan ng emergency contact ay kailangan at " +
-                        "dapat hanggang 50 karakter."
+                    "dapat hanggang 50 karakter."
             )
             return
         }
@@ -367,69 +345,47 @@ class DriverProfileViewModel @Inject constructor(
         if (!EmergencyContact.isValidNumber(cleanEmergencyNumber)) {
             ToastFeedback.show(
                 "Ang numero ng emergency contact ay dapat valid na " +
-                        "telepono (09XXXXXXXXX o +639XXXXXXXXX)."
+                    "telepono (09XXXXXXXXX o +639XXXXXXXXX)."
             )
             return
         }
 
+        val combinedEmergency = "$cleanEmergencyName - $cleanEmergencyNumber"
+
         viewModelScope.launch {
-
             try {
-
-                FirebaseFunctions.getInstance()
-                    .getHttpsCallable("updateDriverProfile")
-                    .call(
+                firestore.collection(FirestoreCollections.USERS)
+                    .document(currentPhone)
+                    .update(
                         mapOf(
                             "firstName" to cleanFirstName,
                             "lastName" to cleanLastName,
-                            "licenseNumber" to cleanLicense,
-                            "plateNumber" to cleanPlate,
-                            "emergencyContact" to cleanEmergency,
+                            "emergencyContact" to combinedEmergency,
                             "emergencyContactName" to cleanEmergencyName,
-                            "emergencyContactNumber" to cleanEmergencyNumber
+                            "emergencyContactNumber" to cleanEmergencyNumber,
+                            "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
                     .await()
 
                 userSession.setUser(
                     oldProfile.copy(
-                        firstName =
-                            cleanFirstName,
-
-                        lastName =
-                            cleanLastName,
-
-                        licenseNumber =
-                            cleanLicense,
-
-                        plateNumber =
-                            cleanPlate,
-
-                        emergencyContact =
-                            cleanEmergency,
-
-                        emergencyContactName =
-                            cleanEmergencyName,
-
-                        emergencyContactNumber =
-                            cleanEmergencyNumber
+                        firstName = cleanFirstName,
+                        lastName = cleanLastName,
+                        emergencyContact = combinedEmergency,
+                        emergencyContactName = cleanEmergencyName,
+                        emergencyContactNumber = cleanEmergencyNumber
                     )
                 )
 
-                _uiState.value =
-                    _uiState.value.copy(
-                        currentView =
-                            ProfileSubView.MAIN
-                    )
-
-                ToastFeedback.show(
-                    "Na-update ang profile."
+                _uiState.value = _uiState.value.copy(
+                    currentView = ProfileSubView.MAIN
                 )
 
+                ToastFeedback.show("Na-update ang profile.")
             } catch (e: Exception) {
                 ToastFeedback.show(
-                    e.message
-                        ?: "Hindi ma-update ang profile. Subukan muli."
+                    e.message ?: "Hindi ma-update ang profile. Subukan muli."
                 )
             }
         }

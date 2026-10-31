@@ -172,11 +172,36 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, delete: if isAdmin();
 
-      // All queue creation, deletion, cancellation, dispatch and position
-      // changes are administrator-only. Drivers finish their own trip via
-      // the authenticated finishDriverTravel callable, which validates the
-      // user's phone/userId mapping and performs an Admin SDK transaction.
-      allow update: if isAdmin();
+      // Temporary fallback while finishDriverTravel is not deployed:
+      // a driver may update ONLY their own queue document, and ONLY to mark
+      // it completed. No other driver's entry or queue order can be changed.
+      function driverOwnsThisQueueEntry() {
+        return signedIn()
+          && authPhone() != null
+          && exists(/databases/$(database)/documents/users/$(authPhone()))
+          && get(/databases/$(database)/documents/users/$(authPhone())).data.role == 'driver'
+          && get(/databases/$(database)/documents/users/$(authPhone())).data.userId == resource.data.driverId;
+      }
+
+      function completesOwnQueueEntry() {
+        return driverOwnsThisQueueEntry()
+          && resource.data.status != 'dispatched'
+          && resource.data.status != 'completed'
+          && resource.data.status != 'cancelled'
+          && resource.data.status != 'resolved'
+          && resource.data.isCancelled != true
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'endTravelAt', 'updatedAt', 'position'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasAll(['status', 'endTravelAt', 'updatedAt', 'position'])
+          && request.resource.data.status == 'completed'
+          && request.resource.data.position == 0
+          && request.resource.data.endTravelAt == request.time
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      // All other queue changes remain administrator-only.
+      allow update: if isAdmin() || completesOwnQueueEntry();
     }
 
     // ------------------------------------------------------------------

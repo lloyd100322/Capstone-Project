@@ -443,6 +443,7 @@ class QueueViewModel @Inject constructor(
                     return@addSnapshotListener
                 }
 
+                val positionByRoute = mutableMapOf<Int, Int>()
                 val active = snapshot.documents
                     .filter {
                         isActiveStatus(it.getString("status"))
@@ -457,7 +458,10 @@ class QueueViewModel @Inject constructor(
                                 ?: Long.MAX_VALUE
                         }
                     )
-                    .mapIndexed { index, document ->
+                    .map { document ->
+                        val route = routeKey(document.getString("route"))
+                        val displayPosition = (positionByRoute[route] ?: 0) + 1
+                        positionByRoute[route] = displayPosition
                         QueueVehicle(
                             id = document.id,
 
@@ -465,11 +469,7 @@ class QueueViewModel @Inject constructor(
                                 .getString("driverId")
                                 .orEmpty(),
 
-                            position = document
-                                .getLong("position")
-                                ?.toInt()
-                                ?.takeIf { it > 0 }
-                                ?: index + 1,
+                            position = displayPosition,
 
                             plateNumber = document
                                 .getString("plateNumber")
