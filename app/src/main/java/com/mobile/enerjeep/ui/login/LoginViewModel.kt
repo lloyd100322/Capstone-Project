@@ -13,6 +13,7 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
@@ -44,7 +45,8 @@ class LoginViewModel @Inject constructor(
     private var resendingToken:
             PhoneAuthProvider.ForceResendingToken? = null
 
-    // Typed on the login form and checked AFTER the OTP is verified.
+    // Password is checked by verifyLoginCredentials before any SMS is sent.
+    // It is checked again after OTP before the local session is established.
     private var pendingPassword: String? = null
     private var currentPhoneNumber: String? = null
     private var resendAllowedAtMillis: Long = 0L
@@ -55,13 +57,9 @@ class LoginViewModel @Inject constructor(
     }
 
     /**
-     * Step 1: send the OTP.
-     *
-     * Nothing is read from Firestore before the OTP is verified. The
-     * password is only checked after Firebase Auth has proven that the
-     * caller really owns the phone number (and the app is then allowed
-     * to read the account). A stolen password alone can no longer be
-     * used to probe the database.
+     * Step 1: verify phone + password on the trusted server.
+     * The server reads the private password hash with Admin SDK and
+     * returns only a boolean. SMS OTP is requested only after success.
      */
     fun sendVerificationCode(
         phoneNumber: String,
@@ -84,20 +82,67 @@ class LoginViewModel @Inject constructor(
             return
         }
 
+        if (password.length > 128) {
+            _uiState.value = LoginUiState.Error(
+                "Hindi valid ang password."
+            )
+            return
+        }
+
         if (_uiState.value is LoginUiState.Loading) return
 
         pendingPassword = password
         currentPhoneNumber = cleanPhoneNumber
 
         viewModelScope.launch {
-            // Verify OTP before reading password hashes. This keeps
-            // /userSecrets owner-only while preserving password + OTP login.
             _uiState.value = LoginUiState.Loading
-            triggerSmsVerification(
-                phoneNumber = cleanPhoneNumber,
-                activity = activity,
-                isResend = false
-            )
+
+            try {
+                // This callable uses Admin SDK. Firestore password hashes
+                // stay private, and the SMS request is not started on failure.
+                val response = FirebaseFunctions.getInstance()
+                    .getHttpsCallable("verifyLoginCredentials")
+                    .call(
+                        mapOf(
+                            "phoneNumber" to cleanPhoneNumber,
+                            "password" to password
+                        )
+                    )
+                    .await()
+
+                val result = response.data as? Map<*, *>
+                val credentialsValid = result?.get("valid") as? Boolean == true
+
+                if (!credentialsValid) {
+                    pendingPassword = null
+                    currentPhoneNumber = null
+                    verificationId = null
+                    resendingToken = null
+                    _uiState.value = LoginUiState.Error(
+                        "Maling numero o password. Subukan muli."
+                    )
+                    return@launch
+                }
+
+                // Only valid credentials reach Firebase Phone Auth.
+                triggerSmsVerification(
+                    phoneNumber = cleanPhoneNumber,
+                    activity = activity,
+                    isResend = false
+                )
+            } catch (e: Exception) {
+                Log.e("Login", "Pre-OTP credential verification failed", e)
+                pendingPassword = null
+                currentPhoneNumber = null
+                verificationId = null
+                resendingToken = null
+
+                val message = e.message
+                    ?.takeIf { it.contains("Masyadong maraming", ignoreCase = true) }
+                    ?: "Hindi ma-verify ang numero at password. Pakisubukan muli."
+
+                _uiState.value = LoginUiState.Error(message)
+            }
         }
     }
 
@@ -260,8 +305,8 @@ class LoginViewModel @Inject constructor(
     }
 
     /**
-     * Step 2: verify the OTP with Firebase Auth, then (as an
-     * authenticated user) verify the password and load the profile.
+     * Step 2: verify the OTP with Firebase Auth, re-check the password,
+     * then load the profile and establish the app session.
      */
     private fun signInWithPhoneAuthCredential(
         credential: PhoneAuthCredential

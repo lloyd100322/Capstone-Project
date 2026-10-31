@@ -501,3 +501,183 @@ exports.updateDriverProfile = onCall(
     return { success: true };
   }
 );
+
+
+/**
+ * PRE-OTP LOGIN CREDENTIAL CHECK.
+ *
+ * This callable intentionally allows unauthenticated requests because it
+ * runs BEFORE Firebase Phone Auth. App Check is mandatory, credentials are
+ * checked using the Admin SDK (the Android client never receives a hash),
+ * and attempts are rate-limited per phone number.
+ *
+ * The client must request the SMS OTP only when { valid: true } is returned.
+ */
+const crypto = require("node:crypto");
+
+const LOGIN_CHECK_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_CHECK_MAX_ATTEMPTS = 8;
+const LOGIN_HASH_BITS = 256;
+const LOGIN_DUMMY_SALT = Buffer.from("enerjeep-login-dummy-salt", "utf8");
+
+function safeEqualBuffers(left, right) {
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function safeEqualText(left, right) {
+  const a = Buffer.from(String(left), "utf8");
+  const b = Buffer.from(String(right), "utf8");
+  return safeEqualBuffers(a, b);
+}
+
+function verifyStoredPassword(password, secretData) {
+  const saltHex = secretData.passwordSalt;
+  const hashHex = secretData.passwordHash;
+
+  if (
+    typeof saltHex !== "string" ||
+    !/^(?:[0-9a-f]{2}){16,64}$/i.test(saltHex) ||
+    typeof hashHex !== "string" ||
+    !/^[0-9a-f]{64}$/i.test(hashHex)
+  ) {
+    // Keep missing/legacy/malformed hash handling reasonably expensive too.
+    crypto.pbkdf2Sync(password, LOGIN_DUMMY_SALT, 12000, LOGIN_HASH_BITS / 8, "sha256");
+    return false;
+  }
+
+  const rawIterations = Number(secretData.iterations);
+  const iterations =
+    Number.isSafeInteger(rawIterations) &&
+    rawIterations >= 1000 &&
+    rawIterations <= 1000000
+      ? rawIterations
+      : 12000;
+
+  const candidate = crypto.pbkdf2Sync(
+    password,
+    Buffer.from(saltHex, "hex"),
+    iterations,
+    LOGIN_HASH_BITS / 8,
+    "sha256"
+  );
+  const stored = Buffer.from(hashHex, "hex");
+  return safeEqualBuffers(candidate, stored);
+}
+
+exports.verifyLoginCredentials = onCall(
+  { enforceAppCheck: true, maxInstances: 20 },
+  async (request) => {
+    const data = request.data || {};
+    const phone = typeof data.phoneNumber === "string"
+      ? data.phoneNumber.trim()
+      : "";
+    const password = typeof data.password === "string"
+      ? data.password
+      : "";
+
+    // Generic invalid-credential result avoids revealing whether an account exists.
+    if (
+      !/^\\+639[0-9]{9}$/.test(phone) ||
+      !password ||
+      password.length > 128
+    ) {
+      return { valid: false };
+    }
+
+    // Use a one-way phone digest for the rate-limit document id.
+    // No phone number or password is stored in the limiter document.
+    const phoneKey = crypto
+      .createHash("sha256")
+      .update(phone, "utf8")
+      .digest("hex");
+    const attemptRef = db.collection("_loginPrecheckAttempts").doc(phoneKey);
+    const now = Date.now();
+    let rateLimited = false;
+
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(attemptRef);
+      const storedStart = Number(snapshot.get("windowStartedAt") || 0);
+      const storedAttempts = Number(snapshot.get("attempts") || 0);
+      const windowExpired =
+        !Number.isFinite(storedStart) ||
+        now - storedStart >= LOGIN_CHECK_WINDOW_MS ||
+        now < storedStart;
+
+      if (windowExpired) {
+        tx.set(attemptRef, {
+          attempts: 1,
+          windowStartedAt: now,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      if (storedAttempts >= LOGIN_CHECK_MAX_ATTEMPTS) {
+        rateLimited = true;
+        return;
+      }
+
+      tx.set(attemptRef, {
+        attempts: storedAttempts + 1,
+        windowStartedAt: storedStart,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    if (rateLimited) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Masyadong maraming pagsubok. Maghintay ng 15 minuto bago subukan muli."
+      );
+    }
+
+    const [userSnapshot, secretSnapshot] = await Promise.all([
+      db.collection("users").doc(phone).get(),
+      db.collection("userSecrets").doc(phone).get(),
+    ]);
+
+    const secretData = secretSnapshot.exists ? secretSnapshot.data() || {} : {};
+    let valid = false;
+
+    if (userSnapshot.exists) {
+      valid = verifyStoredPassword(password, secretData);
+
+      // Older accounts may still have a legacy plaintext password field.
+      // It is migrated and removed only after the OTP succeeds in LoginViewModel.
+      if (!valid) {
+        const legacyPassword = userSnapshot.get("password");
+        if (
+          typeof legacyPassword === "string" &&
+          legacyPassword.length > 0
+        ) {
+          // Do a small dummy derivation before the legacy comparison to reduce
+          // obvious timing differences between current and legacy accounts.
+          crypto.pbkdf2Sync(
+            password,
+            LOGIN_DUMMY_SALT,
+            12000,
+            LOGIN_HASH_BITS / 8,
+            "sha256"
+          );
+          valid = safeEqualText(password, legacyPassword);
+        }
+      }
+    } else {
+      // Do not make missing accounts substantially cheaper to probe.
+      crypto.pbkdf2Sync(
+        password,
+        LOGIN_DUMMY_SALT,
+        12000,
+        LOGIN_HASH_BITS / 8,
+        "sha256"
+      );
+    }
+
+    if (valid) {
+      // Successful credential checks reset the temporary lockout counter.
+      await attemptRef.delete();
+    }
+
+    return { valid };
+  }
+);
