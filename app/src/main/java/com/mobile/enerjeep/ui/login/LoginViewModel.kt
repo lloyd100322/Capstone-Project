@@ -154,19 +154,25 @@ class LoginViewModel @Inject constructor(
 
             /*
              * Stale-hash fallback: kung may legacy plaintext password
-             * pa sa profile at tugma ito, huwag i-deny dito - hayaan ang
+             * pa sa profile at TUGMA ito, huwag i-deny dito - hayaan ang
              * OTP path na ayusin ang hash (self-heal sa post-OTP verify).
-             * Ang "false" ay para lang sa TALAGANG mali ang password.
+             * Kapag hindi mabasa ang profile (hal. denied pre-auth) o
+             * hindi tugma ang legacy, MANANATILI ang "false" - ang hash
+             * rejection ay definitive para sa pre-OTP error.
              */
-            val legacy = firestore
-                .collection(FirestoreCollections.USERS)
-                .document(phoneNumber)
-                .get()
-                .await()
-                .getString("password")
+            val legacy = try {
+                firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(phoneNumber)
+                    .get()
+                    .await()
+                    .getString("password")
+            } catch (_: Exception) {
+                null
+            }
 
-            if (!legacy.isNullOrBlank()) {
-                return if (legacy == typedPassword) null else false
+            if (legacy == typedPassword && !legacy.isNullOrBlank()) {
+                return null
             }
 
             false
