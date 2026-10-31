@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.data.DispatchNotifier
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
@@ -80,6 +81,25 @@ fun DriverContent(
             } catch (_: Exception) {
                 // Tahimik lang kung hindi available ang audio.
             }
+
+            // System notification din sa notification tray - makikita
+            // kahit naka-background ang app (kapag nakasara, ang FCM
+            // push ang bahala).
+            DispatchNotifier.post(
+                context,
+                "Na-dispatch ka!",
+                listOfNotNull(
+                    dispatchAlert
+                        ?.plateNumber
+                        ?.takeIf { it.isNotBlank() },
+                    dispatchAlert
+                        ?.route
+                        ?.takeIf { it.isNotBlank() },
+                    dispatchAlert
+                        ?.time
+                        ?.takeIf { it.isNotBlank() }
+                ).joinToString(" • ")
+            )
         }
     }
 

@@ -3,7 +3,9 @@ package com.mobile.enerjeep
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserProfile
@@ -130,6 +132,11 @@ class ContentViewModel @Inject constructor(
                     
                     userSession.setUser(profile)
 
+                    // I-save ang FCM token ng device (para sa push
+                    // notification kahit nakasara ang app) - tahimik
+                    // lang kung hindi pa available.
+                    saveFcmToken()
+
                     /*
                      * AWTOMATIKONG RESET NG PILA - tumatakbo AGAD sa
                      * pag-login ng admin/superadmin (kahit hindi sa Pila
@@ -159,6 +166,37 @@ class ContentViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /*
+     * FCM TOKEN - kailangan ito ng Cloud Function para makapagpadala
+     * ng push notification sa device na ito kahit nakasara ang app.
+     * Nai-save sa /users/{phone} (fcmToken) - tahimik lang kung hindi
+     * pa available ang token.
+     */
+    private fun saveFcmToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                val token =
+                    if (task.isSuccessful) task.result else null
+                if (token.isNullOrBlank()) {
+                    return@addOnCompleteListener
+                }
+
+                val phone =
+                    auth.currentUser?.phoneNumber
+                        ?: return@addOnCompleteListener
+
+                firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(phone.lowercase())
+                    .update(
+                        mapOf(
+                            "fcmToken" to token,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+            }
     }
 }
 

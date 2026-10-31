@@ -22,6 +22,7 @@ datos ito ng sistema — hindi ito bahagi ng app screen.)
 | `seater` | Bilang ng upuan (16/22) — batayan ng dispatch deduction. |
 | `isVehicleActive` | Aktibo ba ang sasakyan ng driver. |
 | `licenseNumber`, `bodyNumber` | Opsyonal. |
+| `fcmToken` | Push token ng device (FCM) — para sa abiso kahit nakasara ang app; owner ang sumusulat, function ang bumabasa. |
 | `emergencyContactName`, `emergencyContactNumber`, `emergencyContact` | Emergency contact (ang `emergencyContact` ay pinagsama para sa lumang bersyon). |
 | `adminStation` | Para sa admin. |
 | `createdAt`, `updatedAt` | Timestamps. |

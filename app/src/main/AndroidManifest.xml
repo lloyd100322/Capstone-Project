@@ -6,6 +6,9 @@
         android:name="android.hardware.telephony"
         android:required="false" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Para sa system notification ng dispatch alerts (Android 13+).
+         Hinihingi ng app ang pahintulot sa DEVICE kapag unang binuksan. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".EnerJeepApp"
@@ -29,6 +32,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Firebase Cloud Messaging: tumatanggap ng push kapag
+             naka-background o nakasara ang app. -->
+        <service
+            android:name=".data.EnerJeepMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

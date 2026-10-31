@@ -281,6 +281,7 @@ test("a user may edit ONLY his own profile fields (name/license/plate/emergency)
       plateNumber: "TXA 448",
       emergencyContactName: "Inay",
       emergencyContactNumber: "+639171234502",
+      fcmToken: "device-push-token",
       updatedAt: new Date(),
     })
   );

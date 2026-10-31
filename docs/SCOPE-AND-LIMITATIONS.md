@@ -72,11 +72,14 @@ question in review, so each has a stated reason.
    (bookkeeping) of the cash amounts (driver earnings, fines,
    donations, dispatch fees). "Walang pera sa app" is deliberate: no stored value,
    no wallet to hack, no remittance partner needed.
-2. **No true background push notifications.** Dispatch alerts work only
-   while the app is open (in-app sound/banner/bell). Firebase Cloud
-   Messaging (FCM) is a future enhancement; it needs server-side
-   plumbing and possibly billing, and the current workflow (drivers
-   sign in before the day starts) does not require it.
+2. **Push notifications (FCM) — dispatch alerts.** Dalawa ang alerto:
+   (a) in-app banner/tunog/bell kapag bukas ang app, at (b) system
+   notification sa notification tray kahit naka-background o
+   **nakasara** ang app (Firebase Cloud Messaging; ang sender ay ang
+   Cloud Function `onQueueDispatched`). Hinihingi ng app ang
+   **notification permission sa device** (Android 13+) kapag unang
+   binuksan; kapag tinanggihan, ang in-app banner ang gumagana.
+   Tanging dispatch alerts lang ang push (pareho ng in-app abiso).
 3. **No real-time GPS tracking of jeepneys.** The system tracks queue
    state, not vehicle locations.
 4. **No payroll, accounting export, or government reporting** (e.g.,

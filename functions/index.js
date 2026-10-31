@@ -18,7 +18,7 @@
  *   firebase deploy --only functions
  */
 
-const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
+const { onDocumentDeleted, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -175,5 +175,87 @@ exports.dailyQueueReset = onSchedule(
     if (rotated) {
       console.log("dailyQueueReset: na-ikot ang pila para sa bagong araw");
     }
+  }
+);
+
+/**
+ * PUSH NOTIFICATION sa dispatch.
+ *
+ * Kapag ang isang queue entry ay naging "dispatched", nagpapadala ng
+ * Firebase Cloud Messaging (FCM) push sa device ng driver - KAHIT
+ * NAKASARA ang app. Ang notification payload ay awtomatikong
+ * ipinapakita ng system ng Android (may tunog sa channel
+ * "enerjeep_dispatch"), kaya hindi na kailangan ng buhay na proseso ng
+ * app. Ang in-app banner/bell naman ang gumagana kapag bukas ang app
+ * (tahimik ang push doon para hindi mag-doble).
+ */
+exports.onQueueDispatched = onDocumentUpdated(
+  "queue/{entryId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+
+    // Tanging ang PAGPASOK sa "dispatched" lang - hindi bawat update.
+    if ((after.status || "") !== "dispatched") return null;
+    if ((before.status || "") === "dispatched") return null;
+
+    const driverId = after.driverId;
+    if (!driverId) return null;
+
+    // Hanapin ang user doc ng driver (driverId -> users.userId) para
+    // makuha ang fcmToken ng device.
+    const users = await db
+      .collection("users")
+      .where("userId", "==", driverId)
+      .limit(1)
+      .get();
+    if (users.empty) return null;
+
+    const userRef = users.docs[0].ref;
+    const token = users.docs[0].get("fcmToken");
+    if (!token || typeof token !== "string") return null;
+
+    const plate = after.plateNumber || "";
+    const route = after.route || "";
+    const body = [plate, route].filter((x) => x && String(x).trim() !== "").join(" • ");
+
+    try {
+      await admin.messaging().send({
+        token,
+        // Notification payload: ipinapakita ito ng system kahit
+        // nakasara ang app.
+        notification: {
+          title: "Na-dispatch ka!",
+          body: body || "Tingnan ang Pila para sa detalye.",
+        },
+        data: {
+          type: "dispatch",
+          entryId: event.params.entryId,
+          plateNumber: plate,
+          route,
+        },
+        android: {
+          notification: {
+            channel_id: "enerjeep_dispatch",
+            sound: "default",
+          },
+        },
+      });
+      console.log(`onQueueDispatched: naipadala ang push sa ${users.docs[0].id}`);
+    } catch (error) {
+      const code = error && error.code;
+      if (
+        code === "messaging/registration-token-not-registered" ||
+        code === "messaging/invalid-registration-token" ||
+        code === "messaging/invalid-argument"
+      ) {
+        // Lipas na ang token ng device - alisin para hindi na subukan.
+        await userRef.update({ fcmToken: FieldValue.delete() });
+        console.log(`onQueueDispatched: inalis ang lipas na token (${code})`);
+      } else {
+        console.error("onQueueDispatched: hindi naipadala:", error);
+      }
+    }
+    return null;
   }
 );

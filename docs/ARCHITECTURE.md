@@ -153,14 +153,20 @@ instead of corrupting the queue.
 - Passwords are never stored in readable form; legacy plaintext values
   are migrated and deleted automatically.
 
-## 6. Why in-app dispatch alerts (and not Firebase push)?
+## 6. How do the dispatch alerts work (in-app + push)?
 
-The dispatch alert (sound + banner + bell) works while the app is
-open and needs **no** server billing, no Cloud Functions fan-out, and no
-per-message infrastructure. True background push (FCM) is listed as a
-future enhancement in the scope document. For the cooperative's actual
-workflow (drivers sign in before the day starts), in-app alerts are
-enough — and they cost nothing.
+Dalawa ang alerto sa dispatch:
+
+- **In-app (banner + tunog + bell)** — kapag bukas ang app. Tunog ng
+  notification tone ng device, banner na may countdown, at bell na may
+  unread badge. Libre, walang dagdag na infra.
+- **System notification (FCM push)** — kahit naka-background o
+  **nakasara** ang app. Ang Cloud Function (`onQueueDispatched`) ang
+  nagpapadala kapag may na-dispatch; ang system ng Android ang
+  nagpapakita (channel "enerjeep_dispatch", may tunog). Ang device
+  token (`fcmToken`) ay nai-save sa `/users/{phone}` sa login at token
+  refresh. Ang notification permission (Android 13+) ay hinihingi sa
+  device kapag unang binuksan ang app.
 
 ## 7. Why App Check (Play Integrity + debug)?
 

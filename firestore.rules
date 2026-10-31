@@ -111,9 +111,11 @@ service cloud.firestore {
       // profile screen ng app). Identity and account-state fields
       // (userId, role, status, seater, isVehicleActive, adminStation,
       // createdAt) are NEVER writable by the owner - they would break
-      // the queue/ledger joins or change the account's level. The LEGACY
-      // plaintext `password` field may only be REMOVED
-      // (doesNotSetPassword still blocks setting a value).
+      // the queue/ledger joins or change the account's level. `fcmToken`
+      // is the device's push address (saved at login/token refresh) -
+      // owner-writable like the profile itself. The LEGACY plaintext
+      // `password` field may only be REMOVED (doesNotSetPassword still
+      // blocks setting a value).
       allow update: if (isMember() && isOwner(phone)
                         && doesNotSetPassword()
                         && request.resource.data.diff(resource.data)
@@ -123,6 +125,7 @@ service cloud.firestore {
                                        'emergencyContactName',
                                        'emergencyContactNumber',
                                        'emergencyContact',
+                                       'fcmToken',
                                        'updatedAt',
                                        'password']));
 
