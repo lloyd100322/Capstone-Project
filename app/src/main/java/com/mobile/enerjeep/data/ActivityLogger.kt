@@ -40,7 +40,11 @@ object ActivityLogger {
                     mapOf(
                         "actorName" to actorName,
                         "actorPhone" to profile?.phoneNumber.orEmpty().trim(),
-                        "actorRole" to profile?.role?.name ?: "",
+                        // .orEmpty() (hindi `?:`) — ang `to` infix ay
+                        // mas mataas ang precedence kaysa elvis, kaya
+                        // nagiging (a to b) ?: c ang "x to y ?: z" at
+                        // nag-e-error sa mapOf.
+                        "actorRole" to profile?.role?.name.orEmpty(),
                         "action" to action,
                         "detail" to detail,
                         "createdAt" to FieldValue.serverTimestamp()
