@@ -8,6 +8,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
+import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -506,6 +507,13 @@ class DriverProfileViewModel @Inject constructor(
                 )
 
                 batch.commit().await()
+
+                SecureLoginCache.save(
+                    phone,
+                    salted.salt,
+                    salted.hash,
+                    salted.iterations
+                )
 
                 _uiState.value =
                     _uiState.value.copy(

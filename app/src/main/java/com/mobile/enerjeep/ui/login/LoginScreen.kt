@@ -114,6 +114,7 @@ fun LoginScreen(
     val errorMessage = when (val state = uiState) {
         is LoginUiState.Error -> state.message
         is LoginUiState.OtpError -> state.message
+        is LoginUiState.CachedPasswordMismatch -> state.message
         else -> null
     }
 
@@ -447,6 +448,21 @@ fun LoginScreen(
                                 bottom = 16.dp
                             )
                         )
+                    }
+
+                    if (uiState is LoginUiState.CachedPasswordMismatch) {
+                        TextButton(
+                            onClick = {
+                                viewModel.continueWithOtpAfterCacheMismatch(activity)
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = "Pinalitan ba ang password sa ibang device? Ituloy sa OTP",
+                                color = EnerjeepBlue,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
 
                     // LOGIN / VERIFY BUTTON

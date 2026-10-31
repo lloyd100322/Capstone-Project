@@ -13,10 +13,10 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
+import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -45,8 +45,8 @@ class LoginViewModel @Inject constructor(
     private var resendingToken:
             PhoneAuthProvider.ForceResendingToken? = null
 
-    // Password is checked by verifyLoginCredentials before any SMS is sent.
-    // It is checked again after OTP before the local session is established.
+    // A previously verified password hash may be checked locally before SMS.
+    // The authoritative Firestore password check remains after OTP.
     private var pendingPassword: String? = null
     private var currentPhoneNumber: String? = null
     private var resendAllowedAtMillis: Long = 0L
@@ -97,53 +97,52 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
 
-            try {
-                // This callable uses Admin SDK. Firestore password hashes
-                // stay private, and the SMS request is not started on failure.
-                val response = FirebaseFunctions.getInstance()
-                    .getHttpsCallable("verifyLoginCredentials")
-                    .call(
-                        mapOf(
-                            "phoneNumber" to cleanPhoneNumber,
-                            "password" to password
-                        )
-                    )
-                    .await()
-
-                val result = response.data as? Map<*, *>
-                val credentialsValid = result?.get("valid") as? Boolean == true
-
-                if (!credentialsValid) {
-                    pendingPassword = null
-                    currentPhoneNumber = null
-                    verificationId = null
-                    resendingToken = null
-                    _uiState.value = LoginUiState.Error(
-                        "Maling numero o password. Subukan muli."
+            // Device-only fallback: if this phone has a still-valid encrypted
+            // verifier from an earlier successful login, reject a wrong
+            // password before requesting any SMS. New devices have no cache
+            // and continue through OTP so the account is not locked out.
+            when (SecureLoginCache.verify(cleanPhoneNumber, password)) {
+                false -> {
+                    _uiState.value = LoginUiState.CachedPasswordMismatch(
+                        "Maling numero o password. Hindi ipinadala ang OTP."
                     )
                     return@launch
                 }
 
-                // Only valid credentials reach Firebase Phone Auth.
-                triggerSmsVerification(
-                    phoneNumber = cleanPhoneNumber,
-                    activity = activity,
-                    isResend = false
-                )
-            } catch (e: Exception) {
-                Log.e("Login", "Pre-OTP credential verification failed", e)
-                pendingPassword = null
-                currentPhoneNumber = null
-                verificationId = null
-                resendingToken = null
-
-                val message = e.message
-                    ?.takeIf { it.contains("Masyadong maraming", ignoreCase = true) }
-                    ?: "Hindi ma-verify ang numero at password. Pakisubukan muli."
-
-                _uiState.value = LoginUiState.Error(message)
+                true, null -> Unit
             }
+
+            // First login on a device (or an expired cache): OTP must happen
+            // before the private Firestore hash can be read securely.
+            triggerSmsVerification(
+                phoneNumber = cleanPhoneNumber,
+                activity = activity,
+                isResend = false
+            )
         }
+    }
+
+    /**
+     * Recovery for users whose password was changed on another device.
+     * This is a deliberate one-time bypass of the local cache only; the
+     * server-side Firestore password verification still runs after OTP.
+     */
+    fun continueWithOtpAfterCacheMismatch(activity: Activity) {
+        if (_uiState.value !is LoginUiState.CachedPasswordMismatch) return
+
+        val phone = currentPhoneNumber
+        if (phone.isNullOrBlank()) {
+            _uiState.value = LoginUiState.Error(
+                "Nawala ang session. Mag-login muli."
+            )
+            return
+        }
+
+        triggerSmsVerification(
+            phoneNumber = phone,
+            activity = activity,
+            isResend = false
+        )
     }
 
     fun resendVerificationCode(activity: Activity) {
@@ -488,14 +487,32 @@ class LoginViewModel @Inject constructor(
             )
 
             if (matched) {
+                var cachedSalt = salt
+                var cachedHash = hash
+                var cachedIterations = storedIterations
+
                 if (storedIterations < PasswordHasher.ITERATIONS) {
                     try {
-                        persistPasswordHash(phone, typedPassword, userReference)
+                        val upgraded = persistPasswordHash(
+                            phone,
+                            typedPassword,
+                            userReference
+                        )
+                        cachedSalt = upgraded.salt
+                        cachedHash = upgraded.hash
+                        cachedIterations = upgraded.iterations
                     } catch (e: Exception) {
-                        // Login still succeeds; the next login tries again.
+                        // Login still succeeds with the existing valid hash.
                         Log.w("Login", "Password upgrade failed", e)
                     }
                 }
+
+                SecureLoginCache.save(
+                    phone,
+                    cachedSalt,
+                    cachedHash,
+                    cachedIterations
+                )
                 return true
             }
 
@@ -509,9 +526,19 @@ class LoginViewModel @Inject constructor(
             val legacyMatch = data["password"] as? String
             if (!legacyMatch.isNullOrBlank() && legacyMatch == typedPassword) {
                 try {
-                    persistPasswordHash(phone, typedPassword, userReference)
+                    val upgraded = persistPasswordHash(
+                        phone,
+                        typedPassword,
+                        userReference
+                    )
+                    SecureLoginCache.save(
+                        phone,
+                        upgraded.salt,
+                        upgraded.hash,
+                        upgraded.iterations
+                    )
                 } catch (e: Exception) {
-                    // Login still succeeds; the next login tries again.
+                    // Login still succeeds; the next login retries migration.
                     Log.w("Login", "Password self-heal failed", e)
                 }
                 return true
@@ -532,7 +559,17 @@ class LoginViewModel @Inject constructor(
 
         if (matched) {
             try {
-                persistPasswordHash(phone, typedPassword, userReference)
+                val upgraded = persistPasswordHash(
+                    phone,
+                    typedPassword,
+                    userReference
+                )
+                SecureLoginCache.save(
+                    phone,
+                    upgraded.salt,
+                    upgraded.hash,
+                    upgraded.iterations
+                )
             } catch (e: Exception) {
                 // Login still succeeds; the next login tries again.
                 Log.w("Login", "Password migration failed", e)
@@ -551,7 +588,7 @@ class LoginViewModel @Inject constructor(
         phone: String,
         plainPassword: String,
         userReference: DocumentReference
-    ) {
+    ): PasswordHasher.SaltedHash {
         val salted = PasswordHasher.hash(plainPassword)
 
         val batch = firestore.batch()
@@ -575,6 +612,7 @@ class LoginViewModel @Inject constructor(
         )
 
         batch.commit().await()
+        return salted
     }
 
     fun resetState() {
@@ -600,6 +638,10 @@ sealed interface LoginUiState {
     ) : LoginUiState
 
     data class OtpError(
+        val message: String
+    ) : LoginUiState
+
+    data class CachedPasswordMismatch(
         val message: String
     ) : LoginUiState
 }
