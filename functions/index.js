@@ -577,7 +577,7 @@ exports.verifyLoginCredentials = onCall(
 
     // Generic invalid-credential result avoids revealing whether an account exists.
     if (
-      !/^\\+639[0-9]{9}$/.test(phone) ||
+      !/^\+639[0-9]{9}$/.test(phone) ||
       !password ||
       password.length > 128
     ) {
