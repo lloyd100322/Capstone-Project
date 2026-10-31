@@ -385,6 +385,11 @@ class LoginViewModel @Inject constructor(
                 val data = userDocument.data
 
                 if (!userDocument.exists() || data == null) {
+                    Log.e(
+                        "Login",
+                        "Post-OTP DIAGNOSE: users/$phone doc MISSING - " +
+                            "kulang ang datos (seed). Ito ang dahilan ng error."
+                    )
                     auth.signOut()
                     _uiState.value = LoginUiState.Error(
                         "Maling numero o password. Subukan muli."
@@ -395,6 +400,13 @@ class LoginViewModel @Inject constructor(
                 val typedPassword = pendingPassword.orEmpty()
 
                 if (!verifyPassword(phone, typedPassword, userDocument.reference, data)) {
+                    Log.e(
+                        "Login",
+                        "Post-OTP DIAGNOSE: verifyPassword FAILED for " +
+                            "$phone - hindi tugma ang hash at walang " +
+                            "legacy plaintext na tugma. Password/secret " +
+                            "ang problema."
+                    )
                     auth.signOut()
                     _uiState.value = LoginUiState.Error(
                         "Maling numero o password. Subukan muli."
@@ -543,7 +555,14 @@ class LoginViewModel @Inject constructor(
         }
 
         // Legacy plaintext account: verify, then migrate to a hash.
-        val legacy = data["password"] as? String ?: return false
+        val legacy = data["password"] as? String ?: run {
+            Log.e(
+                "Login",
+                "verifyPassword DIAGNOSE: walang hash (o sira) sa " +
+                    "userSecrets/$phone at walang legacy password sa profile."
+            )
+            return false
+        }
         val matched = legacy == typedPassword
 
         if (matched) {
