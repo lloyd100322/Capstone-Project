@@ -11,12 +11,14 @@ import java.util.Locale
 /**
  * Checks the "Ulat ng Multa" (Multa report):
  *
- *  - a fine that is saved in the "kita" collection is in the report
- *  - a fine that is saved in the "ledger" collection is in the report
- *  - a normal Kita, dispatch, terminal fee or donation is NOT a fine
- *  - a fine that is written twice is only counted once
+ *  - a fine recorded in the "ledger" (Talaan) is in the report
+ *  - a normal dispatch earning or terminal fee is NOT a fine
+ *  - the same ledger document is counted once
+ *  - two different documents are two fines kahit pareho ng halaga at araw
  */
 class MultiyaReportTest {
+
+    private var nextRow = 0
 
     private fun today(): String =
         SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
@@ -26,32 +28,18 @@ class MultiyaReportTest {
             .format(Date(System.currentTimeMillis() - 40L * 24L * 60L * 60L * 1000L))
 
     private fun item(
+        id: String = "row-${nextRow++}",
         plate: String = "ABC1234",
         name: String = "Juan Dela Cruz",
         date: String = today(),
         amount: Double = 500.0
     ) = ReportMultiyaItem(
+        id = id,
         plateNumber = plate,
         driverName = name,
         date = date,
         amount = amount
     )
-
-    @Test
-    fun aKitaRecordOfTypeMultaIsAFine() {
-        assertTrue(MultiyaReport.isKitaMultiya("Multa"))
-        assertTrue(MultiyaReport.isKitaMultiya("multa"))
-        // The old wording of older records.
-        assertTrue(MultiyaReport.isKitaMultiya("Multiya"))
-    }
-
-    @Test
-    fun aKitaRecordOfAnotherTypeIsNotAFine() {
-        assertFalse(MultiyaReport.isKitaMultiya("Kita"))
-        assertFalse(MultiyaReport.isKitaMultiya("Bayad"))
-        assertFalse(MultiyaReport.isKitaMultiya(null))
-        assertFalse(MultiyaReport.isKitaMultiya(""))
-    }
 
     @Test
     fun onlyTheMultaFeeTypeOfTheLedgerIsAFine() {
@@ -64,8 +52,7 @@ class MultiyaReportTest {
     @Test
     fun aFineFromTheLedgerIsInTheReport() {
         val summary = MultiyaReport.build(
-            kitaMultiya = emptyList(),
-            ledgerMultiya = listOf(item(amount = 250.0))
+            listOf(item(amount = 250.0))
         )
 
         assertEquals(1, summary.current.size)
@@ -74,21 +61,12 @@ class MultiyaReportTest {
     }
 
     @Test
-    fun aFineFromTheKitaCollectionIsInTheReport() {
+    fun theSameLedgerDocumentIsOnlyCountedOnce() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(amount = 750.0)),
-            ledgerMultiya = emptyList()
-        )
-
-        assertEquals(1, summary.current.size)
-        assertEquals(750.0, summary.total, 0.001)
-    }
-
-    @Test
-    fun aFineThatIsWrittenInBothCollectionsIsCountedOnce() {
-        val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(amount = 500.0)),
-            ledgerMultiya = listOf(item(amount = 500.0))
+            listOf(
+                item(id = "fee-1", amount = 500.0),
+                item(id = "fee-1", amount = 500.0)
+            )
         )
 
         assertEquals(1, summary.current.size)
@@ -96,10 +74,30 @@ class MultiyaReportTest {
     }
 
     @Test
+    fun twoFinesWithTheSameDetailsOnTheSameDayAreStillTwoFines() {
+        /* The regression lock for the old heuristic merge: two REAL,
+         * separate fines may look identical (same driver, same amount,
+         * same day) and must stay two rows - they are different
+         * documents.
+         */
+        val summary = MultiyaReport.build(
+            listOf(
+                item(id = "fee-201", amount = 500.0),
+                item(id = "fee-202", amount = 500.0)
+            )
+        )
+
+        assertEquals(2, summary.current.size)
+        assertEquals(1000.0, summary.total, 0.001)
+    }
+
+    @Test
     fun twoDifferentFinesAreBothCounted() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(amount = 500.0)),
-            ledgerMultiya = listOf(item(amount = 300.0))
+            listOf(
+                item(amount = 500.0),
+                item(plate = "XYZ9876", name = "Pedro Santos", amount = 300.0)
+            )
         )
 
         assertEquals(2, summary.current.size)
@@ -109,8 +107,7 @@ class MultiyaReportTest {
     @Test
     fun anOlderFineGoesToTheHistory() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(item(date = earlier(), amount = 500.0)),
-            ledgerMultiya = emptyList()
+            listOf(item(date = earlier(), amount = 500.0))
         )
 
         assertEquals(0, summary.current.size)
@@ -121,12 +118,10 @@ class MultiyaReportTest {
     @Test
     fun theTotalOfTheReportIsTheSumOfEveryFine() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(
+            listOf(
                 item(date = today(), amount = 100.0),
-                item(date = earlier(), amount = 200.0)
-            ),
-            ledgerMultiya = listOf(
-                item(date = today(), amount = 300.0)
+                item(date = earlier(), amount = 200.0),
+                item(plate = "XYZ9876", name = "Pedro Santos", date = today(), amount = 300.0)
             )
         )
 
@@ -135,20 +130,54 @@ class MultiyaReportTest {
     }
 
     @Test
-    fun theCompleteListHasEveryFineAndCountsAFineThatIsWrittenTwiceOnlyOnce() {
+    fun theCompleteListHasEveryFineAndCountsTheSameDocumentOnlyOnce() {
         val summary = MultiyaReport.build(
-            kitaMultiya = listOf(
-                item(date = today(), amount = 100.0),
-                item(date = earlier(), amount = 200.0)
-            ),
-            ledgerMultiya = listOf(
-                item(date = today(), amount = 100.0)
+            listOf(
+                item(id = "fee-301", date = today(), amount = 100.0),
+                item(id = "fee-302", date = earlier(), amount = 200.0),
+                item(id = "fee-301", date = today(), amount = 100.0)
             )
         )
 
-        // The fine of today is in the list, the older fine is in the list,
-        // and the fine that is written in both collections is there once.
+        // The fine of today is in the list, the older fine is in the
+        // list, and the duplicated DOCUMENT is there once.
         assertEquals(2, summary.all.size)
         assertEquals(300.0, summary.total, 0.001)
+    }
+
+    @Test
+    fun theHistoryIsSortedNewestFirstByRealDateNotByText() {
+        /*
+         * String order of "MMM dd, yyyy" is not chronological ("Sep"
+         * sorts after "May" even when May is later). The list must be
+         * ordered by the saved time of each fine.
+         */
+        val now = System.currentTimeMillis()
+        val day = 24L * 60L * 60L * 1000L
+
+        val summary = MultiyaReport.build(
+            listOf(
+                ReportMultiyaItem(
+                    id = "fee-401",
+                    plateNumber = "ABC1234",
+                    driverName = "Juan Dela Cruz",
+                    date = "Sep 15, 2025",
+                    amount = 100.0,
+                    createdAtMillis = now - 30L * day
+                ),
+                ReportMultiyaItem(
+                    id = "fee-402",
+                    plateNumber = "ABC1234",
+                    driverName = "Juan Dela Cruz",
+                    date = "May 01, 2026",
+                    amount = 200.0,
+                    createdAtMillis = now - 2L * day
+                )
+            )
+        )
+
+        assertEquals(2, summary.history.size)
+        assertEquals(200.0, summary.history[0].amount, 0.001)
+        assertEquals(100.0, summary.history[1].amount, 0.001)
     }
 }

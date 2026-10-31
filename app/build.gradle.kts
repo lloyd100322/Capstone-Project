@@ -81,10 +81,15 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.firebase.appcheck.debug)
 
     testImplementation(libs.junit)
+    // Compose test artifacts have no version in the catalog - the BOM
+    // supplies it. androidTest is its OWN scope (it does NOT inherit the
+    // BOM from `implementation`), so the platform must be declared here.
+    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

@@ -52,12 +52,16 @@ data class ReportIncidentItem(
 )
 
 data class ReportMultiyaItem(
+    // Ang ledger document id - ito ang identity ng bawat row. Ginagamit
+    // ito ng MultiyaReport para hindi mabilang nang dalawang beses ang
+    // ISANG dokumento, habang nananatiling dalawang multa ang dalawang
+    // magkaibang dokumento kahit pareho pa ng halaga at araw.
+    val id: String = "",
     val plateNumber: String,
     val driverName: String,
     val date: String,
     val amount: Double,
-    // When the record was saved. Used to split "Ngayon" from the history
-    // and to spot a fine that is written in two collections.
+    // When the record was saved. Used to split "Ngayon" from the history.
     val createdAtMillis: Long = 0L
 )
 
@@ -66,7 +70,14 @@ data class DonasyonItem(
     val amount: Double,
     val date: String,
     val source: String,
-    val note: String
+    val note: String,
+    /**
+     * "donate" = idinagdag sa pondo (boluntaryo, kahit kanino).
+     * "gamit"  = ibinawas mula sa pondo (ginamit ng kooperatiba).
+     * Ang donasyon ay HIWALAY sa kita - hindi ito binabawas sa
+     * sinumang driver o miyembro.
+     */
+    val type: String = "donate"
 )
 
 sealed interface ReportUiState {
@@ -108,7 +119,8 @@ sealed interface ReportUiState {
 
 @HiltViewModel
 class ReportViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userSession: com.mobile.enerjeep.data.UserSession
 ) : ViewModel() {
 
     private val _uiState =
@@ -123,9 +135,6 @@ class ReportViewModel @Inject constructor(
         listOf<DocumentSnapshot>()
 
     private var incidentDocs =
-        listOf<DocumentSnapshot>()
-
-    private var kitaDocs =
         listOf<DocumentSnapshot>()
 
     private var donationDocs =
@@ -188,23 +197,6 @@ class ReportViewModel @Inject constructor(
         listeners +=
             firestore
                 .collection(
-                    FirestoreCollections.KITA
-                )
-                .addSnapshotListener {
-                        snapshot,
-                        _ ->
-
-                    kitaDocs =
-                        snapshot
-                            ?.documents
-                            .orEmpty()
-
-                    rebuild()
-                }
-
-        listeners +=
-            firestore
-                .collection(
                     FirestoreCollections.DONATIONS
                 )
                 .addSnapshotListener {
@@ -228,8 +220,16 @@ class ReportViewModel @Inject constructor(
          * -----------------------------
          */
 
+        /*
+         * Ang "income" ay DISPATCH RECORDS lang (feeType "Dispatch" /
+         * source "queue_dispatch"). Ang mga bayad ng multa (Talaan) at
+         * iba pang fee rows ay HINDI kita - nasa "Ulat ng Multa" ang mga
+         * iyon - kaya hindi sila binibilang bilang biyahe o kita dito.
+         */
+        val dispatchLedgerDocs = ledgerDocs.filter { isDispatchLedger(it) }
+
         val monthly =
-            ledgerDocs
+            dispatchLedgerDocs
                 .mapNotNull { document ->
 
                     val key =
@@ -276,7 +276,7 @@ class ReportViewModel @Inject constructor(
                         if (
                             previousKey != null
                         ) {
-                            ledgerDocs
+                            dispatchLedgerDocs
                                 .filter {
                                     monthKey(
                                         it
@@ -297,7 +297,7 @@ class ReportViewModel @Inject constructor(
                             ),
 
                         trips =
-                            ledgerDocs.count {
+                            dispatchLedgerDocs.count {
                                 monthKey(
                                     it
                                 ) == key
@@ -324,7 +324,7 @@ class ReportViewModel @Inject constructor(
                 }
 
         val yearly =
-            ledgerDocs
+            dispatchLedgerDocs
                 .mapNotNull {
                     yearKey(it)
                 }
@@ -333,7 +333,7 @@ class ReportViewModel @Inject constructor(
                 .map { year ->
 
                     val yearDocs =
-                        ledgerDocs.filter {
+                        dispatchLedgerDocs.filter {
                             yearKey(it) == year
                         }
 
@@ -358,7 +358,7 @@ class ReportViewModel @Inject constructor(
                 }
 
         val incomeHistory =
-            ledgerDocs
+            dispatchLedgerDocs
                 .sortedByDescending {
                     timestampSeconds(
                         it
@@ -449,24 +449,11 @@ class ReportViewModel @Inject constructor(
          *
          * "Ngayon" means today's records.
          *
-         * A fine can be saved in two places in this app. The "kita"
-         * collection keeps records entered with the "Add collection"
-         * button (type = "Multa"); the "ledger" collection is the source
-         * of truth for dispatch earnings, so the ledger also holds a
-         * row when the fee type is "Multa". Both rows describe the same
-         * fine and both must be counted once.
+         * Ang mga multa ay nire-record sa "ledger" kapag pinindot ng
+         * admin ang "I-record ang Bayad ng Multa" sa Talaan. Ang kita
+         * ng driver (dispatch earnings) ay hindi pinagkukunan ng multa
+         * - walang binabawas sa kita.
          */
-        val kitaMultiya =
-            kitaDocs
-                .filter {
-                    MultiyaReport.isKitaMultiya(
-                        it.getString("type")
-                    )
-                }
-                .map(
-                    ::mapReportMultiya
-                )
-
         // Fines written through the "ledger" collection. Only the
         // feeType matters, so a terminal fee or a dispatch earning is
         // never counted as a fine.
@@ -481,10 +468,9 @@ class ReportViewModel @Inject constructor(
                     ::mapReportMultiya
                 )
 
-        // A fine that is written in both collections is only counted once.
+        // A fine that is written twice is only counted once.
         val multiyaSummary =
             MultiyaReport.build(
-                kitaMultiya,
                 ledgerMultiya
             )
 
@@ -532,14 +518,21 @@ class ReportViewModel @Inject constructor(
 
         val donasyonNgayon =
             currentDonasyon.sumOf {
-                it.amount
+                if (it.type == "gamit") -it.amount else it.amount
             }
 
+        /*
+         * Ang "kabuuang donasyon" ay ang NATITIRANG PONDO:
+         * nakalap (donate) minus ang nagamit (gamit). Hindi lang
+         * pataas nang pataas - pwedeng bumaba kapag may ginamit.
+         */
         val kabuuangDonasyon =
             donationDocs.sumOf {
-                it.getDouble(
-                    "amount"
-                ) ?: 0.0
+                val amount =
+                    (it.get("amount") as? Number)?.toDouble() ?: 0.0
+                val type =
+                    it.getString("type")?.lowercase() ?: "donate"
+                if (type == "gamit") -amount else amount
             }
 
         _uiState.value =
@@ -598,6 +591,9 @@ class ReportViewModel @Inject constructor(
             )
     }
 
+    /** Ang donasyon (dagdag/gamit) ay superadmin lang ang humahawak. */
+    fun isSuperadmin(): Boolean = userSession.isSuperadmin()
+
     fun addDonasyon(
         donasyon: DonasyonItem
     ) {
@@ -628,8 +624,9 @@ class ReportViewModel @Inject constructor(
                 "note" to
                         donasyon.note,
 
-                "isHistory" to
-                        false,
+                "type" to
+                        if (donasyon.type == "gamit") "gamit"
+                        else "donate",
 
                 "createdAt" to
                         FieldValue
@@ -648,6 +645,19 @@ class ReportViewModel @Inject constructor(
                     .document(id)
                     .set(data)
                     .await()
+
+                com.mobile.enerjeep.data.ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    if (donasyon.type == "gamit") "Gamit ng Donasyon" else "Donasyon",
+                    "₱" + donasyon.amount.toString()
+                )
+
+                /*
+                 * Ang donasyon ay HIWALAY sa kita - boluntaryo ito at
+                 * hindi kailanman binabawas sa kita ng sinuman (lalo na
+                 * ng driver). Walang katumbas na record sa "kita".
+                 */
 
             } catch (e: Exception) {
 
@@ -710,6 +720,9 @@ class ReportViewModel @Inject constructor(
     ): ReportMultiyaItem {
 
         return ReportMultiyaItem(
+
+            id =
+                document.id,
 
             plateNumber =
                 document
@@ -793,7 +806,15 @@ class ReportViewModel @Inject constructor(
                     .getString(
                         "note"
                     )
-                    .orEmpty()
+                    .orEmpty(),
+
+            type =
+                document
+                    .getString(
+                        "type"
+                    )
+                    ?.lowercase()
+                    ?: "donate"
         )
     }
 
@@ -888,6 +909,43 @@ class ReportViewModel @Inject constructor(
                 key.format(
                     Date()
                 )
+    }
+
+    /**
+     * Isang DISPATCH RECORD lang ang binibilang bilang kita/biyahe:
+     * feeType "Dispatch" o source "queue_dispatch". Ang mga bayad ng
+     * multa at iba pang fee rows ng Talaan ay hindi kasama dito.
+     */
+    private fun isDispatchLedger(
+        document: DocumentSnapshot
+    ): Boolean {
+
+        val source =
+            document
+                .getString(
+                    "source"
+                )
+                .orEmpty()
+                .trim()
+
+        val feeType =
+            document
+                .getString(
+                    "feeType"
+                )
+                .orEmpty()
+                .trim()
+
+        return source
+            .equals(
+                "queue_dispatch",
+                ignoreCase = true
+            ) ||
+                feeType
+                    .equals(
+                        "Dispatch",
+                        ignoreCase = true
+                    )
     }
 
     private fun amountForLedger(

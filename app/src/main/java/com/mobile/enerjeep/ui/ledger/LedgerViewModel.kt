@@ -56,7 +56,8 @@ sealed interface LedgerUiState {
 
 @HiltViewModel
 class LedgerViewModel @Inject constructor(
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val userSession: com.mobile.enerjeep.data.UserSession
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LedgerUiState>(LedgerUiState.Loading)
@@ -169,8 +170,18 @@ class LedgerViewModel @Inject constructor(
         return LedgerDriverOption(userId, plateNumber, name)
     }
 
-    /** Adds one real ledger record. The driverId is users.userId, not the Firestore document ID. */
+    /**
+     * Adds one real ledger record. The driverId is users.userId, not the
+     * Firestore document ID.
+     */
+
+    // In-flight guard: a double tap must not record the payment twice.
+    private var savingCollection = false
+
     fun addCollection(plateNumber: String, driverName: String, amount: Double, feeType: String) {
+        if (savingCollection) return
+        savingCollection = true
+
         viewModelScope.launch {
             try {
                 val cleanPlateNumber = plateNumber.trim()
@@ -212,7 +223,9 @@ class LedgerViewModel @Inject constructor(
                 val resolvedName = listOf(firstName, lastName).filter { it.isNotBlank() }
                     .joinToString(" ").ifBlank { driverName.trim() }.ifBlank { "Driver" }
                 val documentId = UUID.randomUUID().toString()
-                val nowText = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+                // Stored date text: Locale.US para pareho sa bawat device
+                // at madaling ma-parse pabalik.
+                val nowText = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date())
                 val data = hashMapOf<String, Any>(
                     "id" to documentId,
                     "driverId" to driverId,
@@ -229,8 +242,17 @@ class LedgerViewModel @Inject constructor(
                     "createdAt" to FieldValue.serverTimestamp()
                 )
                 firestore.collection(FirestoreCollections.LEDGER).document(documentId).set(data).await()
+
+                com.mobile.enerjeep.data.ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Bayad ng Multa",
+                    "$plateNumber • $feeType • ₱$amount"
+                )
             } catch (e: Exception) {
                 _uiState.value = LedgerUiState.Error(e.message ?: "Hindi na-save ang collection")
+            } finally {
+                savingCollection = false
             }
         }
     }

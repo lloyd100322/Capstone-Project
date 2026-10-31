@@ -54,9 +54,9 @@ class EmergencyContactTest {
 
     @Test
     fun validNumberIsAccepted() {
+        // Only 09XXXXXXXXX or +639XXXXXXXXX are accepted.
         assertTrue(EmergencyContact.isValidNumber("09171234567"))
         assertTrue(EmergencyContact.isValidNumber("+639171234567"))
-        assertTrue(EmergencyContact.isValidNumber("9171234567"))
     }
 
     @Test
@@ -64,6 +64,15 @@ class EmergencyContactTest {
         assertFalse(EmergencyContact.isValidNumber(""))
         assertFalse(EmergencyContact.isValidNumber("12"))
         assertFalse(EmergencyContact.isValidNumber("Maria"))
+
+        // Landline-style numbers must never pass (regression: "03..."
+        // used to be accepted through the landline fallback).
+        assertFalse(EmergencyContact.isValidNumber("0312345678"))
+        assertFalse(EmergencyContact.isValidNumber("03123456789"))
+
+        // Without the +63 prefix the number must start with 09.
+        assertFalse(EmergencyContact.isValidNumber("9171234567"))
+        assertFalse(EmergencyContact.isValidNumber("639171234567"))
     }
 
     @Test

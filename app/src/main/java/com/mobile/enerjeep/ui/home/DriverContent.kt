@@ -7,6 +7,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
@@ -17,36 +20,105 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.data.DispatchNotifier
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mobile.enerjeep.ui.schedule.ScheduleScreen
 import com.mobile.enerjeep.ui.incident.DriverIncidentScreen
 import com.mobile.enerjeep.ui.kita.KitaScreen
 import com.mobile.enerjeep.ui.profile.DriverProfileScreen
+import android.media.RingtoneManager
+import androidx.compose.ui.platform.LocalContext
 
 
 
 // 1. Driver-Specific Tabs
 enum class DriverTab {
-    Home, Iskedyul, Insidente, Kita, Profile
+    Home, Insidente, Kita, Profile
 }
 
 // 2. Master Controller for the Driver Role
 @Composable
 fun DriverContent(
     appNavigator: AppNavigator,
+    emergencyContactName: String? = null,
+    emergencyContactNumber: String? = null,
+    adminContacts: List<Pair<String, String>> = emptyList(),
     viewModel: DriverViewModel = hiltViewModel()
 ) {
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
     var showIncidentForm by remember { mutableStateOf(false) }
+    var showEmergencyDialog by remember { mutableStateOf(false) }
+    var showAlertsSheet by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Fase 7: dispatch alert (banner + bell + sound)
+    val dispatchAlert by viewModel.dispatchAlert.collectAsStateWithLifecycle()
+    val recentAlerts by viewModel.recentAlerts.collectAsStateWithLifecycle()
+    val hasUnreadAlerts by viewModel.hasUnreadAlerts.collectAsStateWithLifecycle()
+    val unreadAlertCount by viewModel.unreadAlertCount.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    /*
+     * Sound kapag may BAGONG dispatch alert - notification tone ng
+     * device (walang external audio file na kailangan).
+     */
+    LaunchedEffect(dispatchAlert?.id) {
+        if (dispatchAlert != null) {
+            try {
+                val uri = RingtoneManager.getDefaultUri(
+                    RingtoneManager.TYPE_NOTIFICATION
+                )
+                RingtoneManager.getRingtone(context, uri)?.play()
+            } catch (_: Exception) {
+                // Tahimik lang kung hindi available ang audio.
+            }
+
+            // System notification din sa notification tray - makikita
+            // kahit naka-background ang app (kapag nakasara, ang FCM
+            // push ang bahala).
+            DispatchNotifier.post(
+                context,
+                "Na-dispatch ka!",
+                listOfNotNull(
+                    dispatchAlert
+                        ?.plateNumber
+                        ?.takeIf { it.isNotBlank() },
+                    dispatchAlert
+                        ?.route
+                        ?.takeIf { it.isNotBlank() },
+                    dispatchAlert
+                        ?.time
+                        ?.takeIf { it.isNotBlank() }
+                ).joinToString(" • ")
+            )
+        }
+    }
+
+    /*
+     * Timer ng dispatch notification: awtomatikong magsasara ang
+     * banner pagkalipas ng 5 segundo. May countdown sa banner kaya
+     * nakikita ng driver kung kailan ito mawawala.
+     */
+    var alertSecondsLeft by remember { mutableStateOf(5) }
+    LaunchedEffect(dispatchAlert?.id) {
+        if (dispatchAlert != null) {
+            alertSecondsLeft = 5
+            while (alertSecondsLeft > 0) {
+                kotlinx.coroutines.delay(1000)
+                alertSecondsLeft--
+            }
+            viewModel.dismissDispatchAlert()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -62,29 +134,20 @@ fun DriverContent(
                         showIncidentForm = false
                     },
                     icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home", fontSize = 10.sp) },
+                    label = { Text("Home", fontSize = 12.sp) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = EnerjeepBlue,
                         selectedTextColor = EnerjeepBlue,
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
                         indicatorColor = Color.Transparent
                     )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == DriverTab.Iskedyul,
-                    onClick = {
-                        selectedTab = DriverTab.Iskedyul
-                        showIncidentForm = false
-                    },
-                    icon = { DocumentIcon(modifier = Modifier.size(24.dp)) }, // Reusing custom icon
-                    label = { Text("Iskedyul", fontSize = 10.sp) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Insidente,
                     onClick = { selectedTab = DriverTab.Insidente },
                     icon = { WarningIcon(modifier = Modifier.size(24.dp)) },
-                    label = { Text("Insidente", fontSize = 10.sp) }
+                    label = { Text("Insidente", fontSize = 12.sp) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Kita,
@@ -92,8 +155,8 @@ fun DriverContent(
                         selectedTab = DriverTab.Kita
                         showIncidentForm = false
                     },
-                    icon = { SalesIcon(modifier = Modifier.size(24.dp), color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else Color.Gray) },
-                    label = { Text("Kita", fontSize = 10.sp) }
+                    icon = { SalesIcon(size = 24.dp, color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else TextSecondary) },
+                    label = { Text("Kita", fontSize = 12.sp) }
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Profile,
@@ -102,12 +165,12 @@ fun DriverContent(
                         showIncidentForm = false
                     },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                    label = { Text("Profile", fontSize = 10.sp) },
+                    label = { Text("Profile", fontSize = 12.sp) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = EnerjeepBlue,
                         selectedTextColor = EnerjeepBlue,
-                        unselectedIconColor = Color.Gray,
-                        unselectedTextColor = Color.Gray,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
                         indicatorColor = Color.Transparent
                     )
                 )
@@ -129,16 +192,38 @@ fun DriverContent(
                         plateNumber = uiState.plateNumber,
                         route = uiState.route,
                         queuePosition = uiState.queuePosition,
-                        totalInQueue = uiState.totalInQueue,
                         queueStatus = uiState.queueStatus,
                         activeIncidentTitle = uiState.activeIncidentTitle,
                         activeIncidentDate = uiState.activeIncidentDate,
                         activeIncidentPlate = uiState.activeIncidentPlate,
-                        openIncidentCount = uiState.openIncidentCount
+                        openIncidentCount = uiState.openIncidentCount,
+                        posisyonBukas = uiState.posisyonBukas,
+                        queueLeadName = uiState.queueLeadName,
+                        queueLeadPlate = uiState.queueLeadPlate,
+                        queueNextName = uiState.queueNextName,
+                        queueNextPlate = uiState.queueNextPlate,
+                        isInQueue = uiState.activeQueueDocId.isNotBlank() &&
+                                !uiState.isCancelledInQueue,
+                        travelEnded = uiState.travelEndedToday,
+                        dailyEarnings = uiState.dailyEarnings,
+                        dispatchAlert = dispatchAlert,
+                        dispatchSecondsLeft = alertSecondsLeft,
+                        hasUnreadAlerts = hasUnreadAlerts,
+                        unreadAlertCount = unreadAlertCount,
+                        onBellClick = {
+                            viewModel.markAlertsRead()
+                            showAlertsSheet = true
+                        },
+                        onDismissAlert = {
+                            viewModel.dismissDispatchAlert()
+                        },
+                        onTaposNa = {
+                            viewModel.endTravel()
+                        },
+                        onEmergencyClick = {
+                            showEmergencyDialog = true
+                        }
                     )
-                }
-                DriverTab.Iskedyul -> {
-                    ScheduleScreen()
                 }
                 DriverTab.Insidente -> {
                     DriverIncidentScreen()
@@ -149,6 +234,24 @@ fun DriverContent(
                 DriverTab.Profile -> {
                     DriverProfileScreen(appNavigator = appNavigator)
                 }
+            }
+
+            if (showEmergencyDialog) {
+                EmergencyDialog(
+                    onDismiss = {
+                        showEmergencyDialog = false
+                    },
+                    emergencyContactName = emergencyContactName,
+                    emergencyContactNumber = emergencyContactNumber,
+                    adminContacts = adminContacts
+                )
+            }
+
+            if (showAlertsSheet) {
+                DispatchAlertsSheet(
+                    alerts = recentAlerts,
+                    onDismiss = { showAlertsSheet = false }
+                )
             }
         }
     }
@@ -161,20 +264,60 @@ fun DriverDashboardContent(
     plateNumber: String,
     route: String,
     queuePosition: Int,
-    totalInQueue: Int,
     queueStatus: String,
     activeIncidentTitle: String?,
     activeIncidentDate: String?,
     activeIncidentPlate: String?,
-    openIncidentCount: Int
+    openIncidentCount: Int,
+    posisyonBukas: Int = 0,
+    queueLeadName: String = "",
+    queueLeadPlate: String = "",
+    queueNextName: String = "",
+    queueNextPlate: String = "",
+    isInQueue: Boolean = false,
+    travelEnded: Boolean = false,
+    dailyEarnings: Double? = null,
+    dispatchAlert: DriverDispatchAlert? = null,
+    dispatchSecondsLeft: Int = 5,
+    hasUnreadAlerts: Boolean = false,
+    unreadAlertCount: Int = 0,
+    onBellClick: () -> Unit = {},
+    onDismissAlert: () -> Unit = {},
+    onTaposNa: () -> Unit = {},
+    onEmergencyClick: () -> Unit = {}
 ) {
+    var showTaposConfirm by remember { mutableStateOf(false) }
+
+    if (showTaposConfirm) {
+        AlertDialog(
+            onDismissRequest = { showTaposConfirm = false },
+            title = { Text("Tapos na ang biyahe?") },
+            text = {
+                Text(
+                    "Aalisin ka sa pila ngayon at mapupunta sa Kasaysayan. " +
+                            "Maaari kang bumalik bukas ayon sa inyong pila."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showTaposConfirm = false
+                    onTaposNa()
+                }) { Text("Oo", color = SuccessGreen, maxLines = 1) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTaposConfirm = false }) {
+                    Text("Hindi", maxLines = 1)
+                }
+            }
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        // Header
+        // Header (may bell para sa mga dispatch alert)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -191,6 +334,43 @@ fun DriverDashboardContent(
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = onBellClick) {
+                Box {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = "Mga Abiso",
+                        tint = Color.Black,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    if (hasUnreadAlerts) {
+                        /*
+                         * Badge na may BILANG ng bagong abiso (hal. "1",
+                         * "2", ... "9+") - hindi lang pulang tuldok.
+                         */
+                        Surface(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .align(Alignment.TopEnd),
+                            shape = RoundedCornerShape(8.dp),
+                            color = ErrorRed
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = if (unreadAlertCount > 9) {
+                                        "9+"
+                                    } else {
+                                        unreadAlertCount.toString()
+                                    },
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -205,10 +385,67 @@ fun DriverDashboardContent(
         Text(
             text = "Narito ang iyong pila at status ngayon.",
             fontSize = 16.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        /*
+         * Fase 7: banner ng dispatch alert - "Na-dispatch ka na!"
+         * kasama ang plaka at ruta. Maaaring isara.
+         */
+        dispatchAlert?.let { alert ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = EnerjeepBlue),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Na-dispatch ka na!",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = listOf(
+                                alert.plateNumber,
+                                alert.route,
+                                alert.time
+                            ).filter { it.isNotBlank() }
+                                .joinToString(" • "),
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "Magsasara sa $dispatchSecondsLeft segundo",
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontSize = 11.sp
+                        )
+                    }
+                    IconButton(onClick = onDismissAlert) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Isara",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         // Blue Status Card
         Card(
@@ -270,12 +507,120 @@ fun DriverDashboardContent(
                             color = Color.White.copy(alpha = 0.9f),
                             fontSize = 14.sp
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        if (posisyonBukas > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = Color.White.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "Posisyon BUKAS: #$posisyonBukas",
+                                    modifier = Modifier.padding(
+                                        horizontal = 12.dp,
+                                        vertical = 6.dp
+                                    ),
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        /*
+         * Fase 4B: sino ang #1 at sino ang kasunod sa pila ng ruta -
+         * para alam ng driver kung sino ang mauuna at sino ang sumusunod.
+         */
+        if (queueLeadName.isNotBlank() || queueLeadPlate.isNotBlank()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = if (route.isNotBlank()) {
+                            "Pila Ngayon ($route)"
+                        } else {
+                            "Pila Ngayon"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = EnerjeepBlue,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = "#1",
+                                modifier = Modifier.padding(
+                                    horizontal = 10.dp,
+                                    vertical = 4.dp
+                                ),
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Text(
-                            text = "Posisyon $queuePosition ng $totalInQueue sa pila",
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 14.sp
+                            text = listOf(
+                                queueLeadName,
+                                queueLeadPlate
+                            ).filter { it.isNotBlank() }
+                                .joinToString(" • "),
+                            fontSize = 14.sp,
+                            color = Color.Black,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+                    if (queueNextName.isNotBlank() ||
+                        queueNextPlate.isNotBlank()
+                    ) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = Color(0xFFECEFF3),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = "Kasunod",
+                                    modifier = Modifier.padding(
+                                        horizontal = 10.dp,
+                                        vertical = 4.dp
+                                    ),
+                                    color = Color(0xFF5A6472),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = listOf(
+                                    queueNextName,
+                                    queueNextPlate
+                                ).filter { it.isNotBlank() }
+                                    .joinToString(" • "),
+                                fontSize = 14.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
@@ -291,11 +636,36 @@ fun DriverDashboardContent(
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Aktibong Insidente",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color.Black
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Surface(
+                            color = WarningOrangeLight,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "$openIncidentCount",
+                                modifier = Modifier.padding(
+                                    horizontal = 12.dp,
+                                    vertical = 6.dp
+                                ),
+                                color = WarningOrange,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.Top) {
                         Surface(
                             modifier = Modifier.size(40.dp),
@@ -312,12 +682,14 @@ fun DriverDashboardContent(
                             }
                         }
                         Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = activeIncidentTitle ?: "Insidente",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = Color.Black
+                                fontSize = 15.sp,
+                                color = Color.Black,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -325,38 +697,31 @@ fun DriverDashboardContent(
                                 // so the plate of the incident is shown.
                                 // The plate of the signed-in driver is used
                                 // when the record has no plate.
-                                text = "Plaka ${activeIncidentPlate?.takeIf { it.isNotBlank() } ?: plateNumber}",
-                                fontSize = 14.sp,
-                                color = Color.Gray
+                                text = "Plaka " + (activeIncidentPlate?.takeIf { it.isNotBlank() }
+                                    ?: plateNumber),
+                                fontSize = 13.sp,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.AccessTime,
                                     contentDescription = null,
-                                    tint = Color.Gray,
+                                    tint = TextSecondary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = activeIncidentDate ?: "",
                                     fontSize = 12.sp,
-                                    color = Color.Gray
+                                    color = TextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                    }
-                    Surface(
-                        color = WarningOrangeLight,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "$openIncidentCount ka open na incident.",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            color = WarningOrange,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
                     }
                 }
             }
@@ -379,11 +744,219 @@ fun DriverDashboardContent(
                         modifier = Modifier.size(32.dp)
                     )
                     Text(
-                        text = "Wala sa crash.",
+                        text = "Walang di-naayos na insidente.",
                         fontWeight = FontWeight.Medium,
                         fontSize = 15.sp,
                         color = WarningOrange
                     )
+                }
+            }
+        }
+
+        // Malinaw na puwang sa pagitan ng insidente card at ng button.
+        Spacer(modifier = Modifier.height(24.dp))
+
+        /*
+         * "Tapos Na Bumyahe" - aalis ang driver sa pila (Kasaysayan).
+         * May confirm para walang aksidenteng pindot. BERDE muna ang
+         * button; pagkatapos pindutin at tapos na ang biyahe ngayon,
+         * PULA na ito ("tapos na") at lalabas sa ibaba ang buong kita
+         * ng araw.
+         */
+        if (isInQueue || travelEnded) {
+            val doneToday = travelEnded && !isInQueue
+
+            Button(
+                onClick = {
+                    if (!doneToday) {
+                        showTaposConfirm = true
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                enabled = !doneToday,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SuccessGreen,
+                    disabledContainerColor = ErrorRed,
+                    disabledContentColor = Color.White
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Tapos Na Bumyahe",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            /*
+             * Pagkatapos pindutin ang "Tapos Na Bumyahe": lalabas dito
+             * ang buong kita ng driver sa buong araw - hindi na
+             * kailangang pumunta sa Kita tab.
+             */
+            if (travelEnded) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 2.dp
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Buong Kita Ngayon",
+                            fontSize = 14.sp,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "₱" + String.format(
+                                "%,.0f",
+                                dailyEarnings ?: 0.0
+                            ),
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        /*
+         * Emergency button: opens the dialog with 911 and the emergency
+         * contact saved on the driver's own profile. Drivers used to
+         * have no way to reach these numbers at all.
+         */
+        Button(
+            onClick = onEmergencyClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ErrorRed
+            )
+        ) {
+            SirenIcon(
+                modifier = Modifier.size(20.dp),
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Emergency",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+/*
+ * Fase 7: listahan ng mga dispatch alert (bell). In-memory lang -
+ * habang bukas ang app (walang push/Functions).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DispatchAlertsSheet(
+    alerts: List<DriverDispatchAlert>,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Mga Abiso",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Isara")
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            if (alerts.isEmpty()) {
+                Text(
+                    "Wala pang abiso. Ipapakita dito kapag na-dispatch ka.",
+                    color = TextSecondary,
+                    fontSize = 14.sp
+                )
+            } else {
+                alerts.forEach { alert ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = LightGrayBackground
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = EnerjeepBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Na-dispatch: " +
+                                            listOf(
+                                                alert.plateNumber,
+                                                alert.route
+                                            ).filter { it.isNotBlank() }
+                                                .joinToString(" • "),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    alert.time,
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

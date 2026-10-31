@@ -6,8 +6,8 @@ import java.util.Locale
 /**
  * Pure helpers for the two numbers on the admin dashboard.
  *
- * The dashboard card "Kabuuang Benta" shows how much money the cooperative
- * collected, and the card "Insidente" shows how many incidents are still
+ * The dashboard card "Kabuuang Kita" shows how much money the cooperative
+ * earned, and the card "Insidente" shows how many incidents are still
  * open. Both numbers used to be written by hand in the screen (a peso sign
  * with a zero, and a zero), so they never changed. They are built here from
  * the records of Firestore instead.
@@ -16,10 +16,16 @@ import java.util.Locale
  * without a device or a Firestore connection.
  */
 
-/** A row of the "ledger" collection, the way the dashboard needs it. */
+/**
+ * A row of the "ledger" collection, the way the dashboard needs it.
+ *
+ * `otherFees` is the dispatch deduction ("bawas") that was taken from the
+ * driver - that money is what goes to the cooperative.
+ */
 data class DashboardLedgerEntry(
     val amount: Double? = null,
-    val netAmount: Double? = null
+    val netAmount: Double? = null,
+    val otherFees: Double? = null
 )
 
 /** A row of the "incidents" collection, the way the dashboard needs it. */
@@ -31,22 +37,18 @@ data class DashboardIncidentEntry(
 object DashboardSummary {
 
     /**
-     * The money of one ledger row. The net amount is used when it is there,
-     * because that is the amount the other reports of the app use as well.
-     */
-    fun amount(entry: DashboardLedgerEntry): Double =
-        entry.netAmount ?: entry.amount ?: 0.0
-
-    /**
-     * "Kabuuang Benta": the sum of every collection of the ledger.
+     * "Kabuuang Kita": ang kita ng KOOPERATIBA/Terminal = ang bawas
+     * (cut) sa bawat dispatch. Hindi ang kita ng driver - nasa Kita tab
+     * ng driver iyon. Ang mga ledger row na walang bawas (hal. lumang
+     * "Kita" record) ay walang ambag dito.
      */
     fun totalSales(entries: List<DashboardLedgerEntry>): Double =
-        entries.sumOf { amount(it) }
+        entries.sumOf { it.otherFees ?: 0.0 }
 
     /**
      * "Insidente": the number of the incidents that are still open. An
      * incident is closed when it is marked as resolved, which is the same
-     * rule the Insidente screen uses to split "Bukas" from "Naayos".
+     * rule the Insidente screen uses to split "Di-naayos" from "Naayos".
      */
     fun openIncidentCount(entries: List<DashboardIncidentEntry>): Int =
         entries.count { entry ->
@@ -58,9 +60,11 @@ object DashboardSummary {
      * The peso sign and the amount, written the same way the rest of the
      * app writes money.
      */
-    fun formatPeso(amount: Double): String =
-        "₱" + NumberFormat
-            .getNumberInstance(Locale.US)
-            .format(amount)
-            .replace(".00", "")
+    fun formatPeso(amount: Double): String {
+        val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
+            maximumFractionDigits = 2
+            minimumFractionDigits = if ((amount % 1.0) == 0.0) 0 else 2
+        }
+        return "₱" + formatter.format(amount)
+    }
 }

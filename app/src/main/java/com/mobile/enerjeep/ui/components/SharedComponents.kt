@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 
 
@@ -32,12 +34,20 @@ fun SummaryCard(
     title: String,
     value: String,
     icon: @Composable () -> Unit,
-    iconBackground: Color
+    iconBackground: Color,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(140.dp),
+            .height(140.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable { onClick() }
+                } else {
+                    Modifier
+                }
+            ),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -66,11 +76,23 @@ fun SummaryCard(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
-                Text(
-                    text = title,
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextSecondary
+                    )
+                    if (onClick != null) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "›",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSecondary
+                        )
+                    }
+                }
             }
         }
     }
@@ -146,59 +168,6 @@ fun BusIconCustom(modifier: Modifier = Modifier, color: Color = Color.White) {
 }
 
 @Composable
-fun SalesIcon(modifier: Modifier = Modifier, color: Color = Color.Blue) {
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        
-        /*
-         * The peso sign of the Philippines: a vertical stem with a bowl on
-         * the right at the top, and two horizontal bars crossing the stem.
-         * The old drawing was a dollar sign, which is not the money of this
-         * app.
-         */
-        val stemWidth = width * 0.12f
-        val stemX = width * 0.38f
-
-        // Vertical stem.
-        drawLine(
-            color = color,
-            start = Offset(stemX, height * 0.08f),
-            end = Offset(stemX, height * 0.88f),
-            strokeWidth = stemWidth
-        )
-
-        // The bowl of the "P", on the right of the stem.
-        drawPath(
-            path = Path().apply {
-                moveTo(stemX, height * 0.16f)
-                cubicTo(
-                    width * 0.82f, height * 0.16f,
-                    width * 0.82f, height * 0.44f,
-                    stemX, height * 0.44f
-                )
-            },
-            color = color,
-            style = Stroke(width = stemWidth)
-        )
-
-        // The two bars that cross the stem.
-        drawLine(
-            color = color,
-            start = Offset(width * 0.18f, height * 0.44f),
-            end = Offset(width * 0.62f, height * 0.44f),
-            strokeWidth = stemWidth
-        )
-        drawLine(
-            color = color,
-            start = Offset(width * 0.18f, height * 0.58f),
-            end = Offset(width * 0.62f, height * 0.58f),
-            strokeWidth = stemWidth
-        )
-    }
-}
-
-@Composable
 fun WarningIcon(modifier: Modifier = Modifier, color: Color = Color.Red) {
     Canvas(modifier = modifier) {
         val width = size.width
@@ -264,7 +233,7 @@ fun TruckIcon(modifier: Modifier = Modifier, color: Color = Color.Green) {
 }
 
 @Composable
-fun DocumentIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun DocumentIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
@@ -285,7 +254,7 @@ fun DocumentIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
 }
 
 @Composable
-fun ListIcon(modifier: Modifier = Modifier, color: Color = Color.Gray) {
+fun ListIcon(modifier: Modifier = Modifier, color: Color = TextSecondary) {
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height

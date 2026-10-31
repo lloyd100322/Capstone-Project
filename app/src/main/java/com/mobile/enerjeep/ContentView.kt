@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
@@ -55,6 +56,21 @@ fun ContentView(
                             activity = activity,
                             startDestination = Screen.Login
                         )
+                    }
+                    is AppAuthState.Error -> {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = state.message,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(24.dp)
+                            )
+                            Button(onClick = { viewModel.retry() }) {
+                                Text("Subukan", maxLines = 1)
+                            }
+                        }
                     }
                 }
             }

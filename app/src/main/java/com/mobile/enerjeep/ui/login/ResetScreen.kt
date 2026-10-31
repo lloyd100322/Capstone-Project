@@ -39,6 +39,7 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
 @Composable
 fun ResetPasswordScreen(
@@ -111,7 +112,7 @@ fun ResetPasswordScreen(
             ) {
                 Text(
                     text =
-                        "Tagumpay! Na-reset ang password. Mag-sign in.",
+                        "Tagumpay! Na-reset ang password. Mag-sign In.",
                     color = Color(0xFF166534),
                     fontSize = 14.sp,
                     modifier =
@@ -227,7 +228,7 @@ fun PhoneInputContent(
         text =
             "Ilagay ang iyong nakarehistrong numero.",
         fontSize = 14.sp,
-        color = Color.Gray
+        color = TextSecondary
     )
 
     Spacer(
@@ -250,7 +251,7 @@ fun PhoneInputContent(
         Text(
             text = "+63",
             fontSize = 16.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Box(
@@ -273,7 +274,7 @@ fun PhoneInputContent(
             placeholder = {
                 Text(
                     "9171234567",
-                    color = Color.LightGray
+                    color = TextSecondary
                 )
             },
             modifier = Modifier.fillMaxWidth(),
@@ -365,7 +366,7 @@ fun OtpInputContent(
         text =
             "Ilagay ang 6-digit na code na ipinadala sa +63${uiState.phoneNumber}",
         fontSize = 14.sp,
-        color = Color.Gray
+        color = TextSecondary
     )
 
     Spacer(
@@ -415,7 +416,7 @@ fun OtpInputContent(
                                 if (isFocused)
                                     EnerjeepBlue
                                 else
-                                    Color.LightGray,
+                                    FieldBorderColor,
                                 RoundedCornerShape(8.dp)
                             ),
                         contentAlignment =
@@ -450,7 +451,7 @@ fun OtpInputContent(
         },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Ipadala muli ang OTP")
+        Text("Ipadala", maxLines = 1)
     }
 
     Button(
@@ -519,7 +520,7 @@ fun NewPasswordContent(
     Text(
         text = "Bagong Password",
         fontSize = 12.sp,
-        color = Color.Gray
+        color = TextSecondary
     )
 
     Spacer(
@@ -562,7 +563,7 @@ fun NewPasswordContent(
                         else
                             Icons.Default.VisibilityOff,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = TextSecondary
                 )
             }
         }
@@ -575,7 +576,7 @@ fun NewPasswordContent(
     Text(
         text = "Kumpirmahin ang Password",
         fontSize = 12.sp,
-        color = Color.Gray
+        color = TextSecondary
     )
 
     Spacer(
@@ -618,7 +619,7 @@ fun NewPasswordContent(
                         else
                             Icons.Default.VisibilityOff,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = TextSecondary
                 )
             }
         }

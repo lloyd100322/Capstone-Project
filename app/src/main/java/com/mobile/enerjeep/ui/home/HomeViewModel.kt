@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.home
 
 import androidx.lifecycle.ViewModel
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserSession
@@ -19,6 +20,13 @@ class HomeViewModel @Inject constructor(
     val userProfile: UserProfile?
         get() = userSession.userProfile
 
+    /**
+     * Reactive profile. The Home screen collects this so the emergency
+     * dialog always shows the CURRENT contact (it used to keep showing
+     * the values from login even after the profile was edited).
+     */
+    val userProfileFlow = userSession.userProfileFlow
+
     private val _activeJeepsCount =
         MutableStateFlow(0)
 
@@ -32,7 +40,7 @@ class HomeViewModel @Inject constructor(
         _totalJeepsCount.asStateFlow()
 
     /*
-     * "Kabuuang Benta" of the dashboard: the sum of every collection that
+     * "Kabuuang Kita" of the dashboard: the sum of every collection that
      * was recorded in the ledger. It used to be a hardcoded "₱0" in the
      * screen, so the card never showed anything.
      */
@@ -53,16 +61,60 @@ class HomeViewModel @Inject constructor(
     val openIncidentCount =
         _openIncidentCount.asStateFlow()
 
+    /*
+     * "Donasyon" ng dashboard: kabuuang halaga ng lahat ng donasyon
+     * na naitala. Kapareho ng "Kabuuang Kita" - clickable ang card at
+     * dumidiretso sa mismong Donasyon screen (hindi lang sa Mga Ulat).
+     */
+    private val _totalDonasyon =
+        MutableStateFlow(0.0)
+
+    val totalDonasyon =
+        _totalDonasyon.asStateFlow()
+
+    /*
+     * The superadmin-managed "available admin" emergency list. Drivers
+     * see these contacts in the Emergency dialog.
+     */
+    private val _emergencyContacts =
+        MutableStateFlow<List<Pair<String, String>>>(emptyList())
+
+    val emergencyContacts =
+        _emergencyContacts.asStateFlow()
+
+    /* 
+     * Every listener is registered here and removed in onCleared().
+     * Without this the app leaked four full-collection listeners on
+     * every visit to the Home screen.
+     */
+    private val listeners =
+        mutableListOf<ListenerRegistration>()
+
     init {
         startListeners()
     }
 
     private fun startListeners() {
 
+        listeners += firestore
+            .collection(FirestoreCollections.EMERGENCY_CONTACTS)
+            .addSnapshotListener { snapshot, _ ->
+                _emergencyContacts.value = snapshot
+                    ?.documents
+                    ?.filter {
+                        it.getBoolean("isActive") != false
+                    }
+                    ?.map { document ->
+                        document.getString("name").orEmpty() to
+                                document.getString("number").orEmpty()
+                    }
+                    .orEmpty()
+            }
+
         /*
          * Total registered drivers.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.USERS
             )
@@ -85,7 +137,7 @@ class HomeViewModel @Inject constructor(
          * dispatch queue, not simply the number of
          * registered driver accounts.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.QUEUE
             )
@@ -129,7 +181,7 @@ class HomeViewModel @Inject constructor(
          * The total money of the cooperative. Every collection that was
          * recorded in the ledger is added up.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.LEDGER
             )
@@ -160,6 +212,14 @@ class HomeViewModel @Inject constructor(
                                         )
                                             as? Number
                                     )
+                                        ?.toDouble(),
+                            otherFees =
+                                (
+                                        document.get(
+                                            "otherFees"
+                                        )
+                                            as? Number
+                                    )
                                         ?.toDouble()
                         )
                     }
@@ -175,7 +235,7 @@ class HomeViewModel @Inject constructor(
          * as the Insidente screen: an incident is closed when it is
          * marked as resolved.
          */
-        firestore
+        listeners += firestore
             .collection(
                 FirestoreCollections.INCIDENTS
             )
@@ -207,6 +267,46 @@ class HomeViewModel @Inject constructor(
                         entries
                     )
             }
+
+        /*
+         * The total donations of the cooperative ("Donasyon" card).
+         */
+        listeners += firestore
+            .collection(
+                FirestoreCollections.DONATIONS
+            )
+            .addSnapshotListener {
+                    snapshot,
+                    _ ->
+
+                if (snapshot == null) {
+                    return@addSnapshotListener
+                }
+
+                _totalDonasyon.value =
+                    snapshot.documents.sumOf {
+                        document ->
+                        val amount =
+                            (
+                                    document.get(
+                                        "amount"
+                                    )
+                                        as? Number
+                                )
+                                ?.toDouble()
+                                ?: 0.0
+                        val type =
+                            document
+                                .getString("type")
+                                ?.lowercase()
+                                ?: "donate"
+                        /*
+                         * Ang card ay nagpapakita ng NATITIRANG pondo:
+                         * nakalap (donate) minus nagamit (gamit).
+                         */
+                        if (type == "gamit") -amount else amount
+                    }
+            }
     }
 
     private fun isActiveQueueStatus(
@@ -231,4 +331,11 @@ class HomeViewModel @Inject constructor(
 
     fun isDriver(): Boolean =
         userSession.isDriver()
+
+
+    override fun onCleared() {
+        listeners.forEach { it.remove() }
+        listeners.clear()
+        super.onCleared()
+    }
 }

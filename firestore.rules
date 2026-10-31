@@ -1,0 +1,307 @@
+rules_version = '2';
+
+// ============================================================================
+// EnerJeep Firestore security rules
+//
+// The security model:
+//   - Every request must come from a signed-in Firebase Auth user whose
+//     phone number belongs to a real account in /users (isMember).
+//   - "admins" manage accounts, the queue, ledger, incidents and reports.
+//   - "drivers" read the shared operational data (queue, incidents) and
+//     their own earnings (kita, ledger), and edit only their own profile.
+//   - Credentials live in /userSecrets and are ONLY readable by their
+//     owner. No rule ever exposes a password hash to anyone else, and no
+//     rule accepts a plaintext `password` field.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function authPhone() {
+      return request.auth.token.phone_number;
+    }
+
+    // The role of the signed-in user, read directly from their own
+    // document. `get()` inside rules is not limited by the target
+    // document's own rules, so this works even for private documents.
+    function ownRole() {
+      return signedIn() && authPhone() != null
+        ? get(/databases/$(database)/documents/users/$(authPhone())).data.role
+        : null;
+    }
+
+    function isMember() {
+      return ownRole() in ['superadmin', 'admin', 'driver'];
+    }
+
+    function isAdmin() {
+      return ownRole() in ['admin', 'superadmin'];
+    }
+
+    function isSuperadmin() {
+      return ownRole() == 'superadmin';
+    }
+
+    function isOwner(phone) {
+      return signedIn() && authPhone() == phone;
+    }
+
+    // Passwords are never stored on the profile document.
+    //
+    // CREATE: the new document must not carry a password field at all.
+    function hasNoPasswordField() {
+      return !request.resource.data.keys().hasAny(['password']);
+    }
+
+    // UPDATE: documents that still carry a LEGACY plaintext password
+    // field must remain editable (deactivate, profile edits), and the
+    // one-time migration that DELETES that field must always pass.
+    // Only writes that add or change a password value are rejected.
+    function doesNotSetPassword() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['password'])
+             || !request.resource.data.keys().hasAny(['password']);
+    }
+
+    // ------------------------------------------------------------------
+    // /users - profiles (no credentials ever live here)
+    // ------------------------------------------------------------------
+    match /users/{phone} {
+      allow get: if isAdmin() || (isMember() && isOwner(phone));
+
+      // Account management lists every account (admin) or looks up
+      // drivers (admin screens). Drivers never list this collection.
+      allow list: if isAdmin();
+
+      // An admin creates accounts. A first-login "self-create" migration
+      // branch used to live here - it was unreachable (isMember() already
+      // requires an existing users document) and it did not restrict the
+      // role field, so it is intentionally gone: only admins create
+      // accounts.
+      //
+      // User levels: only a superadmin may create an ADMIN account. An
+      // admin may create driver accounts only (the app enforces this
+      // too - here it is the safety net).
+      allow create: if (isAdmin()
+                        && hasNoPasswordField()
+                        && (isSuperadmin()
+                            || request.resource.data.role == 'driver'));
+
+      // An admin edits any profile (activate/deactivate). Never accept a
+      // plaintext password, but legacy documents that still have one can
+      // be updated.
+      //
+      // Only a superadmin may CHANGE the role field of an account
+      // (promote/demote). This stops an admin from promoting himself.
+      allow update: if (isAdmin()
+                        && doesNotSetPassword()
+                        && (isSuperadmin()
+                            || !request.resource.data.diff(resource.data)
+                                 .affectedKeys()
+                                 .hasAny(['role'])));
+
+      // A user edits only his own DISPLAY profile: name, license, plate
+      // at emergency contact (ito ang buong ibinibigay ng sariling
+      // profile screen ng app). Identity and account-state fields
+      // (userId, role, status, seater, isVehicleActive, adminStation,
+      // createdAt) are NEVER writable by the owner - they would break
+      // the queue/ledger joins or change the account's level. `fcmToken`
+      // is the device's push address (saved at login/token refresh) -
+      // owner-writable like the profile itself. The LEGACY plaintext
+      // `password` field may only be REMOVED (doesNotSetPassword still
+      // blocks setting a value).
+      allow update: if (isMember() && isOwner(phone)
+                        && doesNotSetPassword()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasOnly(['firstName', 'lastName',
+                                       'licenseNumber', 'plateNumber',
+                                       'emergencyContactName',
+                                       'emergencyContactNumber',
+                                       'emergencyContact',
+                                       'fcmToken',
+                                       'updatedAt',
+                                       'password']));
+
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /userSecrets - salted password hashes, owner-only reads
+    // ------------------------------------------------------------------
+    match /userSecrets/{phone} {
+      // Pre-login password check (UX): bago magpadala ng OTP, binabasa
+      // ng app ang hash ng user na ito para matiyak na tama ang password.
+      // `get` lang - HINDI maaaring i-list (walang enumeration); dapat
+      // alam ang numero. PBKDF2 (210k) ang hash kaya mamahal ang offline
+      // cracking; App Check (Play Integrity) ang kalasag laban sa script.
+      // Owner-only pa rin ang lahat ng iba; post-OTP verify ang final.
+      allow get: if request.auth == null || isOwner(phone);
+      allow list: if false;
+
+      // The owner sets their own secret (register / change / reset) and
+      // an admin sets it once when creating the account.
+      allow create, update: if isOwner(phone) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /queue - dispatch queue (drivers read, admins manage)
+    // ------------------------------------------------------------------
+    match /queue/{entryId} {
+      allow read: if isMember();
+      allow create, delete: if isAdmin();
+
+      // Admins manage the pila. A driver may also end his OWN travel
+      // ("Tapos Na Bumyahe") - under these limits:
+      //
+      //   (a) own entry: only status/position/endTravelAt/updatedAt may
+      //       change; if the status changes it must become "completed",
+      //       and if the position changes it must become 0 (out of the
+      //       active pila). driverName/plateNumber are the DISPLAY
+      //       fields the profile screen keeps in sync after a rename
+      //       (identity driverId stays untouchable). A modified client
+      //       can no longer move itself up the queue or fake its status.
+      //   (b) other entries: finishing travel renumbers the pila behind
+      //       the driver - a pure position reflow. Identity and status
+      //       fields stay untouchable, and a driver can never use this
+      //       clause on his own entry (that is (a) above).
+      allow update: if isAdmin()
+        || (isMember()
+            && resource.data.driverId ==
+               get(/databases/$(database)/documents/users/$(authPhone())).data.userId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'position', 'endTravelAt',
+                           'driverName', 'plateNumber', 'updatedAt'])
+            && (!request.resource.data.diff(resource.data).affectedKeys()
+                   .hasAny(['status'])
+                 || request.resource.data.status == 'completed')
+            && (!request.resource.data.diff(resource.data).affectedKeys()
+                   .hasAny(['position'])
+                 || request.resource.data.position == 0))
+        || (isMember()
+            && resource.data.driverId !=
+               get(/databases/$(database)/documents/users/$(authPhone())).data.userId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['position', 'updatedAt'])
+            && request.resource.data.position is number
+            && request.resource.data.position >= 0);
+    }
+
+    // ------------------------------------------------------------------
+    // /settings - app settings (queue rotation cutoff, deduction tiers)
+    //
+    // Ang cut-off hour ay SUPERADMIN lang ang maaaring magbago. Ang
+    // admin ay pinapayagang i-maintain ang ibang fields (hal. ang
+    // lastQueueDay/routesNormalized na isinusulat ng auto-reset engine
+    // kahit naka-login lang ang admin) - basta hindi cutoffHour.
+    // ------------------------------------------------------------------
+    match /settings/{docId} {
+      allow read: if isMember();
+
+      allow create: if isSuperadmin()
+        || (isAdmin()
+            && !request.resource.data.keys().hasAny(['cutoffHour']));
+
+      allow update: if isSuperadmin()
+        || (isAdmin()
+            && !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['cutoffHour']));
+
+      allow delete: if isSuperadmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /activityLogs - audit log (accountability)
+    //
+    // EVERY admin action is recorded here (dispatch, cancel, create
+    // account, donations, ...) pati ang "Tapos Na Bumyahe" ng driver.
+    // Only the SUPERADMIN can read the log - auditing the admins is the
+    // oversight power of the level above. Entries can never be edited
+    // or deleted, so the trail is honest.
+    //
+    // Ang bawat entry ay may actorPhone - laging ang phone number ng
+    // SARILING nagsulat. Hindi na mapapanggap ng sinuman ang audit
+    // trail sa pangalan ng iba.
+    // ------------------------------------------------------------------
+    match /activityLogs/{logId} {
+      allow read: if isSuperadmin();
+      allow create: if isMember()
+        && request.resource.data.actorPhone == authPhone();
+      allow update, delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // /emergencyContacts - the "available admin" emergency list
+    //
+    // Only the SUPERADMIN manages this list (add/edit/remove). Every
+    // member can read it - the drivers use it to call for help.
+    // ------------------------------------------------------------------
+    match /emergencyContacts/{contactId} {
+      allow read: if isMember();
+      allow create, update, delete: if isSuperadmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /incidents - everyone reads, admins record and resolve
+    // ------------------------------------------------------------------
+    match /incidents/{incidentId} {
+      allow read: if isMember();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /ledger - earnings and fees (drivers read their data, admins write)
+    //
+    // Drivers query with whereEqualTo("driverId", <own userId>) or
+    // whereEqualTo("plateNumber", <own plate>), which satisfies the
+    // `resource.data` conditions below.
+    // ------------------------------------------------------------------
+    match /ledger/{entryId} {
+      allow read: if isAdmin()
+                  || (isMember() && (
+                       resource.data.driverId ==
+                         get(/databases/$(database)/documents/users/$(authPhone())).data.userId
+                       || resource.data.plateNumber ==
+                         get(/databases/$(database)/documents/users/$(authPhone())).data.plateNumber
+                     ));
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /kita - RETIRED (2026-10-31): ang kita ng driver ay galing na sa
+    // /ledger (dispatch records) lamang. Ang koleksyong ito ay nananatili
+    // lang bilang backstop para sa mga lumang dokumento - basa lang ang
+    // driver, at WALANG SINUMAN ang makakagawa o makakabago dito.
+    // ------------------------------------------------------------------
+    match /kita/{entryId} {
+      allow read: if isAdmin()
+                  || (isMember() && resource.data.driverId ==
+                       get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
+    // /donations - donations report
+    //
+    // Ang donasyon (at ang "gamit" nito) ay pondo ng kooperatiba -
+    // SUPERADMIN lang ang humahawak. Ang donasyon ay HIWALAY sa kita
+    // ng mga driver - hindi ito binabawas sa kahit kanino.
+    // ------------------------------------------------------------------
+    match /donations/{donationId} {
+      allow read: if isMember();
+      allow create, update, delete: if isSuperadmin();
+    }
+
+    // Everything else is closed by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

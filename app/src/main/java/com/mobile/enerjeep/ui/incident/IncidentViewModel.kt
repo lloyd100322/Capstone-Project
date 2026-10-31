@@ -6,6 +6,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
 import com.mobile.enerjeep.data.PhilippineIdentifiers
@@ -31,7 +32,8 @@ data class IncidentItem(
     val penalty: String,
     val description: String,
     val sentToDriver: String = "Oo",
-    val status: String = "Bukas"
+    val status: String = "Di-naayos",
+    val createdAtMillis: Long = 0L
 )
 
 data class IncidentDriverOption(
@@ -46,9 +48,9 @@ sealed interface IncidentUiState {
     data class Success(
         val activeIncidents: List<IncidentItem>,
         val historyIncidents: List<IncidentItem>,
-        // Every incident, open and already resolved. The "Kasaysayan" tab
-        // shows this list, so an incident that was made today is written
-        // in the history as well.
+        // Every incident, open and already resolved. The "Naayos" tab
+        // shows only the resolved ones (historyIncidents), so an incident
+        // that was made today is written in the history as well.
         val allIncidents: List<IncidentItem>,
         val openCount: Int,
         val resolvedCount: Int
@@ -79,8 +81,30 @@ class IncidentViewModel @Inject constructor(
 
     val driverOptions = _driverOptions.asStateFlow()
 
+    /*
+     * Fase 6: ang dropdown ay "dispatched only" - mga jeep na may
+     * dispatch record lang (aktibong bumibiyahe). Kasama ang phone
+     * map para sa tel: call button ng admin.
+     */
+    private val _driverPhones =
+        MutableStateFlow<Map<String, String>>(emptyMap())
+
+    val driverPhones = _driverPhones.asStateFlow()
+
+    private var allDriverOptions: List<IncidentDriverOption> =
+        emptyList()
+
+    private var dispatchedPlates: Set<String> = emptySet()
+
+    private fun refreshDriverOptions() {
+        _driverOptions.value = allDriverOptions.filter {
+            it.plateNumber in dispatchedPlates
+        }
+    }
+
     private var incidentListener: ListenerRegistration? = null
     private var driverListener: ListenerRegistration? = null
+    private var queueListener: ListenerRegistration? = null
 
     init {
         startIncidentListener()
@@ -131,7 +155,12 @@ class IncidentViewModel @Inject constructor(
                                 mapIncident(
                                     document.id,
                                     document.data
-                                        ?: emptyMap()
+                                        ?: emptyMap(),
+                                    document
+                                        .safeTimestamp("createdAt")
+                                        ?.toDate()
+                                        ?.time
+                                        ?: 0L
                                 )
 
                             val resolved =
@@ -179,7 +208,7 @@ class IncidentViewModel @Inject constructor(
                         return@addSnapshotListener
                     }
 
-                    _driverOptions.value =
+                    allDriverOptions =
                         snapshot.documents
                             .mapNotNull {
                                 mapDriverOption(it)
@@ -187,6 +216,50 @@ class IncidentViewModel @Inject constructor(
                             .sortedBy {
                                 it.plateNumber.lowercase()
                             }
+
+                    _driverPhones.value = snapshot.documents
+                        .mapNotNull { document ->
+                            val plate =
+                                document.getString("plateNumber")
+                                    .orEmpty()
+                                    .trim()
+
+                            val phone = document.id.ifBlank {
+                                document.getString("phoneNumber")
+                                    .orEmpty()
+                            }
+
+                            if (plate.isBlank() ||
+                                phone.isBlank()
+                            ) {
+                                null
+                            } else {
+                                plate to phone
+                            }
+                        }
+                        .toMap()
+
+                    refreshDriverOptions()
+                }
+
+        /*
+         * "dispatched only": sinasala ng queue listener kung aling
+         * plaka ang may dispatch record (status = "dispatched").
+         */
+        queueListener =
+            firestore.collection(FirestoreCollections.QUEUE)
+                .whereEqualTo("status", "dispatched")
+                .addSnapshotListener { snapshot, _ ->
+                    dispatchedPlates = snapshot?.documents
+                        ?.mapNotNull {
+                            it.getString("plateNumber")
+                                ?.trim()
+                                ?.takeIf { plate -> plate.isNotBlank() }
+                        }
+                        ?.toSet()
+                        .orEmpty()
+
+                    refreshDriverOptions()
                 }
     }
 
@@ -240,12 +313,51 @@ class IncidentViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Sends a previously saved (but not sent) incident to the drivers.
+     */
+    fun sendIncidentToDriver(incidentId: String) {
+        viewModelScope.launch {
+            try {
+                firestore
+                    .collection(FirestoreCollections.INCIDENTS)
+                    .document(incidentId)
+                    .update(
+                        mapOf(
+                            "sentToDriver" to true,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    .await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Ipinadala sa Driver",
+                    incidentId
+                )
+
+                ToastFeedback.show(
+                    "Naipadala na sa mga driver ang insidente."
+                )
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi maipadala ang insidente."
+                )
+            }
+        }
+    }
+
+    // In-flight flag for reportIncident (double-tap protection).
+    private var reportingIncident = false
+
     fun reportIncident(
         plateNumber: String,
         type: String,
         location: String,
         penalty: String,
-        description: String
+        description: String,
+        sendToDriver: Boolean = true
     ) {
 
         val profile =
@@ -257,11 +369,17 @@ class IncidentViewModel @Inject constructor(
         val cleanPenalty =
             penalty.toDoubleOrNull() ?: 0.0
 
+        // Stored date text: Locale.US para pareho sa bawat device at
+        // madaling ma-parse pabalik.
         val dateText =
             SimpleDateFormat(
                 "MMM dd, yyyy",
-                Locale.getDefault()
+                Locale.US
             ).format(Date())
+
+        // In-flight guard: a double tap must not record the incident twice.
+        if (reportingIncident) return
+        reportingIncident = true
 
         viewModelScope.launch {
 
@@ -308,6 +426,23 @@ class IncidentViewModel @Inject constructor(
                             "Driver"
                         }
 
+                /*
+                 * Numero ng driver na itinatago SA mismong incident record.
+                 * Ang /users ay hindi mababasa ng mga driver (rules), kaya
+                 * para sa "Tawagan" button ng driver screen, ang numero ay
+                 * kinukuha dito. Ang doc ID ng user ay ang phone number.
+                 */
+                val driverPhone =
+                    driverDocument
+                        .id
+                        .trim()
+                        .ifBlank {
+                            driverDocument
+                                .getString("phoneNumber")
+                                .orEmpty()
+                                .trim()
+                        }
+
                 val data =
                     mapOf<String, Any>(
 
@@ -318,6 +453,9 @@ class IncidentViewModel @Inject constructor(
 
                         "driverName" to
                                 driverName,
+
+                        "driverPhone" to
+                                driverPhone,
 
                         "plateNumber" to
                                 plateNumber.trim(),
@@ -341,7 +479,7 @@ class IncidentViewModel @Inject constructor(
                         "description" to
                                 description.trim(),
 
-                        "sentToDriver" to true,
+                        "sentToDriver" to sendToDriver,
 
                         "isResolved" to false,
 
@@ -366,6 +504,13 @@ class IncidentViewModel @Inject constructor(
                     .set(data)
                     .await()
 
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Bagong Insidente",
+                    "${plateNumber.trim()} • $type • $location"
+                )
+
                 ToastFeedback.show(
                     "Naitala ang insidente para sa ${plateNumber.trim()}."
                 )
@@ -376,6 +521,8 @@ class IncidentViewModel @Inject constructor(
                     e.message
                         ?: "Hindi ma-save ang insidente"
                 )
+            } finally {
+                reportingIncident = false
             }
         }
     }
@@ -404,6 +551,13 @@ class IncidentViewModel @Inject constructor(
                         )
                     )
                     .await()
+
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Naayos na Insidente",
+                    incidentId
+                )
 
                 ToastFeedback.show(
                     "Naayos na ang insidente. Nasa Kasaysayan na ito."
@@ -449,7 +603,8 @@ class IncidentViewModel @Inject constructor(
 
     private fun mapIncident(
         id: String,
-        data: Map<String, Any>
+        data: Map<String, Any>,
+        createdAtMillis: Long = 0L
     ): IncidentItem {
 
         val driverName =
@@ -502,7 +657,7 @@ class IncidentViewModel @Inject constructor(
                     ?: "",
 
             sentToDriver =
-                if (data["sentToDriver"] == true) {
+                if (data["sentToDriver"] as? Boolean ?: true) {
                     "Oo"
                 } else {
                     "Hindi"
@@ -519,14 +674,17 @@ class IncidentViewModel @Inject constructor(
                 ) {
                     "Naayos"
                 } else {
-                    "Bukas"
-                }
+                    "Di-naayos"
+                },
+
+            createdAtMillis = createdAtMillis
         )
     }
 
     override fun onCleared() {
         incidentListener?.remove()
         driverListener?.remove()
+        queueListener?.remove()
         super.onCleared()
     }
 }

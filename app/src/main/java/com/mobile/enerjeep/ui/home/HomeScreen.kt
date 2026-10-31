@@ -28,9 +28,9 @@ import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.components.*
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import androidx.compose.ui.window.Dialog
 import com.mobile.enerjeep.ui.queue.QueueScreen
-import com.mobile.enerjeep.ui.ledger.LedgerScreen
 import com.mobile.enerjeep.ui.incident.IncidentScreen
 import com.mobile.enerjeep.ui.incident.IncidentReportFormScreen
 import com.mobile.enerjeep.ui.report.ReportScreen
@@ -47,7 +47,7 @@ import androidx.core.content.ContextCompat
 import com.mobile.enerjeep.ui.components.ToastFeedback
 
 enum class HomeTab {
-    Home, Pila, Talaan, Insidente, MgaUlat, Profile
+    Home, Pila, Insidente, MgaUlat, Profile
 }
 
 @Composable
@@ -56,14 +56,33 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val isAdmin = viewModel.isAdmin()
+    val userProfile by viewModel.userProfileFlow
+        .collectAsStateWithLifecycle()
+
+    /*
+     * The superadmin-managed "available admin" list. Loaded OUTSIDE
+     * the admin/driver branch because the DRIVER side uses it in the
+     * Emergency dialog.
+     */
+    val emergencyContactsList by viewModel.emergencyContacts
+        .collectAsStateWithLifecycle()
 
     if (isAdmin) {
         var selectedTab by remember { mutableStateOf(HomeTab.Home) }
         var showIncidentForm by remember { mutableStateOf(false) }
         var showEmergencyDialog by remember { mutableStateOf(false) }
-        var openLedgerForm by remember { mutableStateOf(false) }
 
-        val userProfile = viewModel.userProfile
+        /*
+         * Mula sa Donasyon stat card: kapag pinindot, dumidiretso sa
+         * Donasyon na seksyon ng iisang Mga Ulat screen. Reset pabalik
+         * sa itaas kapag umalis ng Mga Ulat tab.
+         */
+        var reportStartScreen by remember { mutableStateOf("top") }
+        LaunchedEffect(selectedTab) {
+            if (selectedTab != HomeTab.MgaUlat) {
+                reportStartScreen = "top"
+            }
+        }
 
         val activeJeeps by viewModel.activeJeepsCount
             .collectAsStateWithLifecycle()
@@ -75,6 +94,9 @@ fun HomeScreen(
             .collectAsStateWithLifecycle()
 
         val openIncidentCount by viewModel.openIncidentCount
+            .collectAsStateWithLifecycle()
+
+        val totalDonasyon by viewModel.totalDonasyon
             .collectAsStateWithLifecycle()
 
         Scaffold(
@@ -97,13 +119,13 @@ fun HomeScreen(
                             )
                         },
                         label = {
-                            Text("Home", fontSize = 10.sp)
+                            Text("Home", fontSize = 12.sp)
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = EnerjeepBlue,
                             selectedTextColor = EnerjeepBlue,
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
                             indicatorColor = Color.Transparent
                         )
                     )
@@ -118,21 +140,7 @@ fun HomeScreen(
                             ListIcon(modifier = Modifier.size(24.dp))
                         },
                         label = {
-                            Text("Pila", fontSize = 10.sp)
-                        }
-                    )
-
-                    NavigationBarItem(
-                        selected = selectedTab == HomeTab.Talaan,
-                        onClick = {
-                            selectedTab = HomeTab.Talaan
-                            showIncidentForm = false
-                        },
-                        icon = {
-                            DocumentIcon(modifier = Modifier.size(24.dp))
-                        },
-                        label = {
-                            Text("Talaan", fontSize = 10.sp)
+                            Text("Pila", fontSize = 12.sp)
                         }
                     )
 
@@ -145,7 +153,7 @@ fun HomeScreen(
                             WarningIcon(modifier = Modifier.size(24.dp))
                         },
                         label = {
-                            Text("Insidente", fontSize = 10.sp)
+                            Text("Insidente", fontSize = 12.sp)
                         }
                     )
 
@@ -159,7 +167,7 @@ fun HomeScreen(
                             DocumentIcon(modifier = Modifier.size(24.dp))
                         },
                         label = {
-                            Text("Mga Ulat", fontSize = 10.sp)
+                            Text("Mga Ulat", fontSize = 12.sp)
                         }
                     )
 
@@ -176,13 +184,13 @@ fun HomeScreen(
                             )
                         },
                         label = {
-                            Text("Profile", fontSize = 10.sp)
+                            Text("Profile", fontSize = 12.sp)
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = EnerjeepBlue,
                             selectedTextColor = EnerjeepBlue,
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
                             indicatorColor = Color.Transparent
                         )
                     )
@@ -204,6 +212,7 @@ fun HomeScreen(
                             totalJeeps = totalJeeps,
                             totalSales = totalSales,
                             openIncidentCount = openIncidentCount,
+                            totalDonasyon = totalDonasyon,
 
                             // Changed: open Account Management first.
                             onCreateAccountClick = {
@@ -212,18 +221,24 @@ fun HomeScreen(
                                 )
                             },
 
-                            onTerminalFeeClick = {
-                                selectedTab = HomeTab.Talaan
-                                openLedgerForm = true
+                            // Stats are the quick access: tap = open tab.
+                            onSalesClick = {
+                                selectedTab = HomeTab.MgaUlat
                             },
 
-                            onReportIncidentClick = {
-                                selectedTab = HomeTab.Insidente
-                                showIncidentForm = true
-                            },
-
-                            onViewQueueClick = {
+                            onActiveClick = {
                                 selectedTab = HomeTab.Pila
+                            },
+
+                            onIncidentClick = {
+                                selectedTab = HomeTab.Insidente
+                            },
+
+                            // Donasyon stat = straight to the Donasyon
+                            // section of the Mga Ulat screen.
+                            onDonasyonClick = {
+                                reportStartScreen = "donasyon"
+                                selectedTab = HomeTab.MgaUlat
                             },
 
                             onEmergencyClick = {
@@ -234,15 +249,6 @@ fun HomeScreen(
 
                     HomeTab.Pila -> {
                         QueueScreen()
-                    }
-
-                    HomeTab.Talaan -> {
-                        LedgerScreen(
-                            shouldOpenForm = openLedgerForm,
-                            onFormHandled = {
-                                openLedgerForm = false
-                            }
-                        )
                     }
 
                     HomeTab.Insidente -> {
@@ -262,7 +268,7 @@ fun HomeScreen(
                     }
 
                     HomeTab.MgaUlat -> {
-                        ReportScreen()
+                        ReportScreen(initialSection = reportStartScreen)
                     }
 
                     HomeTab.Profile -> {
@@ -274,13 +280,24 @@ fun HomeScreen(
                     EmergencyDialog(
                         onDismiss = {
                             showEmergencyDialog = false
-                        }
+                        },
+                        emergencyContactName =
+                            userProfile?.emergencyContactName,
+                        emergencyContactNumber =
+                            userProfile?.emergencyContactNumber,
                     )
                 }
             }
         }
     } else {
-        DriverContent(appNavigator = appNavigator)
+        DriverContent(
+            appNavigator = appNavigator,
+            emergencyContactName =
+                userProfile?.emergencyContactName,
+            emergencyContactNumber =
+                userProfile?.emergencyContactNumber,
+            adminContacts = emergencyContactsList
+        )
     }
 }
 
@@ -291,10 +308,12 @@ fun HomeContent(
     totalJeeps: Int,
     totalSales: Double,
     openIncidentCount: Int,
+    totalDonasyon: Double,
     onCreateAccountClick: () -> Unit,
-    onTerminalFeeClick: () -> Unit,
-    onReportIncidentClick: () -> Unit,
-    onViewQueueClick: () -> Unit,
+    onSalesClick: () -> Unit,
+    onActiveClick: () -> Unit,
+    onIncidentClick: () -> Unit,
+    onDonasyonClick: () -> Unit,
     onEmergencyClick: () -> Unit
 ) {
     Column(
@@ -335,7 +354,7 @@ fun HomeContent(
         Text(
             text = "Buod ng kooperatiba sa isang tingin.",
             fontSize = 16.sp,
-            color = Color.Gray
+            color = TextSecondary
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -343,17 +362,22 @@ fun HomeContent(
         Row(
             modifier = Modifier.fillMaxWidth()
         ) {
+            /*
+             * The dashboard statistics ARE the quick access: tapping a
+             * card opens the tab behind the number.
+             */
             SummaryCard(
                 modifier = Modifier.weight(1f),
-                title = "Kabuuang Benta",
+                title = "Kabuuang Kita",
                 value = DashboardSummary.formatPeso(totalSales),
                 icon = {
                     SalesIcon(
-                        modifier = Modifier.size(24.dp),
+                        size = 24.dp,
                         color = EnerjeepBlue
                     )
                 },
-                iconBackground = Color.White
+                iconBackground = Color.White,
+                onClick = onSalesClick
             )
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -368,80 +392,49 @@ fun HomeContent(
                         color = SuccessGreen
                     )
                 },
-                iconBackground = SuccessGreenLight
+                iconBackground = SuccessGreenLight,
+                onClick = onActiveClick
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        SummaryCard(
-            modifier = Modifier.fillMaxWidth(0.5f),
-            title = "Insidente",
-            value = openIncidentCount.toString(),
-            icon = {
-                WarningIcon(
-                    modifier = Modifier.size(24.dp),
-                    color = WarningOrange
-                )
-            },
-            iconBackground = WarningOrangeLight
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TruckIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = EnerjeepBlue
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                title = "Insidente",
+                value = openIncidentCount.toString(),
+                icon = {
+                    WarningIcon(
+                        modifier = Modifier.size(24.dp),
+                        color = WarningOrange
                     )
+                },
+                iconBackground = WarningOrangeLight,
+                onClick = onIncidentClick
+            )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
-                    Text(
-                        text = "Buod ng Tracking",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
+            /*
+             * Donasyon stat: kabuuang donasyon ng kooperatiba. Dumidiretso
+             * sa mismong Donasyon screen kapag pinindot.
+             */
+            SummaryCard(
+                modifier = Modifier.weight(1f),
+                title = "Donasyon",
+                value = DashboardSummary.formatPeso(totalDonasyon),
+                icon = {
+                    DocumentIcon(
+                        modifier = Modifier.size(24.dp),
+                        color = ErrorRed
                     )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Aktibong Jeep Ngayon",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-
-                    Text(
-                        text = activeJeeps.toString(),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                }
-            }
+                },
+                iconBackground = ErrorRedLight,
+                onClick = onDonasyonClick
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -455,10 +448,18 @@ fun HomeContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(modifier = Modifier.fillMaxWidth()) {
+        /*
+         * Only the actions that are NOT covered by the stat cards stay
+         * here: account creation and emergency. Magkatabi (left and
+         * right) sa isang hilera para mas maayos tignan.
+         */
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             QuickActionButton(
                 modifier = Modifier.weight(1f),
-                text = "Gumawa ng Account",
+                text = "Gumawa",
                 icon = {
                     Text(
                         "+",
@@ -472,77 +473,30 @@ fun HomeContent(
                 onClick = onCreateAccountClick
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
-
             QuickActionButton(
                 modifier = Modifier.weight(1f),
-                text = "Itala ang Terminal Fee",
+                text = "Emergency",
                 icon = {
-                    DocumentIcon(
+                    SirenIcon(
                         modifier = Modifier.size(20.dp),
-                        color = Color.Black
+                        color = ErrorRed
                     )
                 },
-                backgroundColor = Color.White,
-                contentColor = Color.Black,
-                onClick = onTerminalFeeClick
+                backgroundColor = ErrorRedLight,
+                contentColor = ErrorRed,
+                onClick = onEmergencyClick
             )
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            QuickActionButton(
-                modifier = Modifier.weight(1f),
-                text = "I-report ang Insidente",
-                icon = {
-                    WarningIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.Black
-                    )
-                },
-                backgroundColor = Color.White,
-                contentColor = Color.Black,
-                onClick = onReportIncidentClick
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            QuickActionButton(
-                modifier = Modifier.weight(1f),
-                text = "Tingnan ang Pila",
-                icon = {
-                    ListIcon(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.Black
-                    )
-                },
-                backgroundColor = Color.White,
-                contentColor = Color.Black,
-                onClick = onViewQueueClick
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        QuickActionButton(
-            modifier = Modifier.fillMaxWidth(0.5f),
-            text = "Emergency",
-            icon = {
-                SirenIcon(
-                    modifier = Modifier.size(20.dp),
-                    color = ErrorRed
-                )
-            },
-            backgroundColor = ErrorRedLight,
-            contentColor = ErrorRed,
-            onClick = onEmergencyClick
-        )
     }
 }
 
 @Composable
-fun EmergencyDialog(onDismiss: () -> Unit) {
+fun EmergencyDialog(
+    onDismiss: () -> Unit,
+    emergencyContactName: String? = null,
+    emergencyContactNumber: String? = null,
+    adminContacts: List<Pair<String, String>> = emptyList()
+) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(24.dp),
@@ -552,7 +506,10 @@ fun EmergencyDialog(onDismiss: () -> Unit) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(24.dp)
+                modifier = Modifier
+                    .padding(24.dp)
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -583,7 +540,7 @@ fun EmergencyDialog(onDismiss: () -> Unit) {
                 Text(
                     "Pindutin ang kontak para tawagan agad.",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -596,25 +553,44 @@ fun EmergencyDialog(onDismiss: () -> Unit) {
                     textColor = Color.White
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                /*
+                 * The emergency contact saved on the profile of the
+                 * account (the person to call when the driver is in an
+                 * accident). This used to be missing entirely from the
+                 * dialog even though every account stores it.
+                 */
+                if (!emergencyContactNumber.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                EmergencyContactButton(
-                    title = "Dispatch ng Koop",
-                    number = "+63 (2) 1234-5678",
-                    icon = Icons.Default.HeadsetMic,
-                    bgColor = EnerjeepBlue,
-                    textColor = Color.White
-                )
+                    EmergencyContactButton(
+                        title = emergencyContactName
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "Emergency Contact",
+                        number = emergencyContactNumber,
+                        icon = Icons.Default.Person,
+                        bgColor = EnerjeepBlue,
+                        textColor = Color.White
+                    )
+                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                /*
+                 * The superadmin-managed "available admin" contacts -
+                 * the drivers may call them for help. (The old hardcoded
+                 * placeholder numbers were removed.)
+                 */
+                adminContacts.forEach { (name, number) ->
+                    if (number.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                EmergencyContactButton(
-                    title = "Pamunuan",
-                    number = "+63 917 500 0000",
-                    icon = Icons.Default.Phone,
-                    bgColor = Color(0xFFFBBF24),
-                    textColor = Color.Black
-                )
+                        EmergencyContactButton(
+                            title = name.ifBlank { "Admin" },
+                            number = number,
+                            icon = Icons.Default.Person,
+                            bgColor = EnerjeepBlue,
+                            textColor = Color.White
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -642,7 +618,8 @@ fun EmergencyContactButton(
     number: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     bgColor: Color,
-    textColor: Color
+    textColor: Color,
+    subtitle: String? = null
 ) {
     val context = LocalContext.current
 
@@ -767,7 +744,7 @@ fun EmergencyContactButton(
         },
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp),
+            .heightIn(min = 64.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = bgColor
         ),
@@ -796,6 +773,14 @@ fun EmergencyContactButton(
                     fontSize = 14.sp,
                     color = textColor
                 )
+
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        fontSize = 11.sp,
+                        color = textColor.copy(alpha = 0.85f)
+                    )
+                }
 
                 Text(
                     text = number,

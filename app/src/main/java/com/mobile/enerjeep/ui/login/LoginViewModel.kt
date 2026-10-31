@@ -10,7 +10,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -39,7 +44,8 @@ class LoginViewModel @Inject constructor(
     private var resendingToken:
             PhoneAuthProvider.ForceResendingToken? = null
 
-    private var pendingProfile: UserProfile? = null
+    // Typed on the login form and checked AFTER the OTP is verified.
+    private var pendingPassword: String? = null
     private var currentPhoneNumber: String? = null
     private var resendAllowedAtMillis: Long = 0L
 
@@ -48,6 +54,15 @@ class LoginViewModel @Inject constructor(
         private const val RESEND_COOLDOWN_MILLIS = 30_000L
     }
 
+    /**
+     * Step 1: send the OTP.
+     *
+     * Nothing is read from Firestore before the OTP is verified. The
+     * password is only checked after Firebase Auth has proven that the
+     * caller really owns the phone number (and the app is then allowed
+     * to read the account). A stolen password alone can no longer be
+     * used to probe the database.
+     */
     fun sendVerificationCode(
         phoneNumber: String,
         password: String,
@@ -71,100 +86,98 @@ class LoginViewModel @Inject constructor(
 
         if (_uiState.value is LoginUiState.Loading) return
 
-        _uiState.value = LoginUiState.Loading
+        pendingPassword = password
+        currentPhoneNumber = cleanPhoneNumber
 
         viewModelScope.launch {
-            try {
-                /*
-                 * The account document id is the phone number, so the
-                 * account can be opened directly by its id. This keeps
-                 * the login working even when the Firestore rules only
-                 * allow one account to be read before signing in.
-                 */
-                val userDocument = firestore
-                    .collection("users")
-                    .document(cleanPhoneNumber)
+            /*
+             * Password check MUNA bago magpadala ng OTP: hindi dapat
+             * gumastos ng SMS kapag mali ang password. get lang ang
+             * userSecrets (walang listahan - kailangang alam ang
+             * numero). null = walang maayos na hash (legacy o offline),
+             * kaya tuloy sa OTP; ang post-OTP verify pa rin ang
+             * authoritative at buo.
+             */
+            _uiState.value = LoginUiState.Loading
+
+            val preCheck = preCheckPassword(cleanPhoneNumber, password)
+
+            if (preCheck == false) {
+                _uiState.value = LoginUiState.Error(
+                    "Maling numero o password. Subukan muli."
+                )
+                return@launch
+            }
+
+            triggerSmsVerification(
+                phoneNumber = cleanPhoneNumber,
+                activity = activity,
+                isResend = false
+            )
+        }
+    }
+
+    /**
+     * Pre-login password check laban sa userSecrets (PBKDF2). Read-
+     * only: walang anumang ina-upgrade o inililipat bago mag-OTP.
+     * true = tama; false = mali; null = walang matse-check (legacy
+     * o error) - magpapatuloy sa OTP path.
+     */
+    private suspend fun preCheckPassword(
+        phoneNumber: String,
+        typedPassword: String
+    ): Boolean? {
+        return try {
+            val secrets = firestore
+                .collection(FirestoreCollections.USER_SECRETS)
+                .document(phoneNumber)
+                .get()
+                .await()
+
+            val salt = secrets.getString("passwordSalt")
+            val hash = secrets.getString("passwordHash")
+
+            if (salt.isNullOrBlank() || hash.isNullOrBlank()) return null
+
+            val storedIterations = secrets.getLong("iterations")?.toInt()
+                ?: PasswordHasher.LEGACY_ITERATIONS
+
+            if (PasswordHasher.verify(
+                    typedPassword,
+                    salt,
+                    hash,
+                    storedIterations
+                )
+            ) {
+                return true
+            }
+
+            /*
+             * Stale-hash fallback: kung may legacy plaintext password
+             * pa sa profile at TUGMA ito, huwag i-deny dito - hayaan ang
+             * OTP path na ayusin ang hash (self-heal sa post-OTP verify).
+             * Kapag hindi mabasa ang profile (hal. denied pre-auth) o
+             * hindi tugma ang legacy, MANANATILI ang "false" - ang hash
+             * rejection ay definitive para sa pre-OTP error.
+             */
+            val legacy = try {
+                firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(phoneNumber)
                     .get()
                     .await()
-
-                if (!userDocument.exists()) {
-                    _uiState.value = LoginUiState.Error(
-                        "Maling numero o password"
-                    )
-                    return@launch
-                }
-
-                val data = userDocument.data
-
-                if (data?.get("password") as? String != password) {
-                    _uiState.value = LoginUiState.Error(
-                        "Maling numero o password"
-                    )
-                    return@launch
-                }
-
-                val roleString =
-                    data?.get("role") as? String
-                        ?: UserRole.Driver.name
-
-                val isDriver = roleString.equals(
-                    "driver",
-                    ignoreCase = true
-                )
-
-                val accountStatus =
-                    data?.get("status") as? String
-
-                if (
-                    !isDriver &&
-                    accountStatus.equals(
-                        "inactive",
-                        ignoreCase = true
-                    )
-                ) {
-                    _uiState.value = LoginUiState.Error(
-                        "Hindi aktibo ang account na ito."
-                    )
-                    return@launch
-                }
-
-                val matchedRole = UserRole.entries.find {
-                    it.name.equals(
-                        roleString,
-                        ignoreCase = true
-                    )
-                } ?: UserRole.Driver
-
-                pendingProfile = UserProfile(
-                    userId = data?.get("userId") as? String ?: "",
-                    firstName = data?.get("firstName") as? String ?: "",
-                    lastName = data?.get("lastName") as? String ?: "",
-                    phoneNumber = data?.get("phoneNumber") as? String ?: "",
-                    password = data?.get("password") as? String ?: "",
-                    role = matchedRole,
-                    licenseNumber = data?.get("licenseNumber") as? String,
-                    plateNumber = data?.get("plateNumber") as? String,
-                    emergencyContact =
-                        data?.get("emergencyContact") as? String,
-                    emergencyContactName =
-                        data?.get("emergencyContactName") as? String,
-                    emergencyContactNumber =
-                        data?.get("emergencyContactNumber") as? String
-                )
-
-                currentPhoneNumber = cleanPhoneNumber
-
-                triggerSmsVerification(
-                    phoneNumber = cleanPhoneNumber,
-                    activity = activity,
-                    isResend = false
-                )
-            } catch (e: Exception) {
-                _uiState.value = LoginUiState.Error(
-                    "Hindi ma-verify ang account: " +
-                            (e.message ?: "Pakisubukan muli.")
-                )
+                    .getString("password")
+            } catch (_: Exception) {
+                null
             }
+
+            if (legacy == typedPassword && !legacy.isNullOrBlank()) {
+                return null
+            }
+
+            false
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -326,6 +339,10 @@ class LoginViewModel @Inject constructor(
         signInWithPhoneAuthCredential(credential)
     }
 
+    /**
+     * Step 2: verify the OTP with Firebase Auth, then (as an
+     * authenticated user) verify the password and load the profile.
+     */
     private fun signInWithPhoneAuthCredential(
         credential: PhoneAuthCredential
     ) {
@@ -335,29 +352,271 @@ class LoginViewModel @Inject constructor(
 
             try {
                 auth.signInWithCredential(credential).await()
+            } catch (e: Exception) {
+                Log.e("PhoneAuth", "OTP sign-in failed", e)
+                ToastFeedback.show(
+                    "Maling o expired na OTP. Pakisubukan muli."
+                )
+                _uiState.value = LoginUiState.OtpError(
+                    "Maling o expired na OTP. Pakisubukan muli."
+                )
+                return@launch
+            }
 
-                pendingProfile?.let {
-                    userSession.setUser(it)
+            // --- From here on the caller really owns the phone number. ---
+
+            try {
+                val phone = auth.currentUser?.phoneNumber
+
+                if (phone.isNullOrBlank()) {
+                    auth.signOut()
+                    _uiState.value = LoginUiState.Error(
+                        "Hindi ma-verify ang account. Pakisubukan muli."
+                    )
+                    return@launch
                 }
+
+                val userDocument = firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(phone)
+                    .get()
+                    .await()
+
+                val data = userDocument.data
+
+                if (!userDocument.exists() || data == null) {
+                    Log.e(
+                        "Login",
+                        "Post-OTP DIAGNOSE: users/$phone doc MISSING - " +
+                            "kulang ang datos (seed). Ito ang dahilan ng error."
+                    )
+                    auth.signOut()
+                    _uiState.value = LoginUiState.Error(
+                        "Maling numero o password. Subukan muli."
+                    )
+                    return@launch
+                }
+
+                val typedPassword = pendingPassword.orEmpty()
+
+                if (!verifyPassword(phone, typedPassword, userDocument.reference, data)) {
+                    Log.e(
+                        "Login",
+                        "Post-OTP DIAGNOSE: verifyPassword FAILED for " +
+                            "$phone - hindi tugma ang hash at walang " +
+                            "legacy plaintext na tugma. Password/secret " +
+                            "ang problema."
+                    )
+                    auth.signOut()
+                    _uiState.value = LoginUiState.Error(
+                        "Maling numero o password. Subukan muli."
+                    )
+                    return@launch
+                }
+
+                val roleString =
+                    data["role"] as? String
+                        ?: UserRole.Driver.name
+
+                val isDriver = roleString.equals(
+                    "driver",
+                    ignoreCase = true
+                )
+
+                val accountStatus =
+                    data["status"] as? String
+
+                if (
+                    !isDriver &&
+                    accountStatus.equals(
+                        "inactive",
+                        ignoreCase = true
+                    )
+                ) {
+                    auth.signOut()
+                    _uiState.value = LoginUiState.Error(
+                        "Hindi aktibo ang account na ito. Kontakin ang admin."
+                    )
+                    return@launch
+                }
+
+                val matchedRole = UserRole.entries.find {
+                    it.name.equals(
+                        roleString,
+                        ignoreCase = true
+                    )
+                } ?: UserRole.Driver
+
+                /*
+                 * The emergency contact is read from the two dedicated
+                 * fields. Older accounts only have the combined
+                 * "emergencyContact" value, so that one is split as a
+                 * fallback and the dialog never shows up empty.
+                 */
+                val legacyEmergency = EmergencyContact.splitLegacy(
+                    data["emergencyContact"] as? String
+                )
+
+                userSession.setUser(UserProfile(
+                    userId = data["userId"] as? String ?: "",
+                    firstName = data["firstName"] as? String ?: "",
+                    lastName = data["lastName"] as? String ?: "",
+                    phoneNumber = data["phoneNumber"] as? String ?: "",
+                    role = matchedRole,
+                    licenseNumber = data["licenseNumber"] as? String,
+                    plateNumber = data["plateNumber"] as? String,
+                    emergencyContact =
+                        data["emergencyContact"] as? String,
+                    emergencyContactName =
+                        (data["emergencyContactName"] as? String)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: legacyEmergency.name.takeIf { it.isNotBlank() },
+                    emergencyContactNumber =
+                        (data["emergencyContactNumber"] as? String)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: legacyEmergency.number.takeIf { it.isNotBlank() },
+                    adminStation = data["adminStation"] as? String
+                ))
 
                 _uiState.value = LoginUiState.Success
             } catch (e: Exception) {
-                val message = e.message
-                    ?: "Hindi ma-verify ang code. Pakisubukan muli."
-
-                ToastFeedback.show(message)
-
-                // Return to the OTP form instead of the login form.
-                _uiState.value = LoginUiState.OtpError(message)
+                Log.e("PhoneAuth", "Post-login account load failed", e)
+                auth.signOut()
+                _uiState.value = LoginUiState.Error(
+                    "Hindi ma-load ang account. Pakisubukan muli."
+                )
             }
         }
+    }
+
+    /**
+     * Checks the typed password against the salted hash in
+     * /userSecrets. Older accounts still have a plaintext `password`
+     * field on the profile document; those are verified once and
+     * immediately migrated to a hash (the plaintext field is deleted).
+     * Hashes written at the older, weaker work factor are silently
+     * upgraded to the current one after a successful login.
+     */
+    private suspend fun verifyPassword(
+        phone: String,
+        typedPassword: String,
+        userReference: DocumentReference,
+        data: Map<String, Any>
+    ): Boolean {
+        val secrets = firestore
+            .collection(FirestoreCollections.USER_SECRETS)
+            .document(phone)
+            .get()
+            .await()
+
+        val salt = secrets.getString("passwordSalt")
+        val hash = secrets.getString("passwordHash")
+
+        // Documents carry the work factor they were written with;
+        // documents from before the field existed used the legacy one.
+        val storedIterations = secrets.getLong("iterations")?.toInt()
+            ?: PasswordHasher.LEGACY_ITERATIONS
+
+        if (!salt.isNullOrBlank() && !hash.isNullOrBlank()) {
+            val matched = PasswordHasher.verify(
+                typedPassword, salt, hash, storedIterations
+            )
+
+            if (matched) {
+                if (storedIterations < PasswordHasher.ITERATIONS) {
+                    try {
+                        persistPasswordHash(phone, typedPassword, userReference)
+                    } catch (e: Exception) {
+                        // Login still succeeds; the next login tries again.
+                        Log.w("Login", "Password upgrade failed", e)
+                    }
+                }
+                return true
+            }
+
+            /*
+             * Self-heal: kung SIRA o LUMA ang hash sa userSecrets pero
+             * tugma pa rin ang legacy plaintext password sa profile,
+             * palitan ang hash (migrate) at hayaang pumasok ang user -
+             * hindi dapat ma-lockout ang account dahil sa sirang hash.
+             * Kung hindi rin tugma ang legacy, talagang mali ang password.
+             */
+            val legacyMatch = data["password"] as? String
+            if (!legacyMatch.isNullOrBlank() && legacyMatch == typedPassword) {
+                try {
+                    persistPasswordHash(phone, typedPassword, userReference)
+                } catch (e: Exception) {
+                    // Login still succeeds; the next login tries again.
+                    Log.w("Login", "Password self-heal failed", e)
+                }
+                return true
+            }
+            return false
+        }
+
+        // Legacy plaintext account: verify, then migrate to a hash.
+        val legacy = data["password"] as? String ?: run {
+            Log.e(
+                "Login",
+                "verifyPassword DIAGNOSE: walang hash (o sira) sa " +
+                    "userSecrets/$phone at walang legacy password sa profile."
+            )
+            return false
+        }
+        val matched = legacy == typedPassword
+
+        if (matched) {
+            try {
+                persistPasswordHash(phone, typedPassword, userReference)
+            } catch (e: Exception) {
+                // Login still succeeds; the next login tries again.
+                Log.w("Login", "Password migration failed", e)
+            }
+        }
+
+        return matched
+    }
+
+    /**
+     * Writes the salted hash to /userSecrets (at the current work
+     * factor) and removes any leftover plaintext password from the
+     * profile document.
+     */
+    private suspend fun persistPasswordHash(
+        phone: String,
+        plainPassword: String,
+        userReference: DocumentReference
+    ) {
+        val salted = PasswordHasher.hash(plainPassword)
+
+        val batch = firestore.batch()
+
+        batch.set(
+            firestore
+                .collection(FirestoreCollections.USER_SECRETS)
+                .document(phone),
+            mapOf(
+                "passwordHash" to salted.hash,
+                "passwordSalt" to salted.salt,
+                "iterations" to salted.iterations,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        )
+
+        // Remove the plaintext password from the profile document.
+        batch.update(
+            userReference,
+            mapOf("password" to FieldValue.delete())
+        )
+
+        batch.commit().await()
     }
 
     fun resetState() {
         _uiState.value = LoginUiState.Idle
         verificationId = null
         resendingToken = null
-        pendingProfile = null
+        pendingPassword = null
         currentPhoneNumber = null
         resendAllowedAtMillis = 0L
     }

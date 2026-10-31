@@ -7,7 +7,6 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.data.safeTimestamp
-import com.mobile.enerjeep.ui.components.HistoryTabs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,23 +24,30 @@ data class DriverIncident(
     val multiya: Double = 0.0,
     val isSentToDriver: Boolean = true,
     // Newest activity (resolved time, else created time) used for ordering.
-    val sortMillis: Long = 0L
+    val sortMillis: Long = 0L,
+    // Creation time of the record, used by the "Ngayon" date filter.
+    val createdAtMillis: Long = 0L,
+    // Numero ng naaksidente na driver (impano sa incident record mismo -
+    // hindi mababasa ng driver ang /users list kaya dito nakaimbak).
+    val driverPhone: String = ""
 )
 
 enum class IncidentTabType {
-    KASALUKUYAN, KASAYSAYAN
+    DI_NAAYOS, NAAYOS
 }
 
 data class DriverIncidentUiState(
     val openCount: Int = 0,
     val resolvedCount: Int = 0,
     val searchQuery: String = "",
-    val selectedTab: IncidentTabType = IncidentTabType.KASALUKUYAN,
+    val selectedTab: IncidentTabType = IncidentTabType.DI_NAAYOS,
     val allIncidents: List<DriverIncident> = emptyList(),
     val filteredIncidents: List<DriverIncident> = emptyList(),
-    val selectedIncident: DriverIncident? = null,
     val isLoading: Boolean = true,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // Fase 6: tel: button - numero ng opisina (emergency list ng superadmin).
+    val officePhone: String = "",
+    val officeName: String = ""
 )
 
 @HiltViewModel
@@ -53,9 +59,43 @@ class DriverIncidentViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DriverIncidentUiState())
     val uiState: StateFlow<DriverIncidentUiState> = _uiState.asStateFlow()
     private var listener: ListenerRegistration? = null
+    private var contactsListener: ListenerRegistration? = null
 
     init {
         startListener()
+        startContactsListener()
+    }
+
+    /*
+     * Fase 6: ang "Tawagan ang Opisina" button ay dumidial sa unang
+     * available na admin contact mula sa emergency list ng superadmin.
+     */
+    private fun startContactsListener() {
+        contactsListener?.remove()
+
+        contactsListener =
+            firestore.collection(FirestoreCollections.EMERGENCY_CONTACTS)
+                .addSnapshotListener { snapshot, _ ->
+                    val contacts = snapshot?.documents
+                        ?.map {
+                            Triple(
+                                it.getString("name").orEmpty(),
+                                it.getString("number").orEmpty(),
+                                it.getBoolean("isActive") != false
+                            )
+                        }
+                        .orEmpty()
+                        .filter {
+                            it.third && it.second.isNotBlank()
+                        }
+                        .sortedBy { it.first.lowercase() }
+
+                    val first = contacts.firstOrNull()
+                    _uiState.value = _uiState.value.copy(
+                        officeName = first?.first.orEmpty(),
+                        officePhone = first?.second.orEmpty()
+                    )
+                }
     }
 
     /**
@@ -81,7 +121,13 @@ class DriverIncidentViewModel @Inject constructor(
 
                 if (snapshot == null) return@addSnapshotListener
 
+                /*
+                 * Reports that were saved WITHOUT sending are admin-only
+                 * drafts - a driver must only see incidents that were
+                 * explicitly sent to them.
+                 */
                 val incidents = snapshot.documents
+                    .filter { it.getBoolean("sentToDriver") != false }
                     .map { mapIncident(it) }
                     .sortedByDescending { it.sortMillis }
 
@@ -109,29 +155,20 @@ class DriverIncidentViewModel @Inject constructor(
         applyFilters()
     }
 
-    fun selectIncident(incident: DriverIncident) {
-        _uiState.value = _uiState.value.copy(selectedIncident = incident)
-    }
-
-    fun clearSelectedIncident() {
-        _uiState.value = _uiState.value.copy(selectedIncident = null)
-    }
-
     private fun applyFilters() {
         val currentState = _uiState.value
-        val showHistory = currentState.selectedTab == IncidentTabType.KASAYSAYAN
 
         /*
-         * "Kasalukuyan" keeps showing the incidents that are still open.
-         * "Kasaysayan" is the complete list, so an incident that was made
-         * today is written in the history as well, the same way the Kita
-         * screen does it.
+         * "Di-naayos" shows only the incidents that are still open.
+         * "Naayos" shows only the resolved incidents.
          */
-        val tabIncidents = HistoryTabs.visible(
-            items = currentState.allIncidents,
-            isCurrent = { incident -> !incident.isResolved },
-            showHistory = showHistory
-        )
+        val tabIncidents = currentState.allIncidents.filter { incident ->
+            if (currentState.selectedTab == IncidentTabType.NAAYOS) {
+                incident.isResolved
+            } else {
+                !incident.isResolved
+            }
+        }
 
         val filtered = tabIncidents.filter { incident ->
             incident.title.contains(currentState.searchQuery, ignoreCase = true) ||
@@ -157,15 +194,22 @@ class DriverIncidentViewModel @Inject constructor(
             isResolved = document.getBoolean("isResolved") == true || document.getString("status")?.lowercase() == "resolved",
             multiya = (document.get("penalty") as? Number)?.toDouble() ?: 0.0,
             isSentToDriver = document.getBoolean("sentToDriver") ?: true,
+            driverPhone = document.getString("driverPhone").orEmpty().trim(),
             sortMillis = (
                     document.safeTimestamp("resolvedAt")
                         ?: document.safeTimestamp("createdAt")
-                    )?.toDate()?.time ?: 0L
+                    )?.toDate()?.time ?: 0L,
+            createdAtMillis = document
+                .safeTimestamp("createdAt")
+                ?.toDate()
+                ?.time
+                ?: 0L
         )
     }
 
     override fun onCleared() {
         listener?.remove()
+        contactsListener?.remove()
         super.onCleared()
     }
 }

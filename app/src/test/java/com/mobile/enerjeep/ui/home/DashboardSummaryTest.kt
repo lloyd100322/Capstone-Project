@@ -7,7 +7,9 @@ import org.junit.Test
 /**
  * Checks the two numbers of the admin dashboard:
  *
- *  - "Kabuuang Benta" adds up the collections of the ledger
+ *  - "Kabuuang Kita" adds up the DISPATCH DEDUCTIONS (bawas) of the
+ *    ledger - that is the income of the cooperative, not the earnings
+ *    of the drivers (those stay in the driver's Kita tab)
  *  - "Insidente" counts the incidents that are still open
  */
 class DashboardSummaryTest {
@@ -18,35 +20,39 @@ class DashboardSummaryTest {
     }
 
     @Test
-    fun theTotalIsTheSumOfEveryCollection() {
+    fun theTotalIsTheSumOfEveryDispatchDeduction() {
         val entries = listOf(
-            DashboardLedgerEntry(amount = 50.0, netAmount = 50.0),
-            DashboardLedgerEntry(amount = 75.0, netAmount = 75.0),
-            DashboardLedgerEntry(amount = 25.0, netAmount = 25.0)
-        )
-
-        assertEquals(150.0, DashboardSummary.totalSales(entries), 0.001)
-    }
-
-    @Test
-    fun theNetAmountIsUsedWhenItIsThere() {
-        // The dispatch earnings have a gross amount and a net amount. The
-        // net amount is the money that was really collected.
-        val entries = listOf(
-            DashboardLedgerEntry(amount = 100.0, netAmount = 80.0)
+            DashboardLedgerEntry(amount = 50.0, netAmount = 20.0, otherFees = 30.0),
+            DashboardLedgerEntry(amount = 75.0, netAmount = 45.0, otherFees = 30.0),
+            DashboardLedgerEntry(amount = 25.0, netAmount = 5.0, otherFees = 20.0)
         )
 
         assertEquals(80.0, DashboardSummary.totalSales(entries), 0.001)
     }
 
     @Test
-    fun aCollectionWithoutAnAmountCountsAsZero() {
+    fun theDriverEarningsAreNotCountedAsCooperativeIncome() {
+        // A dispatch row has a big net amount (the money of the driver)
+        // and a small deduction (the money of the cooperative). Only the
+        // deduction belongs to "Kabuuang Kita".
         val entries = listOf(
-            DashboardLedgerEntry(),
-            DashboardLedgerEntry(amount = 30.0, netAmount = 30.0)
+            DashboardLedgerEntry(amount = 100.0, netAmount = 80.0, otherFees = 20.0)
         )
 
-        assertEquals(30.0, DashboardSummary.totalSales(entries), 0.001)
+        assertEquals(20.0, DashboardSummary.totalSales(entries), 0.001)
+    }
+
+    @Test
+    fun aCollectionWithoutADeductionCountsAsZero() {
+        // Old "Kita" records only carry the driver income - they add
+        // nothing to the cooperative income.
+        val entries = listOf(
+            DashboardLedgerEntry(),
+            DashboardLedgerEntry(amount = 30.0, netAmount = 30.0),
+            DashboardLedgerEntry(amount = 50.0, netAmount = 40.0, otherFees = 10.0)
+        )
+
+        assertEquals(10.0, DashboardSummary.totalSales(entries), 0.001)
     }
 
     @Test

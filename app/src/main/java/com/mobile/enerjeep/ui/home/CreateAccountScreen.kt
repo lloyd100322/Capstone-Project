@@ -27,6 +27,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.ui.theme.*
+import com.mobile.enerjeep.ui.theme.TextSecondary
+
+/**
+ * Pagpipilian sa "Tungkulin" dropdown. Ang label ang nakikita ng user;
+ * ang role + station ang isinusulat sa account ("role" = admin pa rin,
+ * "adminStation" = marilao/monumento).
+ */
+private data class TungkulinOption(
+    val label: String,
+    val role: UserRole,
+    val station: String = ""
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,18 +50,43 @@ fun CreateAccountScreen(
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf(UserRole.Driver) }
+    var selectedTungkulin by remember {
+        mutableStateOf(TungkulinOption(UserRole.Driver.name, UserRole.Driver))
+    }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
     // Driver Details
     var licenseNumber by remember { mutableStateOf("") }
     var plateNumber by remember { mutableStateOf("") }
+    var seater by remember { mutableStateOf("") }
     var emergencyContactName by remember { mutableStateOf("") }
     var emergencyContactNumber by remember { mutableStateOf("") }
 
     var expanded by remember { mutableStateOf(false) }
-    val roles = UserRole.entries
+
+    /*
+     * User levels: only a superadmin can create an admin. An admin can
+     * create driver accounts only.
+     */
+    val tungkulinOptions =
+        if (viewModel.canCreateAdmin()) {
+            listOf(
+                TungkulinOption(
+                    UserRole.Admin.displayName(UserRole.STATION_MARILAO),
+                    UserRole.Admin,
+                    UserRole.STATION_MARILAO
+                ),
+                TungkulinOption(
+                    UserRole.Admin.displayName(UserRole.STATION_MONUMENTO),
+                    UserRole.Admin,
+                    UserRole.STATION_MONUMENTO
+                ),
+                TungkulinOption(UserRole.Driver.name, UserRole.Driver)
+            )
+        } else {
+            listOf(TungkulinOption(UserRole.Driver.name, UserRole.Driver))
+        }
 
     LaunchedEffect(uiState) {
         if (uiState is CreateAccountUiState.Success) {
@@ -140,7 +177,7 @@ fun CreateAccountScreen(
                         Text(
                             "+63",
                             fontSize = 16.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
 
                         Box(
@@ -161,7 +198,7 @@ fun CreateAccountScreen(
                             placeholder = {
                                 Text(
                                     "9XXXXXXXXX",
-                                    color = Color.LightGray
+                                    color = TextSecondary
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -197,7 +234,7 @@ fun CreateAccountScreen(
                         }
                     ) {
                         OutlinedTextField(
-                            value = role.name,
+                            value = selectedTungkulin.label,
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = {
@@ -221,13 +258,13 @@ fun CreateAccountScreen(
                                 expanded = false
                             }
                         ) {
-                            roles.forEach { selectionOption ->
+                            tungkulinOptions.forEach { selectionOption ->
                                 DropdownMenuItem(
                                     text = {
-                                        Text(selectionOption.name)
+                                        Text(selectionOption.label)
                                     },
                                     onClick = {
-                                        role = selectionOption
+                                        selectedTungkulin = selectionOption
                                         expanded = false
                                     }
                                 )
@@ -287,7 +324,7 @@ fun CreateAccountScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Driver Details Card
-                    if (role == UserRole.Driver) {
+                    if (selectedTungkulin.role == UserRole.Driver) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
@@ -336,6 +373,25 @@ fun CreateAccountScreen(
                                         plateNumber = it.uppercase()
                                     },
                                     placeholder = "Plate Number"
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
+                                    "Bilang ng Upuan (Seater)",
+                                    fontSize = 14.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                CustomInputField(
+                                    value = seater,
+                                    onValueChange = {
+                                        if (it.isEmpty() || it.all { char -> char.isDigit() }) {
+                                            seater = it
+                                        }
+                                    },
+                                    placeholder = "Hal. 22"
                                 )
 
                                 Spacer(modifier = Modifier.height(16.dp))
@@ -399,7 +455,7 @@ fun CreateAccountScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(
                                 1.dp,
                                 FieldBorderColor
@@ -420,17 +476,19 @@ fun CreateAccountScreen(
                                     lastName,
                                     "+63$phoneNumber",
                                     password,
-                                    role,
+                                    selectedTungkulin.role,
                                     licenseNumber,
                                     plateNumber,
                                     emergencyContactName,
-                                    emergencyContactNumber
+                                    emergencyContactNumber,
+                                    seater,
+                                    selectedTungkulin.station
                                 )
                             },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
-                            shape = RoundedCornerShape(24.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = EnerjeepBlue
                             ),
@@ -467,7 +525,7 @@ fun CustomInputField(
         placeholder = {
             Text(
                 placeholder,
-                color = Color.LightGray
+                color = TextSecondary
             )
         },
         modifier = Modifier

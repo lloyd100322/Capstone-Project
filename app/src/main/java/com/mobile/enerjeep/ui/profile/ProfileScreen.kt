@@ -11,11 +11,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -34,18 +35,17 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
+import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.ui.theme.EnerjeepBlue
+import com.mobile.enerjeep.ui.theme.ErrorRedText
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 
-private val ProfileLightGray =
-    Color(0xFFF8F9FA)
-
-private val ProfileBlue =
-    Color(0xFF194287)
-
-private val ProfileBorder =
-    Color(0xFFE5E7EB)
-
-private val ProfileError =
-    Color(0xFFB91C1C)
+private val ProfileLightGray = LightGrayBackground
+private val ProfileBlue = EnerjeepBlue
+private val ProfileBorder = FieldBorderColor
+private val ProfileError = ErrorRedText
 
 @Composable
 fun ProfileScreen(
@@ -135,7 +135,7 @@ fun ProfileScreen(
                                             ProfileBlue
                                     )
                         ) {
-                            Text("Subukan muli")
+                            Text("Isara", maxLines = 1)
                         }
                     }
                 }
@@ -164,6 +164,21 @@ fun ProfileScreen(
                                 onSignOutClick = {
                                     viewModel.signOut()
                                     onSignOut()
+                                },
+                                isSuperadmin =
+                                    state.profile.role.equals(
+                                        "superadmin",
+                                        ignoreCase = true
+                                    ),
+                                onSettingsClick = {
+                                    currentView =
+                                        "Settings"
+                                    viewModel.clearMessage()
+                                },
+                                onTalaanClick = {
+                                    currentView =
+                                        "Talaan"
+                                    viewModel.clearMessage()
                                 }
                             )
                         }
@@ -180,12 +195,16 @@ fun ProfileScreen(
                                 onSave = {
                                         first,
                                         last,
-                                        phone ->
+                                        phone,
+                                        contactName,
+                                        contactNumber ->
 
                                     viewModel.updateProfile(
                                         first,
                                         last,
-                                        phone
+                                        phone,
+                                        contactName,
+                                        contactNumber
                                     )
 
                                     currentView =
@@ -218,6 +237,94 @@ fun ProfileScreen(
                                 }
                             )
                         }
+
+                        "Settings" -> {
+
+                            val superadminViewModel:
+                                    com.mobile.enerjeep.ui.home.SuperadminViewModel =
+                                hiltViewModel()
+
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                            ) {
+
+                                Row(
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
+                                ) {
+
+                                    IconButton(
+                                        onClick = {
+                                            currentView =
+                                                "Main"
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default
+                                                .ArrowBack,
+                                            contentDescription =
+                                                "Bumalik"
+                                        )
+                                    }
+
+                                    Text(
+                                        "Bumalik sa Profile",
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                com.mobile.enerjeep.ui.home
+                                    .SettingsView(
+                                        superadminViewModel
+                                    )
+                            }
+                        }
+
+                        "Talaan" -> {
+
+                            val superadminViewModel:
+                                    com.mobile.enerjeep.ui.home.SuperadminViewModel =
+                                hiltViewModel()
+
+                            Column(
+                                modifier =
+                                    Modifier
+                                        .fillMaxSize()
+                            ) {
+
+                                Row(
+                                    verticalAlignment =
+                                        Alignment.CenterVertically
+                                ) {
+
+                                    IconButton(
+                                        onClick = {
+                                            currentView =
+                                                "Main"
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default
+                                                .ArrowBack,
+                                            contentDescription =
+                                                "Bumalik"
+                                        )
+                                    }
+
+                                    Text(
+                                        "Bumalik sa Profile",
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                com.mobile.enerjeep.ui.home
+                                    .ActivityLogView(
+                                        superadminViewModel
+                                    )
+                            }
+                        }
                     }
                 }
             }
@@ -231,7 +338,10 @@ fun ProfileMainContent(
     updateMessage: String?,
     onEditClick: () -> Unit,
     onSecurityClick: () -> Unit,
-    onSignOutClick: () -> Unit
+    onSignOutClick: () -> Unit,
+    isSuperadmin: Boolean = false,
+    onSettingsClick: () -> Unit = {},
+    onTalaanClick: () -> Unit = {}
 ) {
 
     Column(
@@ -381,7 +491,7 @@ fun ProfileMainContent(
                         text =
                             profile.phoneNumber,
                         color =
-                            Color.Gray,
+                            TextSecondary,
                         fontSize =
                             13.sp
                     )
@@ -462,6 +572,46 @@ fun ProfileMainContent(
                     onClick =
                         onSecurityClick
                 )
+
+                /*
+                 * Superadmin lang: ang Settings (oras ng reset, bawas
+                 * kada upuan) at ang Talaan ng Aktibidad (audit log) ay
+                 * nasa ilalim ng "Seguridad" sa Profile tab.
+                 */
+                if (isSuperadmin) {
+
+                    HorizontalDivider(
+                        color =
+                            ProfileBorder
+                    )
+
+                    MenuRow(
+                        icon =
+                            Icons.Default.Settings,
+                        title =
+                            "Mga Setting",
+                        subtitle =
+                            "Oras ng reset at bawas kada upuan",
+                        onClick =
+                            onSettingsClick
+                    )
+
+                    HorizontalDivider(
+                        color =
+                            ProfileBorder
+                    )
+
+                    MenuRow(
+                        icon =
+                            Icons.Default.History,
+                        title =
+                            "Talaan ng Aktibidad",
+                        subtitle =
+                            "Sino ang gumawa ng bawat aksyon at kailan",
+                        onClick =
+                            onTalaanClick
+                    )
+                }
             }
         }
 
@@ -507,7 +657,7 @@ fun ProfileMainContent(
 
         Text(
             text = "Enerjeep v1.0.0",
-            color = Color.Gray,
+            color = TextSecondary,
             fontSize = 12.sp,
             textAlign = TextAlign.Center,
             modifier =
@@ -522,6 +672,8 @@ fun EditProfileContent(
     profile: ProfileData,
     onBack: () -> Unit,
     onSave: (
+        String,
+        String,
         String,
         String,
         String
@@ -545,6 +697,14 @@ fun EditProfileContent(
             profile.phoneNumber
                 .removePrefix("+63")
         )
+    }
+
+    var emergencyContactName by remember(profile) {
+        mutableStateOf(profile.emergencyContactName)
+    }
+
+    var emergencyContactNumber by remember(profile) {
+        mutableStateOf(profile.emergencyContactNumber)
     }
 
     Column(
@@ -595,41 +755,63 @@ fun EditProfileContent(
                     Modifier.padding(24.dp)
             ) {
 
-                Row(
+                /*
+                 * Picture frame ng profile - bilog na frame na may
+                 * initials (tulad ng driver profile). Walang camera icon
+                 * (walang photo upload sa app).
+                 */
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(),
+                    contentAlignment =
+                        Alignment.Center
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(80.dp)
+                                .background(
+                                    ProfileBlue,
+                                    CircleShape
+                                ),
+                        contentAlignment =
+                            Alignment.Center
+                    ) {
+                        Text(
+                            text =
+                                profile.initials,
+                            color =
+                                Color.White,
+                            fontWeight =
+                                FontWeight.Bold,
+                            fontSize =
+                                24.sp
+                        )
+                    }
+                }
+
+                Spacer(
+                    modifier =
+                        Modifier.height(24.dp)
+                )
+
+                OutlinedTextField(
+                    value = emergencyContactName,
+                    onValueChange = {
+                        emergencyContactName =
+                            EmergencyContact.sanitizeName(it)
+                    },
                     modifier =
                         Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-
-                    OutlinedTextField(
-                        value =
-                            firstName,
-                        onValueChange = {
-                            firstName = it
-                        },
-                        modifier =
-                            Modifier.weight(1f),
-                        label = {
-                            Text("Pangalan")
-                        },
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value =
-                            lastName,
-                        onValueChange = {
-                            lastName = it
-                        },
-                        modifier =
-                            Modifier.weight(1f),
-                        label = {
-                            Text("Apelyido")
-                        },
-                        singleLine = true
-                    )
-                }
+                    label = {
+                        Text("Emergency Contact Name")
+                    },
+                    placeholder = {
+                        Text("Pangalan ng contact")
+                    },
+                    singleLine = true
+                )
 
                 Spacer(
                     modifier =
@@ -637,46 +819,25 @@ fun EditProfileContent(
                 )
 
                 OutlinedTextField(
-                    value = phone,
+                    value = emergencyContactNumber,
                     onValueChange = {
-                        if (
-                            it.length <= 10 &&
-                            it.all { char ->
-                                char.isDigit()
-                            }
-                        ) {
-                            phone = it
-                        }
+                        emergencyContactNumber =
+                            EmergencyContact.sanitizeNumber(it)
                     },
                     modifier =
                         Modifier.fillMaxWidth(),
                     label = {
-                        Text("Telepono")
+                        Text("Emergency Contact Number")
                     },
-                    leadingIcon = {
-                        Text("+63")
+                    placeholder = {
+                        Text("09XXXXXXXXX")
                     },
                     keyboardOptions =
                         KeyboardOptions(
                             keyboardType =
                                 KeyboardType.Phone
                         ),
-                    singleLine = true,
-                    enabled = false
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(8.dp)
-                )
-
-                Text(
-                    text =
-                        "Ang phone number ay naka-lock dahil ginagamit ito ng Firebase Phone Authentication.",
-                    color =
-                        Color.Gray,
-                    fontSize =
-                        12.sp
+                    singleLine = true
                 )
 
                 Spacer(
@@ -710,7 +871,9 @@ fun EditProfileContent(
                             onSave(
                                 firstName,
                                 lastName,
-                                profile.phoneNumber
+                                profile.phoneNumber,
+                                emergencyContactName,
+                                emergencyContactNumber
                             )
                         },
                         modifier =
@@ -934,7 +1097,7 @@ fun MenuRow(
 
             Text(
                 text = subtitle,
-                color = Color.Gray,
+                color = TextSecondary,
                 fontSize = 12.sp
             )
         }
@@ -942,7 +1105,7 @@ fun MenuRow(
         Icon(
             Icons.Default.ChevronRight,
             contentDescription = null,
-            tint = Color.LightGray
+            tint = TextSecondary
         )
     }
 }

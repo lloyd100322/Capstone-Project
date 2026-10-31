@@ -7,17 +7,15 @@ import java.util.Locale
 /**
  * Pure helpers for the "Ulat ng Multa" (Multa report).
  *
- * A fine can be saved in two places in this app:
+ * Ang mga multa ay nire-record sa "ledger" collection kapag
+ * pinindot ng admin ang "I-record ang Bayad ng Multa" sa Talaan
+ * (feeType = "Multa"). Iyon lang ang tanging pinagkukunan ng ulat.
  *
- *  - in the "kita" collection, with type = "Multa" (or the old wording
- *    "Multiya")
- *  - in the "ledger" collection, with feeType = "Multa" (this is what the
- *    "Talaan" screen writes when the admin picks "Multa" as the type of
- *    the collection)
- *
- * Both are real fines and both belong in the report. Everything else in
- * the ledger (a dispatch earning, a terminal fee, a donation) must NOT be
- * counted as a fine.
+ * Ang "kita" collection (kung may natira man mula sa lumang bersyon)
+ * ay HINDI na pinagkukunan ng multa: ang kita ng driver ay dispatch
+ * earnings lamang at walang anumang binabawas dito. Everything else in
+ * the ledger (a dispatch earning, a terminal fee, a donation) must NOT
+ * be counted as a fine.
  *
  * The helpers are plain functions so they can be checked with unit tests
  * without a device or a Firestore connection.
@@ -27,22 +25,6 @@ object MultiyaReport {
     /** The wording used by the ledger screen for a fine. */
     const val LEDGER_FEE_TYPE = "Multa"
 
-    /** The wording used by the "kita" collection. */
-    const val KITA_TYPE = "Multa"
-
-    /** The old wording still found in older records. */
-    const val KITA_TYPE_OLD = "Multiya"
-
-    /**
-     * True when the "kita" record is a fine.
-     */
-    fun isKitaMultiya(type: String?): Boolean {
-        val clean = type?.trim() ?: return false
-
-        return clean.equals(KITA_TYPE, ignoreCase = true) ||
-                clean.equals(KITA_TYPE_OLD, ignoreCase = true)
-    }
-
     /**
      * True when the ledger transaction is a fine. Only the feeType is
      * checked, so a dispatch earning or a terminal fee is never counted.
@@ -51,40 +33,6 @@ object MultiyaReport {
         val clean = feeType?.trim() ?: return false
 
         return clean.equals(LEDGER_FEE_TYPE, ignoreCase = true)
-    }
-
-    /**
-     * The identity of a fine that is written in both the "kita" and the
-     * "ledger" collection. The driver, the amount and the day are used
-     * because a fine does not have its own number in the app.
-     *
-     * When the same fine is written twice, the key is the same, so the
-     * report counts it only once.
-     */
-    fun multiyaKey(item: ReportMultiyaItem): String {
-        val amountKey = String.format(Locale.US, "%.2f", item.amount)
-
-        return listOf(
-            item.plateNumber.trim().uppercase(Locale.ROOT),
-            item.driverName.trim().lowercase(Locale.ROOT),
-            amountKey,
-            dayKey(item)
-        ).joinToString("|")
-    }
-
-    /**
-     * The day of the fine, used for the "Ngayon" split and for the
-     * duplicate check.
-     */
-    fun dayKey(item: ReportMultiyaItem): String {
-        if (item.createdAtMillis > 0L) {
-            return SimpleDateFormat("yyyyMMdd", Locale.getDefault())
-                .format(Date(item.createdAtMillis))
-        }
-
-        val parsed = parseDate(item.date) ?: return item.date.trim()
-
-        return SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(parsed)
     }
 
     /**
@@ -121,26 +69,39 @@ object MultiyaReport {
     }
 
     /**
-     * Builds the report from the fines of the "kita" collection and the
-     * fines of the "ledger" collection.
+     * Builds the report from the fines of the "ledger" collection
+     * (feeType "Multa" - ang mga record ng Talaan).
      *
-     * A fine that exists in both collections is only counted once, so the
-     * total of the report is not inflated.
+     * Ang ledger document id ang tanging identity ng bawat row: ang
+     * ISANG dokumento ay binibilang nang isang beses lang, habang ang
+     * dalawang magkaibang dokumento ay dalawang multa pa rin kahit
+     * pareho pa ng halaga at araw - hindi sila pwedeng paghaluin.
      */
     fun build(
-        kitaMultiya: List<ReportMultiyaItem>,
-        ledgerMultiya: List<ReportMultiyaItem>
+        fines: List<ReportMultiyaItem>
     ): Summary {
         val seen = LinkedHashSet<String>()
         val all = mutableListOf<ReportMultiyaItem>()
 
-        (kitaMultiya + ledgerMultiya).forEach { item ->
-            if (seen.add(multiyaKey(item))) {
+        fines.forEach { item ->
+            if (seen.add(item.id)) {
                 all += item
             }
         }
 
-        val sorted = all.sortedByDescending { it.date }
+        /*
+         * Newest first. The display text ("MMM dd, yyyy") must NOT be
+         * used for sorting: string order is not chronological
+         * ("Sep" > "May" alphabetically but not by date). Sort by the
+         * saved time, falling back to the parsed date for old records.
+         */
+        val sorted = all.sortedByDescending {
+            if (it.createdAtMillis > 0L) {
+                it.createdAtMillis
+            } else {
+                parseDate(it.date)?.time ?: 0L
+            }
+        }
 
         return Summary(
             current = sorted.filter { isToday(it) },

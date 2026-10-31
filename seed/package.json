@@ -1,0 +1,14 @@
+{
+  "name": "enerjeep-data-setup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Initial Firestore data for EnerJeep (maintainer tool - not part of the app)",
+  "main": "setup.js",
+  "scripts": {
+    "setup": "node setup.js",
+    "setup:wipe": "node setup.js --wipe"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

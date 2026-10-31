@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonOutline
@@ -34,6 +33,13 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.WarningOrangeLight
+
+
+/** Initials ng driver para sa avatar (hal. "JS" para Juan Santos). */
+private fun profileInitials(first: String, last: String): String =
+    (first.take(1) + last.take(1)).uppercase().ifBlank { "?" }
 
 @Composable
 fun DriverProfileScreen(
@@ -178,7 +184,7 @@ fun DriverProfileMainContent(
                             Alignment.Center
                     ) {
                         Text(
-                            text = "JD",
+                            text = profileInitials(uiState.firstName, uiState.lastName),
                             color = Color.White,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
@@ -206,7 +212,7 @@ fun DriverProfileMainContent(
                     Text(
                         text = "+63 ${uiState.phone}",
                         fontSize = 14.sp,
-                        color = Color.Gray
+                        color = TextSecondary
                     )
 
                     Spacer(
@@ -214,7 +220,7 @@ fun DriverProfileMainContent(
                     )
 
                     Surface(
-                        color = Color(0xFFFEF3C7),
+                        color = WarningOrangeLight,
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
@@ -288,7 +294,7 @@ fun DriverProfileMainContent(
                             text =
                                 "I-update ang iyong impormasyon",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -297,7 +303,7 @@ fun DriverProfileMainContent(
                     imageVector =
                         Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = TextSecondary
                 )
             }
         }
@@ -358,7 +364,7 @@ fun DriverProfileMainContent(
                             text =
                                 "Password at privacy",
                             fontSize = 12.sp,
-                            color = Color.Gray
+                            color = TextSecondary
                         )
                     }
                 }
@@ -367,7 +373,7 @@ fun DriverProfileMainContent(
                     imageVector =
                         Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = TextSecondary
                 )
             }
         }
@@ -416,7 +422,7 @@ fun DriverProfileMainContent(
             Text(
                 text = "Enerjeep v1.0.0",
                 fontSize = 12.sp,
-                color = Color.Gray
+                color = TextSecondary
             )
         }
     }
@@ -502,7 +508,7 @@ fun DriverEditProfileContent(
                                     Alignment.Center
                             ) {
                                 Text(
-                                    text = "JD",
+                                    text = profileInitials(uiState.firstName, uiState.lastName),
                                     color = Color.White,
                                     fontSize = 24.sp,
                                     fontWeight =
@@ -511,210 +517,17 @@ fun DriverEditProfileContent(
                             }
                         }
 
-                        Surface(
-                            modifier =
-                                Modifier
-                                    .size(28.dp)
-                                    .align(
-                                        Alignment.BottomEnd
-                                    ),
-                            shape = CircleShape,
-                            color = EnerjeepBlue
-                        ) {
-                            Box(
-                                contentAlignment =
-                                    Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector =
-                                        Icons.Default.CameraAlt,
-                                    contentDescription =
-                                        null,
-                                    tint = Color.White,
-                                    modifier =
-                                        Modifier.size(
-                                            14.dp
-                                        )
-                                )
-                            }
-                        }
                     }
                 }
 
                 Spacer(
                     modifier = Modifier.height(24.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-                    Column(
-                        modifier =
-                            Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = "Pangalan",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-
-                        Spacer(
-                            modifier =
-                                Modifier.height(4.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = uiState.firstName,
-                            onValueChange = {
-                                viewModel.updateFirstName(
-                                    it
-                                )
-                            },
-                            singleLine = true,
-                            shape =
-                                RoundedCornerShape(
-                                    12.dp
-                                )
-                        )
-                    }
-
-                    Column(
-                        modifier =
-                            Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = "Apelyido",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-
-                        Spacer(
-                            modifier =
-                                Modifier.height(4.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = uiState.lastName,
-                            onValueChange = {
-                                viewModel.updateLastName(
-                                    it
-                                )
-                            },
-                            singleLine = true,
-                            shape =
-                                RoundedCornerShape(
-                                    12.dp
-                                )
-                        )
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Text(
-                    text = "Telepono",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                OutlinedTextField(
-                    value = uiState.phone,
-                    onValueChange = {
-                        viewModel.updatePhone(it)
-                    },
-                    prefix = {
-                        Text("+63 ")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(24.dp)
-                )
-
-                Text(
-                    text = "Detalye ng Driver",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Text(
-                    text = "Driver License ID Number",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                OutlinedTextField(
-                    value = uiState.licenseNumber,
-                    onValueChange = {
-                        viewModel.updateLicenseNumber(
-                            it
-                        )
-                    },
-                    placeholder = {
-                        Text("License Number")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Text(
-                    text = "Plaka",
-                    fontSize = 12.sp,
-                    color = Color.Gray
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                OutlinedTextField(
-                    value = uiState.plateNumber,
-                    onValueChange = {
-                        viewModel.updatePlateNumber(
-                            it
-                        )
-                    },
-                    placeholder = {
-                        Text("Plate Number")
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
                 )
 
                 Text(
                     text = "Emergency Contact Name",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -745,7 +558,7 @@ fun DriverEditProfileContent(
                 Text(
                     text = "Emergency Contact Number",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -887,7 +700,7 @@ fun DriverSecurityContent(
                     text =
                         "Palitan ang iyong password para sa account security.",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -897,7 +710,7 @@ fun DriverSecurityContent(
                 Text(
                     text = "Lumang Password",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -918,7 +731,7 @@ fun DriverSecurityContent(
                         Icon(
                             Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color.Gray
+                            tint = TextSecondary
                         )
                     }
                 )
@@ -930,7 +743,7 @@ fun DriverSecurityContent(
                 Text(
                     text = "Bagong Password",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -951,7 +764,7 @@ fun DriverSecurityContent(
                         Icon(
                             Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color.Gray
+                            tint = TextSecondary
                         )
                     }
                 )
@@ -963,7 +776,7 @@ fun DriverSecurityContent(
                 Text(
                     text = "Kumpirmahin",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = TextSecondary
                 )
 
                 Spacer(
@@ -984,7 +797,7 @@ fun DriverSecurityContent(
                         Icon(
                             Icons.Default.VisibilityOff,
                             contentDescription = null,
-                            tint = Color.Gray
+                            tint = TextSecondary
                         )
                     }
                 )

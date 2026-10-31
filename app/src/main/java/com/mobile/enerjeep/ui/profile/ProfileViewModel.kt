@@ -6,7 +6,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
+import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -23,7 +25,9 @@ data class ProfileData(
     val firstName: String,
     val lastName: String,
     val phoneNumber: String,
-    val role: String
+    val role: String,
+    val emergencyContactName: String = "",
+    val emergencyContactNumber: String = ""
 ) {
     val initials: String
         get() =
@@ -131,12 +135,51 @@ class ProfileViewModel @Inject constructor(
     fun updateProfile(
         firstName: String,
         lastName: String,
-        phoneNumber: String
+        phoneNumber: String,
+        emergencyContactName: String? = null,
+        emergencyContactNumber: String? = null
     ) {
 
         val oldProfile =
             userSession.userProfile
                 ?: return
+
+        /*
+         * null = hindi binago ang emergency contact. Kapag binigyan ng
+         * value (kahit blank), ang mga ito ang ipapasok sa database.
+         * Kapag parehong blank, tatanggalin ang contact (walang contact).
+         */
+        val cleanEmergencyName =
+            emergencyContactName?.trim().orEmpty()
+
+        val cleanEmergencyNumber =
+            emergencyContactNumber?.trim().orEmpty()
+
+        val changingEmergency =
+            emergencyContactName != null ||
+                    emergencyContactNumber != null
+
+        if (
+            changingEmergency &&
+            (cleanEmergencyName.isNotEmpty() ||
+                    cleanEmergencyNumber.isNotEmpty())
+        ) {
+            if (!EmergencyContact.isValidName(cleanEmergencyName)) {
+                _uiState.value = ProfileUiState.Error(
+                    "Ang pangalan ng emergency contact ay kailangan at " +
+                            "dapat hanggang 50 karakter."
+                )
+                return
+            }
+
+            if (!EmergencyContact.isValidNumber(cleanEmergencyNumber)) {
+                _uiState.value = ProfileUiState.Error(
+                    "Ang numero ng emergency contact ay dapat valid na " +
+                            "telepono (09XXXXXXXXX o +639XXXXXXXXX)."
+                )
+                return
+            }
+        }
 
         val currentPhone =
             oldProfile.phoneNumber.trim()
@@ -180,25 +223,51 @@ class ProfileViewModel @Inject constructor(
 
             try {
 
+                val updates = mutableMapOf<String, Any>(
+                    "firstName" to first,
+                    "lastName" to last,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+
+                if (changingEmergency) {
+                    updates["emergencyContactName"] =
+                        cleanEmergencyName
+
+                    updates["emergencyContactNumber"] =
+                        cleanEmergencyNumber
+
+                    // The old combined field is kept in sync.
+                    updates["emergencyContact"] =
+                        EmergencyContact.combine(
+                            cleanEmergencyName,
+                            cleanEmergencyNumber
+                        )
+                }
+
                 firestore
                     .collection(
                         FirestoreCollections.USERS
                     )
                     .document(currentPhone)
-                    .update(
-                        mapOf(
-                            "firstName" to first,
-                            "lastName" to last,
-                            "updatedAt" to
-                                    FieldValue.serverTimestamp()
-                        )
-                    )
+                    .update(updates)
                     .await()
 
                 userSession.setUser(
                     oldProfile.copy(
                         firstName = first,
-                        lastName = last
+                        lastName = last,
+                        emergencyContactName =
+                            if (changingEmergency) {
+                                cleanEmergencyName
+                            } else {
+                                oldProfile.emergencyContactName
+                            },
+                        emergencyContactNumber =
+                            if (changingEmergency) {
+                                cleanEmergencyNumber
+                            } else {
+                                oldProfile.emergencyContactNumber
+                            }
                     )
                 )
 
@@ -208,7 +277,22 @@ class ProfileViewModel @Inject constructor(
                     phone = currentPhone,
                     role = oldProfile.role,
                     message =
-                        "Profile updated successfully!"
+                        "Profile updated successfully!",
+                    emergencyContactName =
+                        if (changingEmergency) {
+                            cleanEmergencyName
+                        } else {
+                            oldProfile.emergencyContactName
+                                .orEmpty()
+                        },
+                    emergencyContactNumber =
+                        if (changingEmergency) {
+                            cleanEmergencyNumber
+                        } else {
+                            oldProfile.emergencyContactNumber
+                                .orEmpty()
+                        },
+                    adminStation = oldProfile.adminStation
                 )
 
             } catch (e: Exception) {
@@ -257,20 +341,42 @@ class ProfileViewModel @Inject constructor(
 
             try {
 
-                val document =
+                val userReference =
                     firestore
                         .collection(
                             FirestoreCollections.USERS
                         )
                         .document(phone)
-                        .get()
-                        .await()
 
-                val savedPassword =
-                    document
-                        .getString("password")
+                val secretsReference =
+                    firestore
+                        .collection(
+                            FirestoreCollections.USER_SECRETS
+                        )
+                        .document(phone)
 
-                if (savedPassword != oldPass) {
+                val document = userReference.get().await()
+                val secrets = secretsReference.get().await()
+
+                val salt = secrets.getString("passwordSalt")
+                val savedHash = secrets.getString("passwordHash")
+                val savedIterations =
+                    secrets.getLong("iterations")?.toInt()
+                        ?: PasswordHasher.LEGACY_ITERATIONS
+
+                val passwordMatches = if (
+                    !salt.isNullOrBlank() &&
+                    !savedHash.isNullOrBlank()
+                ) {
+                    PasswordHasher.verify(
+                        oldPass, salt, savedHash, savedIterations
+                    )
+                } else {
+                    // Legacy account that still has the old plaintext field.
+                    document.getString("password") == oldPass
+                }
+
+                if (!passwordMatches) {
 
                     ToastFeedback.show(
                         "Mali ang kasalukuyang password."
@@ -279,36 +385,46 @@ class ProfileViewModel @Inject constructor(
                     return@launch
                 }
 
-                firestore
-                    .collection(
-                        FirestoreCollections.USERS
+                // Save only a salted hash; never a readable password.
+                val salted = PasswordHasher.hash(newPass)
+                val batch = firestore.batch()
+
+                batch.set(
+                    secretsReference,
+                    mapOf(
+                        "passwordHash" to salted.hash,
+                        "passwordSalt" to salted.salt,
+                        "iterations" to salted.iterations,
+                        "updatedAt" to
+                                FieldValue.serverTimestamp()
                     )
-                    .document(phone)
-                    .update(
-                        mapOf(
-                            "password" to newPass,
-                            "updatedAt" to
-                                    FieldValue.serverTimestamp()
-                        )
+                )
+
+                // Remove the old plaintext field if it still exists.
+                batch.update(
+                    userReference,
+                    mapOf(
+                        "password" to FieldValue.delete(),
+                        "updatedAt" to
+                                FieldValue.serverTimestamp()
                     )
-                    .await()
+                )
+
+                batch.commit().await()
 
                 val oldProfile =
                     userSession.userProfile
                         ?: return@launch
-
-                userSession.setUser(
-                    oldProfile.copy(
-                        password = newPass
-                    )
-                )
 
                 pushFromValues(
                     oldProfile.firstName,
                     oldProfile.lastName,
                     oldProfile.phoneNumber,
                     oldProfile.role,
-                    "Password updated successfully!"
+                    "Password updated successfully!",
+                    oldProfile.emergencyContactName.orEmpty(),
+                    oldProfile.emergencyContactNumber.orEmpty(),
+                    oldProfile.adminStation
                 )
 
                 ToastFeedback.show(
@@ -360,7 +476,10 @@ class ProfileViewModel @Inject constructor(
             current.lastName,
             current.phoneNumber,
             current.role,
-            null
+            null,
+            current.emergencyContactName.orEmpty(),
+            current.emergencyContactNumber.orEmpty(),
+            current.adminStation
         )
     }
 
@@ -383,6 +502,10 @@ class ProfileViewModel @Inject constructor(
                 )
             } ?: UserRole.Driver
 
+        val legacyEmergency = EmergencyContact.splitLegacy(
+            document.getString("emergencyContact")
+        )
+
         pushFromValues(
             document
                 .getString("firstName")
@@ -397,7 +520,18 @@ class ProfileViewModel @Inject constructor(
                 ?: document.id,
 
             role,
-            message
+            message,
+
+            document
+                .getString("emergencyContactName")
+                ?.takeIf { it.isNotBlank() }
+                ?: legacyEmergency.name,
+
+            document
+                .getString("emergencyContactNumber")
+                ?.takeIf { it.isNotBlank() }
+                ?: legacyEmergency.number,
+            document.getString("adminStation")
         )
     }
 
@@ -406,7 +540,10 @@ class ProfileViewModel @Inject constructor(
         lastName: String,
         phone: String,
         role: UserRole,
-        message: String?
+        message: String?,
+        emergencyContactName: String = "",
+        emergencyContactNumber: String = "",
+        adminStation: String? = null
     ) {
 
         _uiState.value =
@@ -415,7 +552,9 @@ class ProfileViewModel @Inject constructor(
                     firstName = firstName,
                     lastName = lastName,
                     phoneNumber = phone,
-                    role = role.name
+                    role = role.displayName(adminStation),
+                    emergencyContactName = emergencyContactName,
+                    emergencyContactNumber = emergencyContactNumber
                 ),
                 updateMessage = message
             )

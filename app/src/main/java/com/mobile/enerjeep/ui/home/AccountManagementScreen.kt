@@ -23,18 +23,31 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.navigation.AppNavigator
 import com.mobile.enerjeep.navigation.Screen
+import com.mobile.enerjeep.ui.theme.FieldBorderColor
+import com.mobile.enerjeep.ui.theme.ErrorRedLight
+import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountManagementScreen(
     appNavigator: AppNavigator,
-    viewModel: AccountManagementViewModel = hiltViewModel()
+    viewModel: AccountManagementViewModel = hiltViewModel(),
+    superadminViewModel: SuperadminViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var accountPendingDeletion by remember {
         mutableStateOf<AccountItem?>(null)
     }
+
+    /*
+     * Superadmin toolbox: the emergency list, the accountability log
+     * and the settings open INSIDE this screen (no new module needed).
+     * 0 = Mga Account, 1 = Emergency List, 2 = Talaan, 3 = Settings
+     */
+    var superadminView by remember { mutableStateOf(0) }
+    val isSuperadmin = viewModel.isSuperadmin()
 
     Scaffold(
         topBar = {
@@ -82,7 +95,7 @@ fun AccountManagementScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF1B49B5)
                     ),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = RoundedCornerShape(16.dp),
                     contentPadding = PaddingValues(
                         horizontal = 16.dp
                     )
@@ -106,6 +119,41 @@ fun AccountManagementScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
+            /*
+             * Superadmin-only toolbox button. An admin never sees
+             * this - that is how the higher level shows itself.
+             * (Ang Settings at Talaan ay nasa Profile tab na -
+             * ilalim ng "Seguridad".)
+             */
+            if (isSuperadmin) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SuperadminTabButton(
+                        modifier = Modifier.weight(1f),
+                        text = "Emergency",
+                        selected = superadminView == 1
+                    ) { superadminView = 1 }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            when {
+                isSuperadmin && superadminView == 1 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { superadminView = 0 }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Bumalik"
+                            )
+                        }
+                        Text("Bumalik sa Mga Account", fontSize = 12.sp)
+                    }
+                    EmergencyListView(superadminViewModel)
+                }
+
+                else -> {
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = {
@@ -114,14 +162,14 @@ fun AccountManagementScreen(
                 placeholder = {
                     Text(
                         "Hanapin ayon sa pangalan o numero",
-                        color = Color.Gray
+                        color = TextSecondary
                     )
                 },
                 leadingIcon = {
                     Icon(
                         Icons.Default.Search,
                         contentDescription = "Search",
-                        tint = Color.Gray
+                        tint = TextSecondary
                     )
                 },
                 modifier = Modifier
@@ -129,7 +177,7 @@ fun AccountManagementScreen(
                     .padding(bottom = 16.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = Color.LightGray,
+                    unfocusedBorderColor = FieldBorderColor,
                     focusedBorderColor = Color(0xFF1B49B5),
                     unfocusedContainerColor = Color.White,
                     focusedContainerColor = Color.White
@@ -160,11 +208,11 @@ fun AccountManagementScreen(
             ) {
                 Text(
                     text = if (uiState.searchQuery.isBlank()) {
-                        "Wala pang account."
+                        "Wala pang account. Pindutin ang \"+ Bago\" para gumawa."
                     } else {
                         "Walang nahanap na account."
                     },
-                    color = Color.Gray,
+                    color = TextSecondary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 24.dp)
@@ -181,14 +229,13 @@ fun AccountManagementScreen(
                 ) { account ->
                     AccountCard(
                         account = account,
-                        onToggleStatus = {
-                            viewModel.toggleAccountStatus(account.id)
-                        },
                         onDelete = {
                             accountPendingDeletion = account
                         },
                         isBusy = account.id in uiState.busyAccountIds
                     )
+                }
+            }
                 }
             }
         }
@@ -237,7 +284,6 @@ fun AccountManagementScreen(
 @Composable
 fun AccountCard(
     account: AccountItem,
-    onToggleStatus: () -> Unit,
     onDelete: () -> Unit,
     isBusy: Boolean = false
 ) {
@@ -254,34 +300,91 @@ fun AccountCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
+            /*
+             * Iisang linya sa itaas: pangalan + role badge (kaliwa),
+             * status badge bago ang basurahan (kanan) - kapareho ng
+             * layout ng status + cancel sa mga pila ng jeep. Wala nang
+             * ibang button - delete at status na lang.
+             */
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = account.name,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = account.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val roleBgColor =
+                        when {
+                            account.role == "Superadmin" -> Color(0xFF6D28D9)
+                            account.role.startsWith("Admin") -> Color(0xFF1B49B5)
+                            else -> WarningOrangeLight
+                        }
+
+                    val roleTextColor =
+                        if (account.role == "Driver") {
+                            Color(0xFFD97706)
+                        } else {
+                            Color.White
+                        }
+
+                    Surface(
+                        color = roleBgColor,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(
+                                horizontal = 10.dp
+                            )
+                        ) {
+                            Text(
+                                text = account.role,
+                                color = roleTextColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                val roleBgColor =
-                    if (account.role == "Admin") {
-                        Color(0xFF1B49B5)
+                val statusBgColor =
+                    if (account.isActive) {
+                        Color(0xFFDCFCE7)
                     } else {
-                        Color(0xFFFEF3C7)
+                        Color(0xFFF3F4F6)
                     }
 
-                val roleTextColor =
-                    if (account.role == "Admin") {
-                        Color.White
+                val statusTextColor =
+                    if (account.isActive) {
+                        Color(0xFF166534)
                     } else {
-                        Color(0xFFD97706)
+                        TextSecondary
+                    }
+
+                val statusText =
+                    if (account.isActive) {
+                        "Aktibo"
+                    } else {
+                        "Hindi Aktibo"
                     }
 
                 Surface(
-                    color = roleBgColor,
+                    color = statusBgColor,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(24.dp)
                 ) {
@@ -292,113 +395,24 @@ fun AccountCard(
                         )
                     ) {
                         Text(
-                            text = account.role,
-                            color = roleTextColor,
+                            text = statusText,
+                            color = statusTextColor,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = account.phone,
-                fontSize = 14.sp,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = "Ginawa noong ${account.dateCreated}",
-                fontSize = 12.sp,
-                color = Color.Gray
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            val statusBgColor =
-                if (account.isActive) {
-                    Color(0xFFDCFCE7)
-                } else {
-                    Color(0xFFF3F4F6)
-                }
-
-            val statusTextColor =
-                if (account.isActive) {
-                    Color(0xFF166534)
-                } else {
-                    Color.Gray
-                }
-
-            val statusText =
-                if (account.isActive) {
-                    "Aktibo"
-                } else {
-                    "Hindi Aktibo"
-                }
-
-            Surface(
-                color = statusBgColor,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.height(24.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(
-                        horizontal = 10.dp
-                    )
-                ) {
-                    Text(
-                        text = statusText,
-                        color = statusTextColor,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onToggleStatus,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                    enabled = !isBusy,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        Color.LightGray
-                    )
-                ) {
-                    Text(
-                        text = if (account.isActive) {
-                            "I-deactivate"
-                        } else {
-                            "I-activate"
-                        },
-                        color = Color.Black,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 IconButton(
                     onClick = onDelete,
                     enabled = !isBusy,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .border(
                             1.dp,
-                            Color(0xFFFEE2E2),
+                            ErrorRedLight,
                             RoundedCornerShape(12.dp)
                         )
                 ) {
@@ -409,6 +423,46 @@ fun AccountCard(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = account.phone,
+                fontSize = 14.sp,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = "Ginawa noong ${account.dateCreated}",
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
         }
+    }
+}
+
+@Composable
+fun SuperadminTabButton(
+    modifier: Modifier = Modifier,
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(40.dp),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            1.dp,
+            if (selected) Color(0xFF6D28D9) else TextSecondary
+        )
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = if (selected) Color(0xFF6D28D9) else Color.Black
+        )
     }
 }

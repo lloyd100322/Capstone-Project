@@ -73,15 +73,29 @@ object EmergencyContact {
     }
 
     /**
-     * The number uses the same Philippine phone rule as the rest of the
-     * app, so there is only one definition of a valid phone number.
+     * The emergency number must be a Philippine MOBILE number in one of
+     * two shapes only:
+     *
+     *   09XXXXXXXXX     (local format)
+     *   +639XXXXXXXXX   (international format)
+     *
+     * Landline-style numbers (like "0312345678") are NOT accepted.
      */
     fun isValidNumber(value: String): Boolean {
         val clean = value.trim()
 
-        if (clean.isEmpty()) return false
+        // 09XXXXXXXXX
+        if (clean.length == 11 &&
+            clean.startsWith("09") &&
+            clean.all { it.isDigit() }
+        ) {
+            return true
+        }
 
-        return PhilippineIdentifiers.isValidPhilippinePhoneNumber(clean)
+        // +639XXXXXXXXX
+        return clean.length == 13 &&
+                clean.startsWith("+639") &&
+                clean.drop(4).all { it.isDigit() }
     }
 
     /**

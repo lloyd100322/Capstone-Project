@@ -27,7 +27,16 @@ fun NavGraph(
                 }
 
                 NavigationEvent.NavigateBack -> {
-                    navController.popBackStack()
+                    /*
+                     * Never pop the LAST entry of the back stack. When the
+                     * stack becomes empty (double tap on the back arrow, or
+                     * back right after a slow write), the NavHost renders
+                     * nothing and the whole app turns into a blank screen.
+                     * Home is the root: back there must stay a no-op.
+                     */
+                    if (navController.previousBackStackEntry != null) {
+                        navController.popBackStack()
+                    }
                 }
             }
         }

@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +36,7 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
+import com.mobile.enerjeep.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 
 @Composable
@@ -167,7 +170,7 @@ fun LoginScreen(
                 colors = CardDefaults.cardColors(
                     containerColor = Color.White
                 ),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(
                     defaultElevation = 2.dp
                 )
@@ -206,13 +209,23 @@ fun LoginScreen(
                             modifier = Modifier.height(8.dp)
                         )
 
+                        val phoneInteraction = remember {
+                            MutableInteractionSource()
+                        }
+                        val phoneFocused by phoneInteraction
+                            .collectIsFocusedAsState()
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
                                 .border(
                                     1.dp,
-                                    FieldBorderColor,
+                                    if (phoneFocused) {
+                                        EnerjeepBlue
+                                    } else {
+                                        FieldBorderColor
+                                    },
                                     RoundedCornerShape(12.dp)
                                 )
                                 .padding(horizontal = 16.dp),
@@ -222,7 +235,7 @@ fun LoginScreen(
                             Text(
                                 text = "+63",
                                 fontSize = 16.sp,
-                                color = Color.Gray
+                                color = TextSecondary
                             )
 
                             Box(
@@ -243,7 +256,7 @@ fun LoginScreen(
                                 placeholder = {
                                     Text(
                                         "9XXXXXXXXX",
-                                        color = Color.LightGray
+                                        color = TextSecondary
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -254,6 +267,7 @@ fun LoginScreen(
                                     focusedIndicatorColor = Color.Transparent,
                                     unfocusedIndicatorColor = Color.Transparent
                                 ),
+                                interactionSource = phoneInteraction,
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Phone
                                 ),
@@ -365,7 +379,7 @@ fun LoginScreen(
                             placeholder = {
                                 Text(
                                     "XXXXXX",
-                                    color = Color.LightGray
+                                    color = TextSecondary
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -398,10 +412,11 @@ fun LoginScreen(
                                 text = if (
                                     uiState is LoginUiState.ResendingOtp
                                 ) {
-                                    "Nagpapadala ng OTP..."
+                                    "Nagpapadala..."
                                 } else {
-                                    "Ipadala muli ang OTP"
+                                    "Ipadala"
                                 },
+                                maxLines = 1,
                                 color = EnerjeepBlue,
                                 fontSize = 14.sp
                             )
@@ -409,9 +424,9 @@ fun LoginScreen(
 
                         if (resendCooldownSeconds > 0) {
                             Text(
-                                text = "Maaari muling magpadala sa " +
+                                text = "Maaaring magpadala muli pagkalipas ng " +
                                         "${resendCooldownSeconds}s",
-                                color = Color.Gray,
+                                color = TextSecondary,
                                 fontSize = 12.sp
                             )
                         }
@@ -452,7 +467,7 @@ fun LoginScreen(
                             .fillMaxWidth()
                             .height(56.dp),
                         enabled = !isBusy,
-                        shape = RoundedCornerShape(24.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EnerjeepBlue
                         )
@@ -466,10 +481,11 @@ fun LoginScreen(
                         } else {
                             Text(
                                 text = if (isOtpStage) {
-                                    "I-verify ang Code"
+                                    "I-verify"
                                 } else {
                                     "Mag-login"
                                 },
+                                maxLines = 1,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White

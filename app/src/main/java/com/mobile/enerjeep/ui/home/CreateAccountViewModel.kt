@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserRole
+import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.navigation.AppNavigator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,8 +27,15 @@ import javax.inject.Inject
 @HiltViewModel
 class CreateAccountViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val appNavigator: AppNavigator
+    private val appNavigator: AppNavigator,
+    private val userSession: UserSession
 ) : ViewModel() {
+
+    /**
+     * Only a superadmin may create an admin account. An admin can
+     * create driver accounts only.
+     */
+    fun canCreateAdmin(): Boolean = userSession.isSuperadmin()
 
     private val _uiState =
         MutableStateFlow<CreateAccountUiState>(
@@ -38,8 +48,13 @@ class CreateAccountViewModel @Inject constructor(
         private val PH_PHONE_REGEX =
             Regex("^\\+639\\d{9}$")
 
+        /*
+         * Ang bagong account (driver) ay pumapasok sa MARILAO –
+         * MONUMENTO. Ang Monumento – Marilao ay simula lang na walang
+         * laman - lalamanin lang ito ng mga na-dispatch (kabila).
+         */
         private const val DEFAULT_ROUTE =
-            "Monumento – Marilao"
+            "Marilao – Monumento"
     }
 
     fun createAccount(
@@ -51,8 +66,17 @@ class CreateAccountViewModel @Inject constructor(
         licenseNumber: String = "",
         plateNumber: String = "",
         emergencyContactName: String = "",
-        emergencyContactNumber: String = ""
+        emergencyContactNumber: String = "",
+        seater: String = "",
+        adminStation: String = ""
     ) {
+        /*
+         * User-level rule: only a superadmin can create an admin.
+         * Everyone else can only create drivers.
+         */
+        val effectiveRole =
+            if (userSession.isSuperadmin()) role else UserRole.Driver
+
         val cleanFirstName = firstName.trim()
         val cleanLastName = lastName.trim()
         val cleanPhoneNumber = phoneNumber.trim()
@@ -65,6 +89,16 @@ class CreateAccountViewModel @Inject constructor(
 
         val cleanEmergencyName = emergencyContactName.trim()
         val cleanEmergencyNumber = emergencyContactNumber.trim()
+        val cleanSeater = seater.trim()
+        val seaterCount = cleanSeater.toIntOrNull()
+
+        /*
+         * Istasyon ng admin ("marilao"/"monumento") - display lang ito
+         * (badge "Admin - Marilao"), ang "role" field ay "admin" pa rin.
+         */
+        val cleanAdminStation = adminStation
+            .trim()
+            .lowercase(Locale.ROOT)
 
         if (
             cleanFirstName.isBlank() ||
@@ -85,9 +119,27 @@ class CreateAccountViewModel @Inject constructor(
             return
         }
 
-        if (role == UserRole.Driver) {
+        if (
+            effectiveRole == UserRole.Admin &&
+            cleanAdminStation != UserRole.STATION_MARILAO &&
+            cleanAdminStation != UserRole.STATION_MONUMENTO
+        ) {
+            _uiState.value = CreateAccountUiState.Error(
+                "Piliin ang istasyon ng admin (Marilao o Monumento)"
+            )
+            return
+        }
+
+        if (effectiveRole == UserRole.Driver) {
             // The plate number and the license number are checked before
             // anything is saved, so a wrong value never reaches Firestore.
+            if (seaterCount == null || seaterCount < 1 || seaterCount > 60) {
+                _uiState.value = CreateAccountUiState.Error(
+                    "Ilagay ang bilang ng upuan ng jeep (1-60), hal. 22"
+                )
+                return
+            }
+
             PhilippineIdentifiers.plateNumberError(cleanPlateNumber)
                 ?.let { error ->
                     _uiState.value = CreateAccountUiState.Error(error)
@@ -102,7 +154,7 @@ class CreateAccountViewModel @Inject constructor(
         }
 
         if (
-            role == UserRole.Driver &&
+            effectiveRole == UserRole.Driver &&
             !EmergencyContact.isValidName(cleanEmergencyName)
         ) {
             _uiState.value = CreateAccountUiState.Error(
@@ -113,7 +165,7 @@ class CreateAccountViewModel @Inject constructor(
         }
 
         if (
-            role == UserRole.Driver &&
+            effectiveRole == UserRole.Driver &&
             !EmergencyContact.isValidNumber(cleanEmergencyNumber)
         ) {
             _uiState.value = CreateAccountUiState.Error(
@@ -143,7 +195,7 @@ class CreateAccountViewModel @Inject constructor(
                     return@launch
                 }
 
-                if (role == UserRole.Driver) {
+                if (effectiveRole == UserRole.Driver) {
                     val duplicatePlate = users
                         .whereEqualTo("role", "driver")
                         .get()
@@ -175,18 +227,24 @@ class CreateAccountViewModel @Inject constructor(
                     "firstName" to cleanFirstName,
                     "lastName" to cleanLastName,
                     "phoneNumber" to cleanPhoneNumber,
-                    "password" to cleanPassword,
-                    "role" to role.name.lowercase(Locale.ROOT),
+                    "role" to effectiveRole.name.lowercase(Locale.ROOT),
                     "status" to "active",
                     "createdAt" to FieldValue.serverTimestamp()
                 )
 
-                if (role == UserRole.Driver) {
+                if (effectiveRole == UserRole.Driver) {
                     userMap["licenseNumber"] =
                         cleanLicenseNumber
 
                     userMap["plateNumber"] =
                         cleanPlateNumber
+
+                    // Seats of the jeep: the dispatch deduction is
+                    // computed from this number.
+                    // seaterCount is Int? (toIntOrNull) - the early
+                    // return above already rejects null, but the map
+                    // needs a non-null value so the compiler is happy.
+                    userMap["seater"] = seaterCount ?: 0
 
                     // The two emergency contact values are saved in their
                     // own fields. The old combined field is kept in sync
@@ -207,66 +265,122 @@ class CreateAccountViewModel @Inject constructor(
                     userMap["isVehicleActive"] = true
                 }
 
-                val batch = firestore.batch()
+                if (effectiveRole == UserRole.Admin) {
+                    userMap["adminStation"] = cleanAdminStation
+                }
 
-                batch.set(userReference, userMap)
+                val saltedPassword = PasswordHasher.hash(cleanPassword)
 
-                if (role == UserRole.Driver) {
-                    val queueSnapshot = firestore
+                val userSecretsData = mapOf(
+                    "passwordHash" to saltedPassword.hash,
+                    "passwordSalt" to saltedPassword.salt,
+                    "iterations" to saltedPassword.iterations,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+
+                val userSecretsReference = firestore
+                    .collection(FirestoreCollections.USER_SECRETS)
+                    .document(cleanPhoneNumber)
+
+                val queueId = FirestoreIds.queue(
+                    generatedUserId
+                )
+
+                val driverName = listOf(
+                    cleanFirstName,
+                    cleanLastName
+                )
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .ifBlank { "Driver" }
+
+                /*
+                 * Only the document ids are collected here. The queue
+                 * POSITION is re-read fresh inside the transaction
+                 * below, so two admins creating accounts at the same
+                 * time can never share a queue number.
+                 */
+                val queueIds = if (effectiveRole == UserRole.Driver) {
+                    firestore
                         .collection(FirestoreCollections.QUEUE)
                         .get()
                         .await()
+                        .documents
+                        .map { it.id }
+                } else {
+                    emptyList()
+                }
 
-                    val activeQueue = queueSnapshot.documents.filter {
-                        isActiveQueueStatus(
-                            it.getString("status")
-                        )
-                    }
+                /*
+                 * Create the user, the password secret and the initial
+                 * queue entry together - in ONE transaction. A failure
+                 * anywhere rolls everything back: walang kalahating
+                 * account.
+                 */
+                firestore.runTransaction { transaction ->
 
-                    val nextPosition = activeQueue
+                    val freshPositions = queueIds
+                        .map {
+                            transaction.get(
+                                firestore
+                                    .collection(FirestoreCollections.QUEUE)
+                                    .document(it)
+                            )
+                        }
+                        .filter {
+                            isActiveQueueStatus(
+                                it.getString("status")
+                            )
+                        }
                         .mapNotNull {
                             it.getLong("position")?.toInt()
                         }
+
+                    val nextPosition = freshPositions
                         .maxOrNull()
                         ?.plus(1)
                         ?: 1
 
-                    val queueId = FirestoreIds.queue(
-                        generatedUserId
-                    )
+                    transaction.set(userReference, userMap)
 
-                    val driverName = listOf(
-                        cleanFirstName,
-                        cleanLastName
-                    )
-                        .filter { it.isNotBlank() }
-                        .joinToString(" ")
-                        .ifBlank { "Driver" }
+                    /*
+                     * The password is stored ONLY as a salted hash, in
+                     * its own collection that just the owner can read.
+                     * The profile document never carries a password.
+                     */
+                    transaction.set(userSecretsReference, userSecretsData)
 
-                    val queueData = mapOf<String, Any>(
-                        "id" to queueId,
-                        "driverId" to generatedUserId,
-                        "plateNumber" to cleanPlateNumber,
-                        "driverName" to driverName,
-                        "route" to DEFAULT_ROUTE,
-                        "position" to nextPosition,
-                        "status" to "Nakapila",
-                        "time" to SimpleDateFormat(
-                            "hh:mm a",
-                            Locale.getDefault()
-                        ).format(Date()),
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
+                    if (effectiveRole == UserRole.Driver) {
+                        val queueData = mapOf<String, Any>(
+                            "id" to queueId,
+                            "driverId" to generatedUserId,
+                            "plateNumber" to cleanPlateNumber,
+                            "driverName" to driverName,
+                            "route" to DEFAULT_ROUTE,
+                            "position" to nextPosition,
+                            "status" to "Nakapila",
+                            "time" to SimpleDateFormat(
+                                "hh:mm a",
+                                Locale.US
+                            ).format(Date()),
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
 
-                    val queueReference = firestore
-                        .collection(FirestoreCollections.QUEUE)
-                        .document(queueId)
+                        val queueReference = firestore
+                            .collection(FirestoreCollections.QUEUE)
+                            .document(queueId)
 
-                    batch.set(queueReference, queueData)
-                }
+                        transaction.set(queueReference, queueData)
+                    }
+                }.await()
 
-                // Create the user and initial queue entry together.
-                batch.commit().await()
+                ActivityLogger.log(
+                    firestore,
+                    userSession,
+                    "Gumawa ng Account",
+                    "$cleanFirstName $cleanLastName (" +
+                            effectiveRole.name + ")"
+                )
 
                 _uiState.value = CreateAccountUiState.Success
 
