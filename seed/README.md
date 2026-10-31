@@ -89,3 +89,10 @@ Phone login needs an SMS OTP. For development and presentations, use
   donasyon ang binabawas sa kita ng driver (`verifyNoDonationDeductions`)
   at dispatch lang ang laman ng kita (`verifyDriverEarnings`) — parehong
   tumatakbo tuwing pagpatakbo.
+- Ang bawat `activityLogs` entry ay may `actorPhone` — phone number ng
+  mismong nagsulat (kapareho ng panuntunan sa firestore.rules).
+- Tinatanggal ng `cleanupLegacyPasswords` ang mga legacy plaintext
+  `password` field sa `/users` (nasa `/userSecrets` lang ang totoong
+  password bilang salted hash).
+- Ang mga date strings (hal. `MMM dd, yyyy`) ay naka-`Locale.US` para
+  pareho ang anyo sa bawat device at madaling ma-parse pabalik.

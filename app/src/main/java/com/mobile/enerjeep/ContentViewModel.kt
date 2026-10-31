@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobile.enerjeep.data.EmergencyContact
+import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -89,7 +90,7 @@ class ContentViewModel @Inject constructor(
                     return@launch
                 }
 
-                val doc = firestore.collection("users")
+                val doc = firestore.collection(FirestoreCollections.USERS)
                     .document(phoneNumber.lowercase())
                     .get()
                     .await()

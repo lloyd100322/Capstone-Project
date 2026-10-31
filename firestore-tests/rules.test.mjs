@@ -10,7 +10,8 @@
  *
  * Each test locks one rule from ../firestore.rules: the driver
  * "Tapos Na Bumyahe" contract, the queue-jump block, the superadmin-only
- * cut-off hour, immutable audit logs, and owner-only password secrets.
+ * cut-off hour, immutable audit logs bound to the writer's own phone,
+ * the owner-only profile allowlist, and owner-only password secrets.
  */
 
 import { test, before, after, beforeEach } from "node:test";
@@ -22,6 +23,7 @@ import {
   assertSucceeds,
 } from "@firebase/rules-unit-testing";
 import {
+  deleteField,
   doc,
   getDoc,
   setDoc,
@@ -99,6 +101,17 @@ test("driver CAN finish his own travel (status completed + position 0)", async (
       status: "completed",
       position: 0,
       endTravelAt: new Date(),
+      updatedAt: new Date(),
+    })
+  );
+});
+
+test("driver CAN sync name/plate on his own entry (profile rename)", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertSucceeds(
+    updateDoc(doc(db, "queue/q-drv"), {
+      driverName: "Juan Dela Cruz",
+      plateNumber: "TXA 448",
       updatedAt: new Date(),
     })
   );
@@ -204,8 +217,24 @@ test("driver CAN write his own audit entry (Tapos Na Bumyahe)", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
   await assertSucceeds(
     setDoc(doc(db, "activityLogs/log-2"), {
-      actorName: "Juan", actorRole: "Driver",
+      actorName: "Juan", actorPhone: DRIVER_PHONE, actorRole: "Driver",
       action: "Tapos Na Bumyahe", detail: "TXA 448",
+    })
+  );
+});
+
+test("an audit entry must carry the WRITER'S OWN phone (no spoofing)", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertFails(
+    setDoc(doc(db, "activityLogs/log-spoof"), {
+      actorName: "Maria", actorPhone: ADMIN_PHONE, actorRole: "Admin",
+      action: "Nag-dispatch", detail: "pinanggap si admin",
+    })
+  );
+  await assertFails(
+    setDoc(doc(db, "activityLogs/log-orph"), {
+      actorName: "Juan", actorRole: "Driver",
+      action: "Tapos Na Bumyahe", detail: "walang actorPhone",
     })
   );
 });
@@ -238,6 +267,73 @@ test("an admin cannot promote anyone - only the superadmin changes roles", async
   await assertSucceeds(
     updateDoc(doc(dbAs(SUPER_PHONE, "u-super"), `users/${DRIVER_PHONE}`), {
       firstName: "Renamed",
+    })
+  );
+});
+
+test("a user may edit ONLY his own profile fields (name/license/plate/emergency)", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertSucceeds(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      firstName: "Renamed",
+      lastName: "Driver",
+      licenseNumber: "N01-123456",
+      plateNumber: "TXA 448",
+      emergencyContactName: "Inay",
+      emergencyContactNumber: "+639171234502",
+      updatedAt: new Date(),
+    })
+  );
+});
+
+test("a user can NEVER rewrite his own identity or account-state fields", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      userId: "hijacked",
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      role: "superadmin",
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      status: "Deactivated",
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      isVehicleActive: false,
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      seater: 99,
+    })
+  );
+});
+
+test("a legacy plaintext password field can be REMOVED but never SET", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      password: "Enerjeep@2026",
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      password: deleteField(),
+    })
+  );
+});
+
+test("a member cannot self-create his own users doc (role escape closed)", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertFails(
+    setDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      role: "superadmin", userId: driverId, plateNumber: "TXA 448",
     })
   );
 });

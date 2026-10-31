@@ -464,7 +464,7 @@ fun DonasyonCardItem(donasyon: DonasyonItem) {
 @Composable
 fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (DonasyonItem) -> Unit) {
     var donor by remember { mutableStateOf("") }; var amount by remember { mutableStateOf("") }; var source by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
-    val today = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date()); var date by remember { mutableStateOf(today) }
+    val today = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date()); var date by remember { mutableStateOf(today) }
     Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 32.dp)) {
         Text(if (isGamit) "Gamit ng Donasyon" else "Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(8.dp))
         Text(

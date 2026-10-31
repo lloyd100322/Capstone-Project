@@ -913,9 +913,11 @@ class QueueViewModel @Inject constructor(
                         "driverName" to driverName,
                         "plateNumber" to plateNumber,
                         "queueId" to vehicleId,
+                        // Stored date text: Locale.US para pareho sa
+                        // bawat device at madaling ma-parse pabalik.
                         "date" to SimpleDateFormat(
                             "MMM dd, yyyy",
-                            Locale.getDefault()
+                            Locale.US
                         ).format(Date()),
                         "amount" to netAmount,
                         "grossAmount" to income,

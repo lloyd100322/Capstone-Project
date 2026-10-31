@@ -13,9 +13,12 @@ import java.util.Locale
  *
  *  - a fine recorded in the "ledger" (Talaan) is in the report
  *  - a normal dispatch earning or terminal fee is NOT a fine
- *  - a fine that is written twice is only counted once
+ *  - the same ledger document is counted once
+ *  - two different documents are two fines kahit pareho ng halaga at araw
  */
 class MultiyaReportTest {
+
+    private var nextRow = 0
 
     private fun today(): String =
         SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
@@ -25,11 +28,13 @@ class MultiyaReportTest {
             .format(Date(System.currentTimeMillis() - 40L * 24L * 60L * 60L * 1000L))
 
     private fun item(
+        id: String = "row-${nextRow++}",
         plate: String = "ABC1234",
         name: String = "Juan Dela Cruz",
         date: String = today(),
         amount: Double = 500.0
     ) = ReportMultiyaItem(
+        id = id,
         plateNumber = plate,
         driverName = name,
         date = date,
@@ -56,16 +61,34 @@ class MultiyaReportTest {
     }
 
     @Test
-    fun aFineThatIsWrittenTwiceIsCountedOnce() {
+    fun theSameLedgerDocumentIsOnlyCountedOnce() {
         val summary = MultiyaReport.build(
             listOf(
-                item(amount = 500.0),
-                item(amount = 500.0)
+                item(id = "fee-1", amount = 500.0),
+                item(id = "fee-1", amount = 500.0)
             )
         )
 
         assertEquals(1, summary.current.size)
         assertEquals(500.0, summary.total, 0.001)
+    }
+
+    @Test
+    fun twoFinesWithTheSameDetailsOnTheSameDayAreStillTwoFines() {
+        /* The regression lock for the old heuristic merge: two REAL,
+         * separate fines may look identical (same driver, same amount,
+         * same day) and must stay two rows - they are different
+         * documents.
+         */
+        val summary = MultiyaReport.build(
+            listOf(
+                item(id = "fee-201", amount = 500.0),
+                item(id = "fee-202", amount = 500.0)
+            )
+        )
+
+        assertEquals(2, summary.current.size)
+        assertEquals(1000.0, summary.total, 0.001)
     }
 
     @Test
@@ -107,17 +130,17 @@ class MultiyaReportTest {
     }
 
     @Test
-    fun theCompleteListHasEveryFineAndCountsAFineThatIsWrittenTwiceOnlyOnce() {
+    fun theCompleteListHasEveryFineAndCountsTheSameDocumentOnlyOnce() {
         val summary = MultiyaReport.build(
             listOf(
-                item(date = today(), amount = 100.0),
-                item(date = earlier(), amount = 200.0),
-                item(date = today(), amount = 100.0)
+                item(id = "fee-301", date = today(), amount = 100.0),
+                item(id = "fee-302", date = earlier(), amount = 200.0),
+                item(id = "fee-301", date = today(), amount = 100.0)
             )
         )
 
         // The fine of today is in the list, the older fine is in the
-        // list, and the fine that is written twice is there once.
+        // list, and the duplicated DOCUMENT is there once.
         assertEquals(2, summary.all.size)
         assertEquals(300.0, summary.total, 0.001)
     }
@@ -135,6 +158,7 @@ class MultiyaReportTest {
         val summary = MultiyaReport.build(
             listOf(
                 ReportMultiyaItem(
+                    id = "fee-401",
                     plateNumber = "ABC1234",
                     driverName = "Juan Dela Cruz",
                     date = "Sep 15, 2025",
@@ -142,6 +166,7 @@ class MultiyaReportTest {
                     createdAtMillis = now - 30L * day
                 ),
                 ReportMultiyaItem(
+                    id = "fee-402",
                     plateNumber = "ABC1234",
                     driverName = "Juan Dela Cruz",
                     date = "May 01, 2026",

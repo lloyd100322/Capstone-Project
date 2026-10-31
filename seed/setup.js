@@ -845,18 +845,22 @@ async function verifyDriverEarnings() {
 
 async function writeLogs() {
   let batch = db.batch();
+  // [actorName, actorRole, actorPhone, action, detail, back, hh, mm]
+  // Ang actorPhone ay laging ang phone number ng SARILING nagsulat -
+  // pareho ito ng panuntunan sa firestore.rules (audit binding).
   const logs = [
-    ["Maria Santos", "Admin", "Dispatch", `${drivers[17].plate} → Monumento – Marilao`, 0, 7, 40],
-    [`${drivers[0].firstName} ${drivers[0].lastName}`, "Driver", "Tapos Na Bumyahe", drivers[0].plate, 1, 12, 30],
-    ["Ramon Villanueva", "Superadmin", "Settings", "Oras ng reset: 9:00 PM | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
-    ["Ramon Villanueva", "Superadmin", "Bagong Account", "Maria Santos (admin)", 20, 9, 0],
-    ["Maria Santos", "Admin", "Insidente", "Inayos: Minor collision sa Monumento", 1, 16, 45],
+    ["Maria Santos", "Admin", "+639171000002", "Dispatch", `${drivers[17].plate} → Monumento – Marilao`, 0, 7, 40],
+    [`${drivers[0].firstName} ${drivers[0].lastName}`, "Driver", drivers[0].phone, "Tapos Na Bumyahe", drivers[0].plate, 1, 12, 30],
+    ["Ramon Villanueva", "Superadmin", "+639171000001", "Settings", "Oras ng reset: 9:00 PM | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
+    ["Ramon Villanueva", "Superadmin", "+639171000001", "Bagong Account", "Maria Santos (admin)", 20, 9, 0],
+    ["Maria Santos", "Admin", "+639171000002", "Insidente", "Inayos: Minor collision sa Monumento", 1, 16, 45],
   ];
   logs.forEach((l, i) => {
-    const [actorName, actorRole, action, detail, back, hh, mm] = l;
+    const [actorName, actorRole, actorPhone, action, detail, back, hh, mm] = l;
     const d = daysAgo(back, hh, mm);
     batch.set(db.collection("activityLogs").doc(`log_${tag(701 + i)}`), {
       actorName,
+      actorPhone,
       actorRole,
       action,
       detail,
@@ -865,6 +869,27 @@ async function writeLogs() {
   });
   await batch.commit();
   console.log("  activityLogs: 5 entries");
+}
+
+/*
+ * Linisin ang mga LEGACY na plaintext password field sa /users (lumang
+ * bersyon). Sa bagong bersyon, ang password ay nasa /userSecrets lang
+ * bilang salted hash - walang dahilan para manatili ang plaintext kahit
+ * kailan.
+ */
+async function cleanupLegacyPasswords() {
+  const snap = await db.collection("users").limit(500).get();
+  const doomed = snap.docs.filter((d) => "password" in d.data());
+  if (doomed.length === 0) {
+    console.log("  verify: walang legacy plaintext password sa /users ✓");
+    return;
+  }
+  const batch = db.batch();
+  doomed.forEach((d) =>
+    batch.update(d.ref, { password: admin.firestore.FieldValue.delete() })
+  );
+  await batch.commit();
+  console.log(`  cleanup: inalis ang legacy plaintext password sa ${doomed.length} users doc`);
 }
 
 // ---------------------------------------------------------------- main
@@ -876,6 +901,7 @@ async function writeLogs() {
       await wipeCollections();
     }
     await cleanupLegacyDocs();
+    await cleanupLegacyPasswords();
     await writeUsers();
     const dispatchIds = await writeQueue();
     await writeIncidents();

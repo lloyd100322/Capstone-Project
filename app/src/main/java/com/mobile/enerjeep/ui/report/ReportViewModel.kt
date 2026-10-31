@@ -52,12 +52,16 @@ data class ReportIncidentItem(
 )
 
 data class ReportMultiyaItem(
+    // Ang ledger document id - ito ang identity ng bawat row. Ginagamit
+    // ito ng MultiyaReport para hindi mabilang nang dalawang beses ang
+    // ISANG dokumento, habang nananatiling dalawang multa ang dalawang
+    // magkaibang dokumento kahit pareho pa ng halaga at araw.
+    val id: String = "",
     val plateNumber: String,
     val driverName: String,
     val date: String,
     val amount: Double,
-    // When the record was saved. Used to split "Ngayon" from the history
-    // and to spot a fine that is written in two collections.
+    // When the record was saved. Used to split "Ngayon" from the history.
     val createdAtMillis: Long = 0L
 )
 
@@ -216,8 +220,16 @@ class ReportViewModel @Inject constructor(
          * -----------------------------
          */
 
+        /*
+         * Ang "income" ay DISPATCH RECORDS lang (feeType "Dispatch" /
+         * source "queue_dispatch"). Ang mga bayad ng multa (Talaan) at
+         * iba pang fee rows ay HINDI kita - nasa "Ulat ng Multa" ang mga
+         * iyon - kaya hindi sila binibilang bilang biyahe o kita dito.
+         */
+        val dispatchLedgerDocs = ledgerDocs.filter { isDispatchLedger(it) }
+
         val monthly =
-            ledgerDocs
+            dispatchLedgerDocs
                 .mapNotNull { document ->
 
                     val key =
@@ -264,7 +276,7 @@ class ReportViewModel @Inject constructor(
                         if (
                             previousKey != null
                         ) {
-                            ledgerDocs
+                            dispatchLedgerDocs
                                 .filter {
                                     monthKey(
                                         it
@@ -285,7 +297,7 @@ class ReportViewModel @Inject constructor(
                             ),
 
                         trips =
-                            ledgerDocs.count {
+                            dispatchLedgerDocs.count {
                                 monthKey(
                                     it
                                 ) == key
@@ -312,7 +324,7 @@ class ReportViewModel @Inject constructor(
                 }
 
         val yearly =
-            ledgerDocs
+            dispatchLedgerDocs
                 .mapNotNull {
                     yearKey(it)
                 }
@@ -321,7 +333,7 @@ class ReportViewModel @Inject constructor(
                 .map { year ->
 
                     val yearDocs =
-                        ledgerDocs.filter {
+                        dispatchLedgerDocs.filter {
                             yearKey(it) == year
                         }
 
@@ -346,7 +358,7 @@ class ReportViewModel @Inject constructor(
                 }
 
         val incomeHistory =
-            ledgerDocs
+            dispatchLedgerDocs
                 .sortedByDescending {
                     timestampSeconds(
                         it
@@ -612,9 +624,6 @@ class ReportViewModel @Inject constructor(
                 "note" to
                         donasyon.note,
 
-                "isHistory" to
-                        false,
-
                 "type" to
                         if (donasyon.type == "gamit") "gamit"
                         else "donate",
@@ -711,6 +720,9 @@ class ReportViewModel @Inject constructor(
     ): ReportMultiyaItem {
 
         return ReportMultiyaItem(
+
+            id =
+                document.id,
 
             plateNumber =
                 document
@@ -897,6 +909,43 @@ class ReportViewModel @Inject constructor(
                 key.format(
                     Date()
                 )
+    }
+
+    /**
+     * Isang DISPATCH RECORD lang ang binibilang bilang kita/biyahe:
+     * feeType "Dispatch" o source "queue_dispatch". Ang mga bayad ng
+     * multa at iba pang fee rows ng Talaan ay hindi kasama dito.
+     */
+    private fun isDispatchLedger(
+        document: DocumentSnapshot
+    ): Boolean {
+
+        val source =
+            document
+                .getString(
+                    "source"
+                )
+                .orEmpty()
+                .trim()
+
+        val feeType =
+            document
+                .getString(
+                    "feeType"
+                )
+                .orEmpty()
+                .trim()
+
+        return source
+            .equals(
+                "queue_dispatch",
+                ignoreCase = true
+            ) ||
+                feeType
+                    .equals(
+                        "Dispatch",
+                        ignoreCase = true
+                    )
     }
 
     private fun amountForLedger(

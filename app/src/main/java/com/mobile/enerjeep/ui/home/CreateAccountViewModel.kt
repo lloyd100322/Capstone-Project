@@ -269,85 +269,110 @@ class CreateAccountViewModel @Inject constructor(
                     userMap["adminStation"] = cleanAdminStation
                 }
 
-                val batch = firestore.batch()
-
-                batch.set(userReference, userMap)
-
-                /*
-                 * The password is stored ONLY as a salted hash, in its
-                 * own collection that just the owner can read. The
-                 * profile document never carries a password.
-                 */
                 val saltedPassword = PasswordHasher.hash(cleanPassword)
 
-                batch.set(
-                    firestore
-                        .collection(FirestoreCollections.USER_SECRETS)
-                        .document(cleanPhoneNumber),
-                    mapOf(
-                        "passwordHash" to saltedPassword.hash,
-                        "passwordSalt" to saltedPassword.salt,
-                        "iterations" to saltedPassword.iterations,
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
+                val userSecretsData = mapOf(
+                    "passwordHash" to saltedPassword.hash,
+                    "passwordSalt" to saltedPassword.salt,
+                    "iterations" to saltedPassword.iterations,
+                    "createdAt" to FieldValue.serverTimestamp()
                 )
 
-                if (effectiveRole == UserRole.Driver) {
-                    val queueSnapshot = firestore
+                val userSecretsReference = firestore
+                    .collection(FirestoreCollections.USER_SECRETS)
+                    .document(cleanPhoneNumber)
+
+                val queueId = FirestoreIds.queue(
+                    generatedUserId
+                )
+
+                val driverName = listOf(
+                    cleanFirstName,
+                    cleanLastName
+                )
+                    .filter { it.isNotBlank() }
+                    .joinToString(" ")
+                    .ifBlank { "Driver" }
+
+                /*
+                 * Only the document ids are collected here. The queue
+                 * POSITION is re-read fresh inside the transaction
+                 * below, so two admins creating accounts at the same
+                 * time can never share a queue number.
+                 */
+                val queueIds = if (effectiveRole == UserRole.Driver) {
+                    firestore
                         .collection(FirestoreCollections.QUEUE)
                         .get()
                         .await()
+                        .documents
+                        .map { it.id }
+                } else {
+                    emptyList()
+                }
 
-                    val activeQueue = queueSnapshot.documents.filter {
-                        isActiveQueueStatus(
-                            it.getString("status")
-                        )
-                    }
+                /*
+                 * Create the user, the password secret and the initial
+                 * queue entry together - in ONE transaction. A failure
+                 * anywhere rolls everything back: walang kalahating
+                 * account.
+                 */
+                firestore.runTransaction { transaction ->
 
-                    val nextPosition = activeQueue
+                    val freshPositions = queueIds
+                        .map {
+                            transaction.get(
+                                firestore
+                                    .collection(FirestoreCollections.QUEUE)
+                                    .document(it)
+                            )
+                        }
+                        .filter {
+                            isActiveQueueStatus(
+                                it.getString("status")
+                            )
+                        }
                         .mapNotNull {
                             it.getLong("position")?.toInt()
                         }
+
+                    val nextPosition = freshPositions
                         .maxOrNull()
                         ?.plus(1)
                         ?: 1
 
-                    val queueId = FirestoreIds.queue(
-                        generatedUserId
-                    )
+                    transaction.set(userReference, userMap)
 
-                    val driverName = listOf(
-                        cleanFirstName,
-                        cleanLastName
-                    )
-                        .filter { it.isNotBlank() }
-                        .joinToString(" ")
-                        .ifBlank { "Driver" }
+                    /*
+                     * The password is stored ONLY as a salted hash, in
+                     * its own collection that just the owner can read.
+                     * The profile document never carries a password.
+                     */
+                    transaction.set(userSecretsReference, userSecretsData)
 
-                    val queueData = mapOf<String, Any>(
-                        "id" to queueId,
-                        "driverId" to generatedUserId,
-                        "plateNumber" to cleanPlateNumber,
-                        "driverName" to driverName,
-                        "route" to DEFAULT_ROUTE,
-                        "position" to nextPosition,
-                        "status" to "Nakapila",
-                        "time" to SimpleDateFormat(
-                            "hh:mm a",
-                            Locale.getDefault()
-                        ).format(Date()),
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
+                    if (effectiveRole == UserRole.Driver) {
+                        val queueData = mapOf<String, Any>(
+                            "id" to queueId,
+                            "driverId" to generatedUserId,
+                            "plateNumber" to cleanPlateNumber,
+                            "driverName" to driverName,
+                            "route" to DEFAULT_ROUTE,
+                            "position" to nextPosition,
+                            "status" to "Nakapila",
+                            "time" to SimpleDateFormat(
+                                "hh:mm a",
+                                Locale.US
+                            ).format(Date()),
+                            "createdAt" to FieldValue.serverTimestamp()
+                        )
 
-                    val queueReference = firestore
-                        .collection(FirestoreCollections.QUEUE)
-                        .document(queueId)
+                        val queueReference = firestore
+                            .collection(FirestoreCollections.QUEUE)
+                            .document(queueId)
 
-                    batch.set(queueReference, queueData)
-                }
-
-                // Create the user and initial queue entry together.
-                batch.commit().await()
+                        transaction.set(queueReference, queueData)
+                    }
+                }.await()
 
                 ActivityLogger.log(
                     firestore,

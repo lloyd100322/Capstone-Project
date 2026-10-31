@@ -36,39 +36,6 @@ object MultiyaReport {
     }
 
     /**
-     * The identity of a fine. The driver, the amount and the day are
-     * used because a fine does not have its own number in the app.
-     *
-     * When the same fine is written twice, the key is the same, so the
-     * report counts it only once.
-     */
-    fun multiyaKey(item: ReportMultiyaItem): String {
-        val amountKey = String.format(Locale.US, "%.2f", item.amount)
-
-        return listOf(
-            item.plateNumber.trim().uppercase(Locale.ROOT),
-            item.driverName.trim().lowercase(Locale.ROOT),
-            amountKey,
-            dayKey(item)
-        ).joinToString("|")
-    }
-
-    /**
-     * The day of the fine, used for the "Ngayon" split and for the
-     * duplicate check.
-     */
-    fun dayKey(item: ReportMultiyaItem): String {
-        if (item.createdAtMillis > 0L) {
-            return SimpleDateFormat("yyyyMMdd", Locale.getDefault())
-                .format(Date(item.createdAtMillis))
-        }
-
-        val parsed = parseDate(item.date) ?: return item.date.trim()
-
-        return SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(parsed)
-    }
-
-    /**
      * True when the fine belongs to today ("Ngayon").
      */
     fun isToday(item: ReportMultiyaItem): Boolean {
@@ -105,8 +72,10 @@ object MultiyaReport {
      * Builds the report from the fines of the "ledger" collection
      * (feeType "Multa" - ang mga record ng Talaan).
      *
-     * A fine that is written twice is only counted once, so the total
-     * of the report is not inflated.
+     * Ang ledger document id ang tanging identity ng bawat row: ang
+     * ISANG dokumento ay binibilang nang isang beses lang, habang ang
+     * dalawang magkaibang dokumento ay dalawang multa pa rin kahit
+     * pareho pa ng halaga at araw - hindi sila pwedeng paghaluin.
      */
     fun build(
         fines: List<ReportMultiyaItem>
@@ -115,7 +84,7 @@ object MultiyaReport {
         val all = mutableListOf<ReportMultiyaItem>()
 
         fines.forEach { item ->
-            if (seen.add(multiyaKey(item))) {
+            if (seen.add(item.id)) {
                 all += item
             }
         }

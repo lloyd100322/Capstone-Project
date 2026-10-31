@@ -4,10 +4,17 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 
 /**
- * The accountability trail: every admin action is written to the
- * /activityLogs collection so the superadmin can always see WHO did
- * WHAT and WHEN. Entries can never be edited or deleted (firestore
- * rules) - the trail must stay honest.
+ * Nag-iisang pasukan para sa LAHAT ng audit-log entries.
+ *
+ * ISANG klaseng entry para sa lahat (admin o driver): ang `actorName` at
+ * `actorPhone` ay galing sa SARILING session ng nagsulat - hindi sa
+ * argumento - kaya hindi ito pwedeng palitan ng kahit sinong kliyente.
+ * Tine-check din ng firestore.rules na ang `actorPhone` ay laging ang
+ * phone number ng naka-login, kaya hindi na mapapanggap ng sinuman ang
+ * audit trail sa pangalan ng iba.
+ *
+ * Never throw here - the audit trail must never break the actual action
+ * it is recording.
  */
 object ActivityLogger {
 
@@ -21,26 +28,10 @@ object ActivityLogger {
         val actorName = listOf(
             profile?.firstName.orEmpty(),
             profile?.lastName.orEmpty()
-        ).filter { it.isNotBlank() }
+        )
             .joinToString(" ")
             .ifBlank { "Hindi kilala" }
 
-        log(
-            firestore = firestore,
-            actorName = actorName,
-            actorRole = profile?.role?.name ?: "",
-            action = action,
-            detail = detail
-        )
-    }
-
-    fun log(
-        firestore: FirebaseFirestore,
-        actorName: String,
-        actorRole: String,
-        action: String,
-        detail: String
-    ) {
         try {
             firestore
                 .collection(FirestoreCollections.ACTIVITY_LOGS)
@@ -48,14 +39,16 @@ object ActivityLogger {
                 .set(
                     mapOf(
                         "actorName" to actorName,
-                        "actorRole" to actorRole,
+                        "actorPhone" to profile?.phoneNumber.orEmpty().trim(),
+                        "actorRole" to profile?.role?.name ?: "",
                         "action" to action,
                         "detail" to detail,
                         "createdAt" to FieldValue.serverTimestamp()
                     )
                 )
         } catch (_: Exception) {
-            // The audit trail must never break the actual action.
+            // Never throw here - the audit trail must never break the
+            // actual action it is recording.
         }
     }
 }

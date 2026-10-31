@@ -79,8 +79,11 @@ service cloud.firestore {
       // drivers (admin screens). Drivers never list this collection.
       allow list: if isAdmin();
 
-      // An admin creates accounts; a signed-in user may create their own
-      // document during first-login migration.
+      // An admin creates accounts. A first-login "self-create" migration
+      // branch used to live here - it was unreachable (isMember() already
+      // requires an existing users document) and it did not restrict the
+      // role field, so it is intentionally gone: only admins create
+      // accounts.
       //
       // User levels: only a superadmin may create an ADMIN account. An
       // admin may create driver accounts only (the app enforces this
@@ -88,22 +91,40 @@ service cloud.firestore {
       allow create: if (isAdmin()
                         && hasNoPasswordField()
                         && (isSuperadmin()
-                            || request.resource.data.role == 'driver'))
-                    || (isMember() && isOwner(phone)
-                        && hasNoPasswordField());
+                            || request.resource.data.role == 'driver'));
 
-      // A user edits their own profile; an admin edits any profile
-      // (activate/deactivate). Never accept a plaintext password, but
-      // legacy documents that still have one can be updated.
+      // An admin edits any profile (activate/deactivate). Never accept a
+      // plaintext password, but legacy documents that still have one can
+      // be updated.
       //
       // Only a superadmin may CHANGE the role field of an account
       // (promote/demote). This stops an admin from promoting himself.
-      allow update: if ((isAdmin() || (isMember() && isOwner(phone)))
+      allow update: if (isAdmin()
                         && doesNotSetPassword()
                         && (isSuperadmin()
                             || !request.resource.data.diff(resource.data)
                                  .affectedKeys()
                                  .hasAny(['role'])));
+
+      // A user edits only his own DISPLAY profile: name, license, plate
+      // at emergency contact (ito ang buong ibinibigay ng sariling
+      // profile screen ng app). Identity and account-state fields
+      // (userId, role, status, seater, isVehicleActive, adminStation,
+      // createdAt) are NEVER writable by the owner - they would break
+      // the queue/ledger joins or change the account's level. The LEGACY
+      // plaintext `password` field may only be REMOVED
+      // (doesNotSetPassword still blocks setting a value).
+      allow update: if (isMember() && isOwner(phone)
+                        && doesNotSetPassword()
+                        && request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasOnly(['firstName', 'lastName',
+                                       'licenseNumber', 'plateNumber',
+                                       'emergencyContactName',
+                                       'emergencyContactNumber',
+                                       'emergencyContact',
+                                       'updatedAt',
+                                       'password']));
 
       allow delete: if isAdmin();
     }
@@ -135,8 +156,10 @@ service cloud.firestore {
       //   (a) own entry: only status/position/endTravelAt/updatedAt may
       //       change; if the status changes it must become "completed",
       //       and if the position changes it must become 0 (out of the
-      //       active pila). A modified client can no longer move itself
-      //       up the queue or fake its status.
+      //       active pila). driverName/plateNumber are the DISPLAY
+      //       fields the profile screen keeps in sync after a rename
+      //       (identity driverId stays untouchable). A modified client
+      //       can no longer move itself up the queue or fake its status.
       //   (b) other entries: finishing travel renumbers the pila behind
       //       the driver - a pure position reflow. Identity and status
       //       fields stay untouchable, and a driver can never use this
@@ -147,7 +170,7 @@ service cloud.firestore {
                get(/databases/$(database)/documents/users/$(authPhone())).data.userId
             && request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['status', 'position', 'endTravelAt',
-                           'updatedAt'])
+                           'driverName', 'plateNumber', 'updatedAt'])
             && (!request.resource.data.diff(resource.data).affectedKeys()
                    .hasAny(['status'])
                  || request.resource.data.status == 'completed')
@@ -194,10 +217,15 @@ service cloud.firestore {
     // Only the SUPERADMIN can read the log - auditing the admins is the
     // oversight power of the level above. Entries can never be edited
     // or deleted, so the trail is honest.
+    //
+    // Ang bawat entry ay may actorPhone - laging ang phone number ng
+    // SARILING nagsulat. Hindi na mapapanggap ng sinuman ang audit
+    // trail sa pangalan ng iba.
     // ------------------------------------------------------------------
     match /activityLogs/{logId} {
       allow read: if isSuperadmin();
-      allow create: if isMember();
+      allow create: if isMember()
+        && request.resource.data.actorPhone == authPhone();
       allow update, delete: if false;
     }
 
@@ -239,11 +267,10 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // /kita - manual earnings of a driver
-    //
-    // Basa lang ang driver (sariling kita). Ang pagsulat ay ADMIN lang -
-    // hindi maaaring baguhin ng driver ang sarili niyang earnings record
-    // kahit sariling dokumento pa ito (laban sa inflation ng kita).
+    // /kita - RETIRED (2026-10-31): ang kita ng driver ay galing na sa
+    // /ledger (dispatch records) lamang. Ang koleksyong ito ay nananatili
+    // lang bilang backstop para sa mga lumang dokumento - basa lang ang
+    // driver, at WALANG SINUMAN ang makakagawa o makakabago dito.
     // ------------------------------------------------------------------
     match /kita/{entryId} {
       allow read: if isAdmin()

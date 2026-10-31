@@ -223,7 +223,9 @@ class LedgerViewModel @Inject constructor(
                 val resolvedName = listOf(firstName, lastName).filter { it.isNotBlank() }
                     .joinToString(" ").ifBlank { driverName.trim() }.ifBlank { "Driver" }
                 val documentId = UUID.randomUUID().toString()
-                val nowText = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(Date())
+                // Stored date text: Locale.US para pareho sa bawat device
+                // at madaling ma-parse pabalik.
+                val nowText = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date())
                 val data = hashMapOf<String, Any>(
                     "id" to documentId,
                     "driverId" to driverId,

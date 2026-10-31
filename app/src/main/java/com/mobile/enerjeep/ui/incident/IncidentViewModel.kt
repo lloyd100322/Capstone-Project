@@ -369,10 +369,12 @@ class IncidentViewModel @Inject constructor(
         val cleanPenalty =
             penalty.toDoubleOrNull() ?: 0.0
 
+        // Stored date text: Locale.US para pareho sa bawat device at
+        // madaling ma-parse pabalik.
         val dateText =
             SimpleDateFormat(
                 "MMM dd, yyyy",
-                Locale.getDefault()
+                Locale.US
             ).format(Date())
 
         // In-flight guard: a double tap must not record the incident twice.
