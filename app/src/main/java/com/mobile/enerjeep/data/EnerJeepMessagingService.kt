@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.data
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -52,6 +53,9 @@ class EnerJeepMessagingService : FirebaseMessagingService() {
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 )
+                .addOnFailureListener { error ->
+                    Log.w("FCMToken", "Failed to save refreshed FCM token", error)
+                }
         } catch (_: Exception) {
             // Hindi dapat masira ang token refresh.
         }

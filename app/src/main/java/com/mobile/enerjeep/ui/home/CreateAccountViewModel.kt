@@ -300,6 +300,13 @@ class CreateAccountViewModel @Inject constructor(
                  * below, so two admins creating accounts at the same
                  * time can never share a queue number.
                  */
+                val queueControlReference = firestore
+                    .collection(FirestoreCollections.SETTINGS)
+                    .document("queueControl")
+                val observedQueueRevision = if (effectiveRole == UserRole.Driver) {
+                    queueControlReference.get().await().getLong("revision") ?: 0L
+                } else 0L
+
                 val queueIds = if (effectiveRole == UserRole.Driver) {
                     firestore
                         .collection(FirestoreCollections.QUEUE)
@@ -318,6 +325,16 @@ class CreateAccountViewModel @Inject constructor(
                  * account.
                  */
                 firestore.runTransaction { transaction ->
+                    val currentQueueRevision = if (effectiveRole == UserRole.Driver) {
+                        val control = transaction.get(queueControlReference)
+                        val current = control.getLong("revision") ?: 0L
+                        if (current != observedQueueRevision) {
+                            throw IllegalStateException(
+                                "Nagbago ang pila habang gumagawa ng account. Subukan muli."
+                            )
+                        }
+                        current
+                    } else 0L
 
                     val freshPositions = queueIds
                         .map {
@@ -371,6 +388,14 @@ class CreateAccountViewModel @Inject constructor(
                             .document(queueId)
 
                         transaction.set(queueReference, queueData)
+                        transaction.set(
+                            queueControlReference,
+                            mapOf(
+                                "revision" to currentQueueRevision + 1L,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        )
                     }
                 }.await()
 

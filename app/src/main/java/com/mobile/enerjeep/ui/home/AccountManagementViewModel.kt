@@ -338,71 +338,93 @@ class AccountManagementViewModel @Inject constructor(
                 val userReference = firestore
                     .collection(FirestoreCollections.USERS)
                     .document(account.id)
+                val secretReference = firestore
+                    .collection(FirestoreCollections.USER_SECRETS)
+                    .document(account.id)
+                val queueControlReference = firestore
+                    .collection(FirestoreCollections.SETTINGS)
+                    .document("queueControl")
 
-                val batch = firestore.batch()
+                // Capture the queue revision before taking a queue snapshot.
+                // The transaction rejects this deletion if another queue
+                // operation changes the shared revision in the meantime.
+                val observedQueueRevision = queueControlReference.get().await()
+                    .getLong("revision") ?: 0L
+                val queueReferences = if (account.role == "Driver") {
+                    firestore.collection(FirestoreCollections.QUEUE)
+                        .get().await().documents.map { it.reference }
+                } else emptyList()
 
-                if (account.role == "Driver") {
-                    val queueDocuments = firestore
-                        .collection(FirestoreCollections.QUEUE)
-                        .get()
-                        .await()
-                        .documents
-
-                    val openEntriesToDelete = queueDocuments.filter {
-                        it.getString("driverId") == account.userId &&
-                                isOpenQueueStatus(
-                                    it.getString("status")
-                                )
+                firestore.runTransaction { transaction ->
+                    val control = transaction.get(queueControlReference)
+                    val currentRevision = control.getLong("revision") ?: 0L
+                    if (currentRevision != observedQueueRevision) {
+                        throw IllegalStateException(
+                            "Nagbago ang pila habang binubura ang account. I-refresh at subukan muli."
+                        )
                     }
 
-                    openEntriesToDelete.forEach { document ->
-                        batch.delete(document.reference)
+                    val userDocument = transaction.get(userReference)
+                    if (!userDocument.exists()) {
+                        throw IllegalStateException("Hindi na makita ang account.")
                     }
 
-                    val deletedIds = openEntriesToDelete
-                        .map { it.id }
-                        .toSet()
+                    if (account.role == "Driver") {
+                        val queueDocuments = queueReferences
+                            .map { transaction.get(it) }
+                            .filter { it.exists() }
 
-                    val remainingActive = queueDocuments
-                        .filter {
-                            it.id !in deletedIds &&
-                                    isOpenQueueStatus(
-                                        it.getString("status")
-                                    )
+                        val entriesToDelete = queueDocuments.filter {
+                            it.getString("driverId") == account.userId &&
+                                isOpenQueueStatus(it.getString("status"))
                         }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                it.getLong("position") ?: Long.MAX_VALUE
-                            }.thenBy {
-                                queueDateSeconds(
-                                    it,
-                                    "createdAt"
-                                ) ?: Long.MAX_VALUE
+                        val deletedIds = entriesToDelete.map { it.id }.toSet()
+
+                        entriesToDelete.forEach { transaction.delete(it.reference) }
+
+                        // Queue positions are independent per route.
+                        queueDocuments
+                            .filter {
+                                it.id !in deletedIds &&
+                                    isOpenQueueStatus(it.getString("status"))
                             }
-                        )
-
-                    remainingActive.forEachIndexed { index, document ->
-                        batch.update(
-                            document.reference,
-                            mapOf(
-                                "position" to index + 1,
-                                "updatedAt" to FieldValue.serverTimestamp()
-                            )
-                        )
+                            .groupBy { it.getString("route").orEmpty() }
+                            .values
+                            .forEach { routeEntries ->
+                                routeEntries
+                                    .sortedWith(
+                                        compareBy<DocumentSnapshot> {
+                                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                                        }.thenBy {
+                                            it.getLong("position") ?: Long.MAX_VALUE
+                                        }.thenBy {
+                                            queueDateSeconds(it, "createdAt") ?: Long.MAX_VALUE
+                                        }
+                                    )
+                                    .forEachIndexed { index, document ->
+                                        transaction.update(
+                                            document.reference,
+                                            mapOf(
+                                                "position" to index + 1,
+                                                "updatedAt" to FieldValue.serverTimestamp()
+                                            )
+                                        )
+                                    }
+                            }
                     }
-                }
 
-                // Preserve previous dispatch and ledger records.
-                batch.delete(userReference)
-
-                // Remove the stored password hash with the account.
-                batch.delete(
-                    firestore
-                        .collection(FirestoreCollections.USER_SECRETS)
-                        .document(account.id)
-                )
-
-                batch.commit().await()
+                    // Preserve completed dispatch and ledger history.
+                    transaction.delete(userReference)
+                    transaction.delete(secretReference)
+                    transaction.set(
+                        queueControlReference,
+                        mapOf(
+                            "revision" to currentRevision + 1L,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                }.await()
 
                 ActivityLogger.log(
                     firestore,

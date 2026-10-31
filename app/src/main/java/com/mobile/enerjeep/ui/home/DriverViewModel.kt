@@ -6,6 +6,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.safeTimestamp
@@ -23,6 +24,7 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import javax.inject.Inject
 
 
@@ -297,122 +299,38 @@ class DriverViewModel @Inject constructor(
      * "Tapos Na": ang driver ay aalis sa pila (status "completed" ->
      * Kasaysayan) at ang nasa likod niya ay uusad.
      */
+    private var endingTravel = false
+
+    /** Completes only this driver's own trip through a trusted transaction. */
     fun endTravel() {
         val docId = _uiState.value.activeQueueDocId
         if (docId.isBlank()) {
             ToastFeedback.show("Wala ka sa pila ngayon.")
             return
         }
+        if (endingTravel) return
 
+        endingTravel = true
         viewModelScope.launch {
             try {
-                val target = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .document(docId)
-                    .get()
+                FirebaseFunctions.getInstance()
+                    .getHttpsCallable("finishDriverTravel")
+                    .call(mapOf("queueEntryId" to docId))
                     .await()
-
-                if (!target.exists() ||
-                    !isActiveQueueStatus(target.getString("status"))
-                ) {
-                    throw IllegalStateException(
-                        "Wala na sa pila ang sasakyang ito."
-                    )
-                }
-
-                val queueSnapshot = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .get()
-                    .await()
-
-                val queueReferencesById =
-                    queueSnapshot.documents.associate { it.id to it.reference }
-
-                firestore.runTransaction { transaction ->
-                    val fresh = transaction.get(target.reference)
-                    if (!fresh.exists() ||
-                        !isActiveQueueStatus(fresh.getString("status"))
-                    ) {
-                        throw IllegalStateException(
-                            "Wala na sa pila ang sasakyang ito."
-                        )
-                    }
-
-                    /*
-                     * FRESH read of the pila inside the transaction
-                     * (per-doc get - pareho ng QueueRotation) kaya tama
-                     * ang renumbering kahit sabay-sabay ang galaw.
-                     */
-                    val remaining = queueReferencesById
-                        .filterKeys { it != docId }
-                        .values
-                        .map { transaction.get(it) }
-                        .filter {
-                            it.exists() &&
-                                    isActiveQueueStatus(it.getString("status")) &&
-                                    QueueViewModel.sameRoute(
-                                        it.getString("route"),
-                                        fresh.getString("route")
-                                    )
-                        }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                if (it.getBoolean("isCancelled") == true) 1 else 0
-                            }.thenBy {
-                                it.getLong("position") ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.safeTimestamp("createdAt")?.seconds
-                                    ?: Long.MAX_VALUE
-                            }
-                        )
-
-                    transaction.update(
-                        target.reference,
-                        mapOf(
-                            "status" to "completed",
-                            "endTravelAt" to FieldValue.serverTimestamp(),
-                            "updatedAt" to FieldValue.serverTimestamp(),
-                            "position" to 0
-                        )
-                    )
-
-                    remaining.forEachIndexed { index, document ->
-                        transaction.update(
-                            document.reference,
-                            mapOf(
-                                "position" to index + 1,
-                                "updatedAt" to FieldValue.serverTimestamp()
-                            )
-                        )
-                    }
-
-                    true
-                }.await()
 
                 ActivityLogger.log(
                     firestore,
                     userSession,
                     "Tapos Na Bumyahe",
-                    target.getString("plateNumber").orEmpty()
+                    _uiState.value.plateNumber
                 )
-
-                /*
-                 * "Tapos Na Bumyahe": pula ang button at lalabas sa
-                 * ibaba nito ang buong kita ng driver sa buong araw -
-                 * hindi na kailangang pumunta sa Kita tab.
-                 */
-                _uiState.value = _uiState.value.copy(
-                    travelEndedToday = true
-                )
+                _uiState.value = _uiState.value.copy(travelEndedToday = true)
                 loadDailyEarnings()
-
-                ToastFeedback.show(
-                    "Tapos na ang biyahe. Wala ka na sa pila."
-                )
+                ToastFeedback.show("Tapos na ang biyahe. Wala ka na sa pila.")
             } catch (e: Exception) {
-                ToastFeedback.show(
-                    e.message ?: "Hindi matapos ang biyahe."
-                )
+                ToastFeedback.show(e.message ?: "Hindi matapos ang biyahe.")
+            } finally {
+                endingTravel = false
             }
         }
     }
@@ -429,7 +347,7 @@ class DriverViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val byDriver = if (userId.isBlank()) {
+                val dispatchDocs = if (userId.isBlank()) {
                     emptyList()
                 } else {
                     firestore
@@ -438,46 +356,20 @@ class DriverViewModel @Inject constructor(
                         .get()
                         .await()
                         .documents
-                }
-
-                val plate = profile.plateNumber?.trim().orEmpty()
-                val byPlate = if (plate.isBlank()) {
-                    emptyList()
-                } else {
-                    firestore
-                        .collection(FirestoreCollections.LEDGER)
-                        .whereEqualTo("plateNumber", plate)
-                        .get()
-                        .await()
-                        .documents
-                }
-
-                val dispatchDocs = (byDriver + byPlate)
-                    .distinctBy { it.id }
-                    .filter { document ->
-                        val owner = document.getString("driverId")
-                            .orEmpty().trim()
-                        (owner.isBlank() || owner == userId) &&
+                        .filter { document ->
+                            document.getString("driverId")?.trim() == userId &&
                                 (
-                                        document.getString("source")
-                                            .orEmpty().trim()
-                                            .equals(
-                                                "queue_dispatch",
-                                                ignoreCase = true
-                                            ) ||
-                                                document.getString("feeType")
-                                                    .orEmpty().trim()
-                                                    .equals(
-                                                        "Dispatch",
-                                                        ignoreCase = true
-                                                    )
-                                        )
-                    }
-                    .distinctBy { document ->
-                        document.getString("queueId")?.trim()
-                            ?.takeIf { it.isNotBlank() }
-                            ?: document.id
-                    }
+                                    document.getString("source").orEmpty().trim()
+                                        .equals("queue_dispatch", ignoreCase = true) ||
+                                    document.getString("feeType").orEmpty().trim()
+                                        .equals("Dispatch", ignoreCase = true)
+                                )
+                        }
+                        .distinctBy { document ->
+                            document.getString("queueId")?.trim()
+                                ?.takeIf { it.isNotBlank() } ?: document.id
+                        }
+                }
 
                 val records = KitaHistory.merge(
                     dispatchDocs.map { mapDispatchLedger(it) }
@@ -570,10 +462,10 @@ class DriverViewModel @Inject constructor(
     private fun isToday(millis: Long): Boolean {
         if (millis <= 0L) return false
 
-        val dayKey = SimpleDateFormat(
-            "yyyyMMdd",
-            Locale.getDefault()
-        )
+        val manila = TimeZone.getTimeZone("Asia/Manila")
+        val dayKey = SimpleDateFormat("yyyyMMdd", Locale.US).apply {
+            timeZone = manila
+        }
         return dayKey.format(Date()) == dayKey.format(Date(millis))
     }
 

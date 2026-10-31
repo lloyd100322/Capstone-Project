@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
@@ -375,161 +376,20 @@ class DriverProfileViewModel @Inject constructor(
 
             try {
 
-                val users =
-                    firestore.collection(
-                        FirestoreCollections.USERS
-                    )
-
-                val oldRef =
-                    users.document(
-                        currentPhone
-                    )
-
-                val cleanFirstName =
-                    state.firstName.trim()
-
-                val cleanLastName =
-                    state.lastName.trim()
-
-                val cleanLicense =
-                    state.licenseNumber.trim()
-
-                val cleanEmergency =
-                    EmergencyContact.combine(
-                        cleanEmergencyName,
-                        cleanEmergencyNumber
-                    )
-
-                /*
-                 * A plate number must stay unique, the same rule the
-                 * Create Account screen uses. Otherwise reports would
-                 * attach earnings and incidents to the wrong driver.
-                 *
-                 * Drivers may not list every account (only admins can),
-                 * so the double-check is best effort here: when the
-                 * database refuses the list, the save continues. The
-                 * Create Account screen (admin) is the strict gate.
-                 */
-                if (cleanPlate != oldProfile.plateNumber) {
-                    val alreadyUsed = try {
-                        users
-                            .whereEqualTo("role", "driver")
-                            .get()
-                            .await()
-                            .documents
-                            .any {
-                                it.id != currentPhone &&
-                                        PhilippineIdentifiers.platesMatch(
-                                            it.getString("plateNumber"),
-                                            cleanPlate
-                                        )
-                            }
-                    } catch (_: Exception) {
-                        false
-                    }
-
-                    if (alreadyUsed) {
-                        ToastFeedback.show(
-                            "Ginagamit na ng ibang driver ang plate number na ito"
-                        )
-                        return@launch
-                    }
-                }
-
-                oldRef
-                    .update(
-                        mapOf<String, Any>(
-                            "firstName" to
-                                    cleanFirstName,
-
-                            "lastName" to
-                                    cleanLastName,
-
-                            "licenseNumber" to
-                                    cleanLicense,
-
-                            "plateNumber" to
-                                    cleanPlate,
-
-                            "emergencyContact" to
-                                    cleanEmergency,
-
-                            "emergencyContactName" to
-                                    cleanEmergencyName,
-
-                            "emergencyContactNumber" to
-                                    cleanEmergencyNumber,
-
-                            "updatedAt" to
-                                    FieldValue
-                                        .serverTimestamp()
+                FirebaseFunctions.getInstance()
+                    .getHttpsCallable("updateDriverProfile")
+                    .call(
+                        mapOf(
+                            "firstName" to cleanFirstName,
+                            "lastName" to cleanLastName,
+                            "licenseNumber" to cleanLicense,
+                            "plateNumber" to cleanPlate,
+                            "emergencyContact" to cleanEmergency,
+                            "emergencyContactName" to cleanEmergencyName,
+                            "emergencyContactNumber" to cleanEmergencyNumber
                         )
                     )
                     .await()
-
-                /*
-                 * Keep active queue records synchronized
-                 * with the driver's updated name and plate.
-                 */
-                val queueSnapshot =
-                    firestore
-                        .collection(
-                            FirestoreCollections.QUEUE
-                        )
-                        .whereEqualTo(
-                            "driverId",
-                            oldProfile.userId
-                        )
-                        .get()
-                        .await()
-
-                val batch =
-                    firestore.batch()
-
-                queueSnapshot.documents.forEach {
-                        queueDocument ->
-
-                    val status =
-                        queueDocument
-                            .getString("status")
-                            ?.lowercase()
-
-                    val isActive = status !in setOf(
-                        "dispatched",
-                        "cancelled",
-                        "completed",
-                        "resolved"
-                    )
-
-                    if (isActive) {
-                        batch.update(
-                            queueDocument.reference,
-                            mapOf(
-                                "driverName" to
-                                        listOf(
-                                            cleanFirstName,
-                                            cleanLastName
-                                        )
-                                            .filter {
-                                                it.isNotBlank()
-                                            }
-                                            .joinToString(" ")
-                                            .ifBlank {
-                                                "Driver"
-                                            },
-
-                                "plateNumber" to
-                                        cleanPlate,
-
-                                "updatedAt" to
-                                        FieldValue
-                                            .serverTimestamp()
-                            )
-                        )
-                    }
-                }
-
-                batch.commit().await()
 
                 userSession.setUser(
                     oldProfile.copy(

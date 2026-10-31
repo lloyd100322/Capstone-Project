@@ -154,18 +154,21 @@ are **not** in the code:
    (the token is printed in Logcat as "Firebase App Check debug token").
    A 403 on a new device is normal until the token is registered.
 
-4. **Cloud Function — delete Auth user on account deletion** (optional
-   but recommended; requires the Blaze/pay-as-you-go plan):
+4. **Cloud Functions** (requires the Blaze/pay-as-you-go plan):
 
    ```bash
    cd functions && npm install && cd ..
    firebase deploy --only functions
    ```
 
-   Without it, deleting an account in the app removes the Firestore
-   data but leaves the Firebase Auth record behind (the phone number
-   then cannot be reused). With it, `functions/index.js` deletes the
-   Auth user automatically.
+   Deploy this after updating the code. The functions include:
+   - `finishDriverTravel` — verifies the signed-in driver's phone and userId, then completes the trip and reorders the route on the server in one transaction. The driver's **Tapos Na Bumyahe** action requires this function.
+   - `updateDriverProfile` — validates the driver's profile and plate uniqueness, then updates the profile and that driver's active queue display fields atomically.
+   - `dailyQueueReset` — scheduled queue rotation (the app also has a catch-up fallback).
+   - `onQueueDispatched` — dispatch push notifications.
+   - `deleteAuthUserOnAccountDelete` — removes the Firebase Authentication account after its Firestore user document is deleted.
+
+   The callable completion function enforces App Check, so register the debug token for development devices before testing it.
 
 5. **Firestore indexes**: if the app log prints a "requires an index"
    link, open it once while signed in to the Firebase console to create

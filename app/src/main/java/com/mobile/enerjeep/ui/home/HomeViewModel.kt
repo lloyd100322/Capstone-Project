@@ -111,6 +111,10 @@ class HomeViewModel @Inject constructor(
                     .orEmpty()
             }
 
+        // Dashboard-wide data is admin-only. Driver screens load their
+        // own authorized datasets through DriverViewModel.
+        if (!userSession.isAdmin()) return
+
         /*
          * Total registered drivers.
          */

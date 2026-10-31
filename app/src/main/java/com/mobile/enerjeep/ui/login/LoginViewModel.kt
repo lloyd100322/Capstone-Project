@@ -90,94 +90,14 @@ class LoginViewModel @Inject constructor(
         currentPhoneNumber = cleanPhoneNumber
 
         viewModelScope.launch {
-            /*
-             * Password check MUNA bago magpadala ng OTP: hindi dapat
-             * gumastos ng SMS kapag mali ang password. get lang ang
-             * userSecrets (walang listahan - kailangang alam ang
-             * numero). null = walang maayos na hash (legacy o offline),
-             * kaya tuloy sa OTP; ang post-OTP verify pa rin ang
-             * authoritative at buo.
-             */
+            // Verify OTP before reading password hashes. This keeps
+            // /userSecrets owner-only while preserving password + OTP login.
             _uiState.value = LoginUiState.Loading
-
-            val preCheck = preCheckPassword(cleanPhoneNumber, password)
-
-            if (preCheck == false) {
-                _uiState.value = LoginUiState.Error(
-                    "Maling numero o password. Subukan muli."
-                )
-                return@launch
-            }
-
             triggerSmsVerification(
                 phoneNumber = cleanPhoneNumber,
                 activity = activity,
                 isResend = false
             )
-        }
-    }
-
-    /**
-     * Pre-login password check laban sa userSecrets (PBKDF2). Read-
-     * only: walang anumang ina-upgrade o inililipat bago mag-OTP.
-     * true = tama; false = mali; null = walang matse-check (legacy
-     * o error) - magpapatuloy sa OTP path.
-     */
-    private suspend fun preCheckPassword(
-        phoneNumber: String,
-        typedPassword: String
-    ): Boolean? {
-        return try {
-            val secrets = firestore
-                .collection(FirestoreCollections.USER_SECRETS)
-                .document(phoneNumber)
-                .get()
-                .await()
-
-            val salt = secrets.getString("passwordSalt")
-            val hash = secrets.getString("passwordHash")
-
-            if (salt.isNullOrBlank() || hash.isNullOrBlank()) return null
-
-            val storedIterations = secrets.getLong("iterations")?.toInt()
-                ?: PasswordHasher.LEGACY_ITERATIONS
-
-            if (PasswordHasher.verify(
-                    typedPassword,
-                    salt,
-                    hash,
-                    storedIterations
-                )
-            ) {
-                return true
-            }
-
-            /*
-             * Stale-hash fallback: kung may legacy plaintext password
-             * pa sa profile at TUGMA ito, huwag i-deny dito - hayaan ang
-             * OTP path na ayusin ang hash (self-heal sa post-OTP verify).
-             * Kapag hindi mabasa ang profile (hal. denied pre-auth) o
-             * hindi tugma ang legacy, MANANATILI ang "false" - ang hash
-             * rejection ay definitive para sa pre-OTP error.
-             */
-            val legacy = try {
-                firestore
-                    .collection(FirestoreCollections.USERS)
-                    .document(phoneNumber)
-                    .get()
-                    .await()
-                    .getString("password")
-            } catch (_: Exception) {
-                null
-            }
-
-            if (legacy == typedPassword && !legacy.isNullOrBlank()) {
-                return null
-            }
-
-            false
-        } catch (_: Exception) {
-            null
         }
     }
 

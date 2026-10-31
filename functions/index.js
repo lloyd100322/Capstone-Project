@@ -19,6 +19,7 @@
  */
 
 const { onDocumentDeleted, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -26,7 +27,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 exports.deleteAuthUserOnAccountDelete = onDocumentDeleted(
-  "users/{phone}",
+  { document: "users/{phone}", retry: true },
   async (event) => {
     // The document id of /users is the phone number, e.g. "+639171234567".
     const phone = event.params.phone;
@@ -43,9 +44,8 @@ exports.deleteAuthUserOnAccountDelete = onDocumentDeleted(
         return;
       }
 
-      // Never throw: the Firestore deletion already happened and failing
-      // here would only retry forever. Log for the operator instead.
-      console.error(`Failed to delete Auth user for ${phone}:`, error);
+      console.error(`Failed to delete Auth user for ${phone}; retrying:`, error);
+      throw error;
     }
   }
 );
@@ -121,9 +121,16 @@ exports.dailyQueueReset = onSchedule(
 
     // Simple read muna para makuha ang mga id (walang query sa loob ng
     // transaction sa mobile/admin SDK - pareho ng QueueRotation).
+    const queueControlRef = db.collection("settings").doc("queueControl");
+    const observedRevision = (await queueControlRef.get()).get("revision") || 0;
     const queueIds = (await db.collection("queue").get()).docs.map((d) => d.id);
 
     const rotated = await db.runTransaction(async (tx) => {
+      const queueControl = await tx.get(queueControlRef);
+      const currentRevision = queueControl.get("revision") || 0;
+      if (currentRevision !== observedRevision) {
+        throw new Error("Queue changed during scheduled reset; retry on next schedule.");
+      }
       const meta = await tx.get(metaRef);
       const rawHour = meta.get("cutoffHour");
       const cutoffHour =
@@ -167,6 +174,11 @@ exports.dailyQueueReset = onSchedule(
       tx.set(
         metaRef,
         { lastQueueDay: today, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      tx.set(
+        queueControlRef,
+        { revision: currentRevision + 1, updatedAt: FieldValue.serverTimestamp() },
         { merge: true }
       );
       return true;
@@ -257,5 +269,235 @@ exports.onQueueDispatched = onDocumentUpdated(
       }
     }
     return null;
+  }
+);
+
+
+/**
+ * Completes the authenticated driver's own queue entry. The server verifies
+ * the Phone Auth identity and changes the entry and route positions in one
+ * Admin SDK transaction; clients cannot reorder another driver's queue row.
+ */
+exports.finishDriverTravel = onCall(
+  { enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    }
+
+    const phone = request.auth.token.phone_number;
+    if (typeof phone !== "string" || !phone) {
+      throw new HttpsError("permission-denied", "Walang verified phone number.");
+    }
+
+    const userSnap = await db.collection("users").doc(phone).get();
+    if (!userSnap.exists || userSnap.get("role") !== "driver") {
+      throw new HttpsError("permission-denied", "Driver account lamang ang puwedeng magtapos ng biyahe.");
+    }
+
+    const driverId = userSnap.get("userId");
+    const entryId = request.data && request.data.queueEntryId;
+    if (typeof driverId !== "string" || !driverId ||
+        typeof entryId !== "string" || !entryId) {
+      throw new HttpsError("invalid-argument", "Invalid queue entry.");
+    }
+
+    const entryRef = db.collection("queue").doc(entryId);
+    const queueControlRef = db.collection("settings").doc("queueControl");
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const entry = await tx.get(entryRef);
+        if (!entry.exists || entry.get("driverId") !== driverId ||
+            !isQueueActive(entry.data()) || entry.get("isCancelled") === true) {
+          // An already-completed request is safe to repeat after a network timeout.
+          if (entry.exists &&
+              entry.get("driverId") === driverId &&
+              entry.get("status") === "completed") return;
+          throw new HttpsError("failed-precondition", "Wala na sa aktibong pila ang sasakyang ito.");
+        }
+
+        const route = entry.get("route");
+        if (typeof route !== "string" || !route) {
+          throw new HttpsError("failed-precondition", "Walang valid na ruta ang queue entry.");
+        }
+
+        const routeSnapshot = await tx.get(
+          db.collection("queue").where("route", "==", route)
+        );
+        const remaining = routeSnapshot.docs
+          .filter((doc) => doc.id !== entryId &&
+            !QUEUE_STATUSES_INACTIVE.includes(String(doc.get("status") || "").toLowerCase()))
+          .sort((a, b) => {
+            const cancelledA = a.get("isCancelled") === true ? 1 : 0;
+            const cancelledB = b.get("isCancelled") === true ? 1 : 0;
+            return cancelledA - cancelledB ||
+              (a.get("position") ?? Number.MAX_SAFE_INTEGER) -
+              (b.get("position") ?? Number.MAX_SAFE_INTEGER);
+          });
+
+        const control = await tx.get(queueControlRef);
+        const revision = control.get("revision") || 0;
+
+        tx.update(entryRef, {
+          status: "completed",
+          endTravelAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          position: 0,
+        });
+        remaining.forEach((doc, index) => {
+          tx.update(doc.ref, {
+            position: index + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+        tx.set(queueControlRef, {
+          revision: revision + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("finishDriverTravel failed:", error);
+      throw new HttpsError("internal", "Hindi matapos ang biyahe. Subukan muli.");
+    }
+
+    return { success: true };
+  }
+);
+
+
+/**
+ * Updates the authenticated driver's editable profile and synchronizes only
+ * that driver's active queue display fields in the same server transaction.
+ * Plate uniqueness is enforced against current user records, not by a
+ * best-effort client-side list query.
+ */
+exports.updateDriverProfile = onCall(
+  { enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    }
+
+    const phone = request.auth.token.phone_number;
+    if (typeof phone !== "string" || !phone) {
+      throw new HttpsError("permission-denied", "Walang verified phone number.");
+    }
+
+    const data = request.data || {};
+    const firstName = typeof data.firstName === "string" ? data.firstName.trim() : null;
+    const lastName = typeof data.lastName === "string" ? data.lastName.trim() : null;
+    const licenseNumber = typeof data.licenseNumber === "string" ? data.licenseNumber.trim() : null;
+    const plateNumber = typeof data.plateNumber === "string" ? data.plateNumber.trim().toUpperCase() : null;
+    const emergencyContactName = typeof data.emergencyContactName === "string"
+      ? data.emergencyContactName.trim() : null;
+    const emergencyContactNumber = typeof data.emergencyContactNumber === "string"
+      ? data.emergencyContactNumber.trim() : null;
+    const emergencyContact = typeof data.emergencyContact === "string"
+      ? data.emergencyContact.trim() : null;
+
+    if ([firstName, lastName, licenseNumber, plateNumber,
+         emergencyContactName, emergencyContactNumber, emergencyContact]
+        .some((value) => value === null)) {
+      throw new HttpsError("invalid-argument", "Kulang o invalid ang profile fields.");
+    }
+
+    const normalizedPlate = plateNumber.replace(/[^A-Z0-9]/g, "");
+    if (!/^[A-Z]{2,3}[0-9]{1,4}$/.test(normalizedPlate)) {
+      throw new HttpsError("invalid-argument", "Invalid ang plate number.");
+    }
+
+    if (licenseNumber &&
+        (licenseNumber.length > 20 ||
+         !/^[A-Za-z0-9 -]+$/.test(licenseNumber) ||
+         !/[0-9]/.test(licenseNumber))) {
+      throw new HttpsError("invalid-argument", "Invalid ang driver license number.");
+    }
+
+    const nameDigits = (emergencyContactName.match(/[0-9]/g) || []).length;
+    if (!emergencyContactName ||
+        emergencyContactName.length > 50 ||
+        nameDigits > 11 ||
+        !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(emergencyContactName) ||
+        !/^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .'-]+$/.test(emergencyContactName)) {
+      throw new HttpsError("invalid-argument", "Invalid ang pangalan ng emergency contact.");
+    }
+
+    if (!/^(09[0-9]{9}|\+639[0-9]{9})$/.test(emergencyContactNumber)) {
+      throw new HttpsError("invalid-argument", "Invalid ang emergency contact number.");
+    }
+
+    const userRef = db.collection("users").doc(phone);
+    const queueControlRef = db.collection("settings").doc("queueControl");
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists || userSnap.get("role") !== "driver") {
+          throw new HttpsError("permission-denied", "Driver account lamang ang maaaring mag-edit ng profile.");
+        }
+
+        const driverId = userSnap.get("userId");
+        if (typeof driverId !== "string" || !driverId) {
+          throw new HttpsError("failed-precondition", "Walang valid na User ID ang account.");
+        }
+
+        const drivers = await tx.get(
+          db.collection("users").where("role", "==", "driver")
+        );
+        const duplicatePlate = drivers.docs.some((doc) =>
+          doc.id !== phone &&
+          String(doc.get("plateNumber") || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "") === normalizedPlate
+        );
+        if (duplicatePlate) {
+          throw new HttpsError("already-exists", "Ginagamit na ng ibang driver ang plate number na ito.");
+        }
+
+        const queueSnapshot = await tx.get(
+          db.collection("queue").where("driverId", "==", driverId)
+        );
+        const control = await tx.get(queueControlRef);
+        const revision = control.get("revision") || 0;
+
+        tx.update(userRef, {
+          firstName,
+          lastName,
+          licenseNumber,
+          plateNumber,
+          emergencyContact,
+          emergencyContactName,
+          emergencyContactNumber,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const driverName = [firstName, lastName]
+          .filter((value) => value)
+          .join(" ") || "Driver";
+
+        queueSnapshot.docs.forEach((document) => {
+          const status = String(document.get("status") || "").toLowerCase();
+          if (QUEUE_STATUSES_INACTIVE.includes(status)) return;
+          tx.update(document.ref, {
+            driverName,
+            plateNumber,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+
+        tx.set(queueControlRef, {
+          revision: revision + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("updateDriverProfile failed:", error);
+      throw new HttpsError("internal", "Hindi ma-update ang profile. Subukan muli.");
+    }
+
+    return { success: true };
   }
 );

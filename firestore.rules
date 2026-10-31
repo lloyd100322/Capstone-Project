@@ -88,46 +88,46 @@ service cloud.firestore {
       // User levels: only a superadmin may create an ADMIN account. An
       // admin may create driver accounts only (the app enforces this
       // too - here it is the safety net).
-      allow create: if (isAdmin()
-                        && hasNoPasswordField()
-                        && (isSuperadmin()
-                            || request.resource.data.role == 'driver'));
+      allow create: if isAdmin()
+        && hasNoPasswordField()
+        && request.resource.data.keys().hasOnly([
+             'userId', 'firstName', 'lastName', 'phoneNumber', 'role',
+             'status', 'createdAt', 'licenseNumber', 'plateNumber',
+             'seater', 'emergencyContactName', 'emergencyContactNumber',
+             'emergencyContact', 'isVehicleActive', 'adminStation'
+           ])
+        && request.resource.data.userId is string
+        && request.resource.data.phoneNumber == phone
+        && request.resource.data.role in ['admin', 'driver']
+        && request.resource.data.status == 'active'
+        && (isSuperadmin() || request.resource.data.role == 'driver');
 
-      // An admin edits any profile (activate/deactivate). Never accept a
-      // plaintext password, but legacy documents that still have one can
-      // be updated.
-      //
-      // Only a superadmin may CHANGE the role field of an account
-      // (promote/demote). This stops an admin from promoting himself.
-      allow update: if (isAdmin()
-                        && doesNotSetPassword()
-                        && (isSuperadmin()
-                            || !request.resource.data.diff(resource.data)
-                                 .affectedKeys()
-                                 .hasAny(['role'])));
-
-      // A user edits only his own DISPLAY profile: name, license, plate
-      // at emergency contact (ito ang buong ibinibigay ng sariling
-      // profile screen ng app). Identity and account-state fields
-      // (userId, role, status, seater, isVehicleActive, adminStation,
-      // createdAt) are NEVER writable by the owner - they would break
-      // the queue/ledger joins or change the account's level. `fcmToken`
-      // is the device's push address (saved at login/token refresh) -
-      // owner-writable like the profile itself. The LEGACY plaintext
-      // `password` field may only be REMOVED (doesNotSetPassword still
-      // blocks setting a value).
-      allow update: if (isMember() && isOwner(phone)
-                        && doesNotSetPassword()
-                        && request.resource.data.diff(resource.data)
-                             .affectedKeys()
-                             .hasOnly(['firstName', 'lastName',
-                                       'licenseNumber', 'plateNumber',
-                                       'emergencyContactName',
-                                       'emergencyContactNumber',
-                                       'emergencyContact',
-                                       'fcmToken',
-                                       'updatedAt',
-                                       'password']));
+      // Account-state changes are restricted to explicit mutable fields.
+      allow update: if (
+          isAdmin()
+          && doesNotSetPassword()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'isVehicleActive', 'updatedAt'])
+          && (isSuperadmin() || resource.data.role == 'driver')
+        )
+        || (
+          isSuperadmin()
+          && doesNotSetPassword()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['role', 'updatedAt'])
+          && request.resource.data.role in ['admin', 'driver', 'superadmin']
+        )
+        || (
+          isMember()
+          && isOwner(phone)
+          && doesNotSetPassword()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly([
+                 'firstName', 'lastName',
+                 'emergencyContactName', 'emergencyContactNumber',
+                 'emergencyContact', 'fcmToken', 'updatedAt', 'password'
+               ])
+        );
 
       allow delete: if isAdmin();
     }
@@ -136,18 +136,32 @@ service cloud.firestore {
     // /userSecrets - salted password hashes, owner-only reads
     // ------------------------------------------------------------------
     match /userSecrets/{phone} {
-      // Pre-login password check (UX): bago magpadala ng OTP, binabasa
-      // ng app ang hash ng user na ito para matiyak na tama ang password.
-      // `get` lang - HINDI maaaring i-list (walang enumeration); dapat
-      // alam ang numero. PBKDF2 (210k) ang hash kaya mamahal ang offline
-      // cracking; App Check (Play Integrity) ang kalasag laban sa script.
-      // Owner-only pa rin ang lahat ng iba; post-OTP verify ang final.
-      allow get: if request.auth == null || isOwner(phone);
+      // Password verification occurs only after Firebase Phone Auth has
+      // established the matching phone-number session. The client never
+      // receives password hashes before OTP verification.
+      allow get: if isOwner(phone);
       allow list: if false;
 
       // The owner sets their own secret (register / change / reset) and
       // an admin sets it once when creating the account.
-      allow create, update: if isOwner(phone) || isAdmin();
+      function validSecret() {
+        return request.resource.data.keys().hasOnly([
+                 'passwordHash', 'passwordSalt', 'iterations',
+                 'createdAt', 'updatedAt'
+               ])
+               && request.resource.data.keys().hasAll([
+                 'passwordHash', 'passwordSalt', 'iterations'
+               ])
+               && request.resource.data.passwordHash is string
+               && request.resource.data.passwordHash.size() > 0
+               && request.resource.data.passwordSalt is string
+               && request.resource.data.passwordSalt.size() > 0
+               && request.resource.data.iterations is int
+               && request.resource.data.iterations > 0;
+      }
+
+      allow create: if validSecret() && (isOwner(phone) || isAdmin());
+      allow update: if validSecret() && isOwner(phone);
       allow delete: if isAdmin();
     }
 
@@ -158,40 +172,11 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, delete: if isAdmin();
 
-      // Admins manage the pila. A driver may also end his OWN travel
-      // ("Tapos Na Bumyahe") - under these limits:
-      //
-      //   (a) own entry: only status/position/endTravelAt/updatedAt may
-      //       change; if the status changes it must become "completed",
-      //       and if the position changes it must become 0 (out of the
-      //       active pila). driverName/plateNumber are the DISPLAY
-      //       fields the profile screen keeps in sync after a rename
-      //       (identity driverId stays untouchable). A modified client
-      //       can no longer move itself up the queue or fake its status.
-      //   (b) other entries: finishing travel renumbers the pila behind
-      //       the driver - a pure position reflow. Identity and status
-      //       fields stay untouchable, and a driver can never use this
-      //       clause on his own entry (that is (a) above).
-      allow update: if isAdmin()
-        || (isMember()
-            && resource.data.driverId ==
-               get(/databases/$(database)/documents/users/$(authPhone())).data.userId
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['status', 'position', 'endTravelAt',
-                           'driverName', 'plateNumber', 'updatedAt'])
-            && (!request.resource.data.diff(resource.data).affectedKeys()
-                   .hasAny(['status'])
-                 || request.resource.data.status == 'completed')
-            && (!request.resource.data.diff(resource.data).affectedKeys()
-                   .hasAny(['position'])
-                 || request.resource.data.position == 0))
-        || (isMember()
-            && resource.data.driverId !=
-               get(/databases/$(database)/documents/users/$(authPhone())).data.userId
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['position', 'updatedAt'])
-            && request.resource.data.position is number
-            && request.resource.data.position >= 0);
+      // All queue creation, deletion, cancellation, dispatch and position
+      // changes are administrator-only. Drivers finish their own trip via
+      // the authenticated finishDriverTravel callable, which validates the
+      // user's phone/userId mapping and performs an Admin SDK transaction.
+      allow update: if isAdmin();
     }
 
     // ------------------------------------------------------------------
@@ -259,18 +244,14 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     // /ledger - earnings and fees (drivers read their data, admins write)
     //
-    // Drivers query with whereEqualTo("driverId", <own userId>) or
-    // whereEqualTo("plateNumber", <own plate>), which satisfies the
-    // `resource.data` conditions below.
+    // Drivers query only by their own users.userId. Plate numbers are
+    // display identifiers and may be reused, so they never grant access.
     // ------------------------------------------------------------------
     match /ledger/{entryId} {
+      // Driver access is identity-based only. Plates can be reused.
       allow read: if isAdmin()
-                  || (isMember() && (
-                       resource.data.driverId ==
-                         get(/databases/$(database)/documents/users/$(authPhone())).data.userId
-                       || resource.data.plateNumber ==
-                         get(/databases/$(database)/documents/users/$(authPhone())).data.plateNumber
-                     ));
+                  || (isMember() && resource.data.driverId ==
+                       get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
       allow create, update, delete: if isAdmin();
     }
 
