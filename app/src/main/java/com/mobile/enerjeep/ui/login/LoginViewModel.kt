@@ -142,12 +142,34 @@ class LoginViewModel @Inject constructor(
             val storedIterations = secrets.getLong("iterations")?.toInt()
                 ?: PasswordHasher.LEGACY_ITERATIONS
 
-            PasswordHasher.verify(
-                typedPassword,
-                salt,
-                hash,
-                storedIterations
-            )
+            if (PasswordHasher.verify(
+                    typedPassword,
+                    salt,
+                    hash,
+                    storedIterations
+                )
+            ) {
+                return true
+            }
+
+            /*
+             * Stale-hash fallback: kung may legacy plaintext password
+             * pa sa profile at tugma ito, huwag i-deny dito - hayaan ang
+             * OTP path na ayusin ang hash (self-heal sa post-OTP verify).
+             * Ang "false" ay para lang sa TALAGANG mali ang password.
+             */
+            val legacy = firestore
+                .collection(FirestoreCollections.USERS)
+                .document(phoneNumber)
+                .get()
+                .await()
+                .getString("password")
+
+            if (!legacy.isNullOrBlank()) {
+                return if (legacy == typedPassword) null else false
+            }
+
+            false
         } catch (_: Exception) {
             null
         }
@@ -482,15 +504,36 @@ class LoginViewModel @Inject constructor(
                 typedPassword, salt, hash, storedIterations
             )
 
-            if (matched && storedIterations < PasswordHasher.ITERATIONS) {
+            if (matched) {
+                if (storedIterations < PasswordHasher.ITERATIONS) {
+                    try {
+                        persistPasswordHash(phone, typedPassword, userReference)
+                    } catch (e: Exception) {
+                        // Login still succeeds; the next login tries again.
+                        Log.w("Login", "Password upgrade failed", e)
+                    }
+                }
+                return true
+            }
+
+            /*
+             * Self-heal: kung SIRA o LUMA ang hash sa userSecrets pero
+             * tugma pa rin ang legacy plaintext password sa profile,
+             * palitan ang hash (migrate) at hayaang pumasok ang user -
+             * hindi dapat ma-lockout ang account dahil sa sirang hash.
+             * Kung hindi rin tugma ang legacy, talagang mali ang password.
+             */
+            val legacyMatch = data["password"] as? String
+            if (!legacyMatch.isNullOrBlank() && legacyMatch == typedPassword) {
                 try {
                     persistPasswordHash(phone, typedPassword, userReference)
                 } catch (e: Exception) {
                     // Login still succeeds; the next login tries again.
-                    Log.w("Login", "Password upgrade failed", e)
+                    Log.w("Login", "Password self-heal failed", e)
                 }
+                return true
             }
-            return matched
+            return false
         }
 
         // Legacy plaintext account: verify, then migrate to a hash.
