@@ -1,6 +1,5 @@
 package com.mobile.enerjeep.ui.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -150,65 +149,47 @@ class NotificationCenterViewModel @Inject constructor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationCenterBar(
+fun NotificationCenterBell(
     viewModel: NotificationCenterViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
     var showSheet by remember { mutableStateOf(false) }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.White,
-        shadowElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(58.dp)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+    // Bell only: the existing dashboard header supplies the app title.
+    Box {
+        IconButton(
+            onClick = {
+                showSheet = true
+                viewModel.markAllRead()
+            }
         ) {
-            Text(
-                text = "EnerJeep",
-                color = EnerjeepBlue,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+            Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = "Mga Abiso",
+                tint = EnerjeepBlue,
+                modifier = Modifier.size(27.dp)
             )
-            Spacer(Modifier.weight(1f))
-            IconButton(
-                onClick = {
-                    showSheet = true
-                    viewModel.markAllRead()
-                }
+        }
+
+        if (state.unreadCount > 0) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-2).dp, y = 2.dp)
+                    .sizeIn(minWidth = 17.dp, minHeight = 17.dp),
+                shape = CircleShape,
+                color = ErrorRed
             ) {
-                Box {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Mga Abiso",
-                        tint = EnerjeepBlue,
-                        modifier = Modifier.size(27.dp)
+                Box(
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (state.unreadCount > 9) "9+" else state.unreadCount.toString(),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    if (state.unreadCount > 0) {
-                        Surface(
-                            modifier = Modifier
-                                .sizeIn(minWidth = 17.dp, minHeight = 17.dp)
-                                .align(Alignment.TopEnd),
-                            shape = CircleShape,
-                            color = ErrorRed
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(horizontal = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (state.unreadCount > 9) "9+" else state.unreadCount.toString(),
-                                    color = Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
