@@ -237,23 +237,6 @@ fun QueueScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if ((selectedTab == 0 || selectedTab == 1) && !canManageSelectedRoute) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF3F8)),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                        ) {
-                            Text(
-                                text = "READ ONLY • Maaari mong tingnan ang pila ng kabilang terminal, pero hindi ka maaaring mag-dispatch, magkansela, o magbago ng posisyon dito.",
-                                modifier = Modifier.padding(14.dp),
-                                fontSize = 12.sp,
-                                color = TextSecondary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
                     /*
                      * Zoom: PINCH gestures na lang ang gamit (walang
                      * button). Pinch IN = maliit na box (zoom out),
@@ -271,7 +254,7 @@ fun QueueScreen(
                             text = if (canManageSelectedRoute) {
                                 "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon."
                             } else {
-                                "Pinch para mag-zoom • Tingnan lamang ang pila ng kabilang terminal."
+                                "Pinch para mag-zoom."
                             },
                             fontSize = 12.sp,
                             color = TextSecondary
