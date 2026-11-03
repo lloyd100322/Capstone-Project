@@ -178,9 +178,20 @@ are **not** in the code:
    - `finishDriverTravel` — verifies the signed-in driver and completes
      the trip/reorders the route in one server transaction.
    - `updateDriverProfile` — validates the driver's profile and plate
-     uniqueness, then updates the profile and active queue display fields.
+     uniqueness, reserves the normalized plate, then updates the profile
+     and active queue display fields in one transaction.
+   - `getIncidentDriverPhone` — returns the phone number for a shared
+     incident only on demand to an authenticated driver through App Check;
+     new incident documents no longer store the phone number.
    - `deleteAuthUserOnAccountDelete` — removes the Firebase Authentication
      account after its Firestore user document is deleted.
+
+   **Legacy incident contact cleanup:** older incident documents may still
+   contain `driverPhone`. After deploying the updated Functions, from the
+   `functions` folder run `node scripts/remove-incident-phone-fields.js`
+   first as a dry run. Verify the selected project and take a backup before
+   an operator runs it with `--apply`. Do not run the apply mode until the
+   dry-run count and target project have been checked.
 
    The scheduled function uses Cloud Scheduler. Confirm the Cloud Scheduler
    API is enabled in the Google Cloud project; scheduled functions need a
@@ -205,11 +216,11 @@ app/src/main/java/com/mobile/enerjeep/
 │   ├── ledger/      # admin income/fees (Ledger)
 │   ├── report/      # Mga Ulat: income/incidents/fines/donations + charts
 │   ├── incident/    # incident reports (admin + driver)
-│   ├── profile/     # profile editing (emergency contact only), security
+│   ├── profile/     # profile editing (server-validated driver fields), security
 │   └── components/  # shared UI: PesoIcon, LabeledBarChart, date filter, ...
 ├── EnerJeepApp.kt   # App Check initialization
 └── MainActivity.kt
-functions/           # Cloud Function (delete Auth user on account delete)
+functions/           # queue reset, auth, profile, incident, and notification Cloud Functions
 firestore.rules      # Firestore security rules (deploy with the CLI)
 docs/                # architecture justification + scope/limitations
 seed/                # realistic demo data (Firestore seed script)
