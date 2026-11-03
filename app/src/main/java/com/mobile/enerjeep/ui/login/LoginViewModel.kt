@@ -50,8 +50,8 @@ class LoginViewModel @Inject constructor(
     private var resendingToken:
             PhoneAuthProvider.ForceResendingToken? = null
 
-    // A previously verified password hash may be checked locally before SMS.
-    // The authoritative Firestore password check remains after OTP.
+    // These credentials are kept only during the OTP flow; the password
+    // is checked by the server before SMS and rechecked after OTP.
     private var pendingPassword: String? = null
     private var currentPhoneNumber: String? = null
     private var resendAllowedAtMillis: Long = 0L
