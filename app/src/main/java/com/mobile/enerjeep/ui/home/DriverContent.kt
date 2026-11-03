@@ -298,7 +298,7 @@ fun DriverDashboardContent(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        // Dashboard header; the shared notification bell is above all screens.
+        // Dashboard header with the notification bell beside the app title.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -316,6 +316,8 @@ fun DriverDashboardContent(
                 color = Color.Black
             )
             Spacer(modifier = Modifier.weight(1f))
+
+            NotificationCenterBell()
         }
 
         Spacer(modifier = Modifier.height(32.dp))
