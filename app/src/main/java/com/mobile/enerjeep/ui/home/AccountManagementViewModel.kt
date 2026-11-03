@@ -10,6 +10,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
@@ -369,6 +370,20 @@ class AccountManagementViewModel @Inject constructor(
                         throw IllegalStateException("Hindi na makita ang account.")
                     }
 
+                    val normalizedPlate = PhilippineIdentifiers
+                        .normalizePlateNumber(account.plateNumber)
+                    val plateClaimReference = if (
+                        account.role == "Driver" && normalizedPlate.isNotBlank()
+                    ) {
+                        firestore.collection(FirestoreCollections.DRIVER_PLATE_CLAIMS)
+                            .document(normalizedPlate)
+                    } else {
+                        null
+                    }
+                    val plateClaim = plateClaimReference?.let {
+                        transaction.get(it)
+                    }
+
                     if (account.role == "Driver") {
                         val queueDocuments = queueReferences
                             .map { transaction.get(it) }
@@ -416,6 +431,12 @@ class AccountManagementViewModel @Inject constructor(
                     // Preserve completed dispatch and ledger history.
                     transaction.delete(userReference)
                     transaction.delete(secretReference)
+                    if (
+                        plateClaimReference != null &&
+                        plateClaim?.getString("phoneNumber") == account.phone
+                    ) {
+                        transaction.delete(plateClaimReference)
+                    }
                     transaction.set(
                         queueControlReference,
                         mapOf(
