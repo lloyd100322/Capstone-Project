@@ -115,9 +115,11 @@ backstop (basa lang, walang sulat).
 
 Older incidents may contain `driverPhone`. After deploying the updated
 Cloud Functions, the script `functions/scripts/remove-incident-phone-fields.js`
-defaults to a dry run and prints counts only. Review the selected Firebase
-project and back up production data before an operator reruns it with
-`--apply`. The script is not run automatically.
+defaults to a dry run and prints counts only. It requires an explicit
+project argument, for example
+`node scripts/remove-incident-phone-fields.js --project enerjeep-b8f3a`.
+Review the count and back up production data before an operator reruns it
+with `--project enerjeep-b8f3a --apply`. The script is not run automatically.
 
 ## 3. Mga konbensyon at integridad
 
