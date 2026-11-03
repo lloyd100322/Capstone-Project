@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -46,7 +47,8 @@ data class DriverProfileUiState(
 @HiltViewModel
 class DriverProfileViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val userSession: UserSession
+    private val userSession: UserSession,
+    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState =
@@ -538,6 +540,25 @@ class DriverProfileViewModel @Inject constructor(
                     e.message
                         ?: "Hindi ma-update ang password. Subukan muli."
                 )
+            }
+        }
+    }
+
+    /**
+     * Fully signs out a driver. The root ContentViewModel observes the
+     * cleared UserSession and replaces the authenticated NavController,
+     * so Android Back cannot return to the previous driver dashboard.
+     */
+    fun signOut() {
+        val phone = userSession.userProfile?.phoneNumber.orEmpty()
+
+        viewModelScope.launch {
+            try {
+                auth.signOut()
+            } finally {
+                // Remove the optional pre-OTP verifier for this account too.
+                SecureLoginCache.clear(phone)
+                userSession.clear()
             }
         }
     }
