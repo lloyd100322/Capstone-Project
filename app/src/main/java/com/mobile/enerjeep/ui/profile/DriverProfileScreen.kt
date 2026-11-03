@@ -28,8 +28,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.data.EmergencyContact
-import com.mobile.enerjeep.navigation.AppNavigator
-import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
@@ -43,7 +41,6 @@ private fun profileInitials(first: String, last: String): String =
 
 @Composable
 fun DriverProfileScreen(
-    appNavigator: AppNavigator,
     viewModel: DriverProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -64,9 +61,7 @@ fun DriverProfileScreen(
                     )
                 },
                 onSignOut = {
-                    appNavigator.navigateTo(
-                        Screen.Login
-                    )
+                    viewModel.signOut()
                 }
             )
 
