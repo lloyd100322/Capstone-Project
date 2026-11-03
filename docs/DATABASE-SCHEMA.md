@@ -33,7 +33,18 @@ password na dapat manatili sa koleksyong ito — tinatanggal ito ng
 
 ### `/userSecrets` — password hash (docId = `+639XXXXXXXXX`)
 `passwordHash`, `passwordSalt`, `iterations` (PBKDF2 210k), `createdAt`.
-Basahin at sulat ng MAY-ARI (at admin) lang.
+Basahin ng may-ari lamang; account creation is performed by an admin.
+The pre-OTP credential check uses the App Check-protected callable and Admin SDK;
+the Android client never reads password hashes before phone verification.
+
+### `/driverPlateClaims` — normalized plate ownership
+DocId = plate number without separators (hal. `TXA448`). Fields:
+`phoneNumber` (owner user document ID), `driverId` (`users.userId`),
+`createdAt`, `updatedAt`. Only admins can read or maintain claims.
+Driver account creation and server-side driver profile updates claim the
+normalized plate transactionally; account deletion releases only its own claim.
+The user duplicate-plate scan remains as a compatibility check for older
+driver records that predate the claim collection.
 
 ### `/queue` — pila ng terminal
 | Field | Kahulugan |
@@ -54,7 +65,7 @@ Basahin at sulat ng MAY-ARI (at admin) lang.
 | Uri ng record | ID | Fields |
 |---|---|---|
 | Dispatch (kita ng driver) | `<entryId>_dispatch` | `feeType:"Dispatch"`, `source:"queue_dispatch"`, `driverId`, `plateNumber`, `queueId`, `amount`=netAmount, `grossAmount`=income, `otherFees`, `netAmount`, `seater`, `seaterDeduction`, `deductionTier`, `date` |
-| Bayad ng multa (Talaan) | `fee_<hex>` o UUID | `feeType:"Multa"`, `source:"ledger"`, `driverId`, `plateNumber`, `driverName`, `amount`, `date`, `createdAt` |
+| Bayad ng multa (Insidente) | UUID | `feeType:"Multa"`, `source:"ledger"`, optional `incidentId` (when paid from an incident), `driverId`, `plateNumber`, `driverName`, `amount`, `date`, `createdAt` |
 | Iba pang bayarin | `fee_<hex>` o UUID | `feeType` (hal. "Terminal Fee"), pareho ng iba pang fields |
 
 **Ang kita ng driver = dispatch records lamang.** Hindi kasama ang multa o
@@ -62,8 +73,14 @@ donasyon sa kita; walang bawas na kahit ano.
 
 ### `/incidents` — mga insidente
 `title`, `description`, `severity`, `location`, `status`
-(`Ongoing`/`Resolved`), `driverId`, `driverName`, `plateNumber`,
-`penalty` (Double), `date`, `createdAt`, `updatedAt`.
+(`open`/`resolved`), `isResolved` (Boolean), `driverId`,
+`driverName`, `plateNumber`, `penalty` (Number), `date`,
+`sentToDriver` (Boolean), `reportedBy` (`users.userId`),
+`createdAt`, `resolvedAt`, `updatedAt`. Driver phone numbers are not
+stored in member-readable incident documents. A driver may request the
+number on demand through the App Check-protected `getIncidentDriverPhone`
+callable. Older records may still contain a legacy `driverPhone` field until
+the documented dry-run-first cleanup script is reviewed and explicitly run.
 
 ### `/donations` — donasyon at gamit
 `donor`, `amount`, `date`, `source`, `note`, `type` (`donate` \| `gamit`),
@@ -75,6 +92,8 @@ donasyon sa kita; walang bawas na kahit ano.
   `updatedAt`.
 - `settings/deductionTiers` — ang bawas kada upuan (hal.
   `{16: 32, 22: 44}` = 16-seater → ₱32, 22-seater → ₱44).
+- `settings/queueControl` — shared `revision` counter used to detect
+  concurrent queue mutations across app and scheduled/server operations.
 
 ### `/activityLogs` — audit log (append-only)
 `actorName`, **`actorPhone`** (laging ang phone ng SARILING nagsulat —
@@ -92,7 +111,15 @@ backstop (basa lang, walang sulat).
 
 ---
 
-## 2. Mga konbensyon at integridad
+## 2. Legacy incident phone-field cleanup
+
+Older incidents may contain `driverPhone`. After deploying the updated
+Cloud Functions, the script `functions/scripts/remove-incident-phone-fields.js`
+defaults to a dry run and prints counts only. Review the selected Firebase
+project and back up production data before an operator reruns it with
+`--apply`. The script is not run automatically.
+
+## 3. Mga konbensyon at integridad
 
 - **`driverId` → `users.userId`** — pareho sa lahat ng koleksyon
   (queue, incidents, ledger). Hindi ginagamit ang docId ng user.
