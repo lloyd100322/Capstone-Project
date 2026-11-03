@@ -3,9 +3,9 @@ package com.mobile.enerjeep.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.safeTimestamp
@@ -305,9 +305,8 @@ class DriverViewModel @Inject constructor(
     private var endingTravel = false
 
     /**
-     * Temporary no-Cloud-Function fallback. Firestore rules allow this
-     * account to complete only its own eligible queue document; all other
-     * queue edits remain admin-only.
+     * Uses the trusted server operation so ownership, queue re-numbering,
+     * and the shared queue revision are updated in one transaction.
      */
     fun endTravel() {
         val profile = userSession.userProfile
@@ -321,16 +320,9 @@ class DriverViewModel @Inject constructor(
         endingTravel = true
         viewModelScope.launch {
             try {
-                firestore.collection(FirestoreCollections.QUEUE)
-                    .document(docId)
-                    .update(
-                        mapOf(
-                            "status" to "completed",
-                            "endTravelAt" to FieldValue.serverTimestamp(),
-                            "updatedAt" to FieldValue.serverTimestamp(),
-                            "position" to 0
-                        )
-                    )
+                FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("finishDriverTravel")
+                    .call(mapOf("queueEntryId" to docId))
                     .await()
 
                 ActivityLogger.log(
@@ -339,7 +331,12 @@ class DriverViewModel @Inject constructor(
                     "Tapos Na Bumyahe",
                     _uiState.value.plateNumber
                 )
-                _uiState.value = _uiState.value.copy(travelEndedToday = true)
+                _uiState.value = _uiState.value.copy(
+                    travelEndedToday = true,
+                    activeQueueDocId = "",
+                    queuePosition = 0,
+                    queueStatus = "completed"
+                )
                 loadDailyEarnings()
                 ToastFeedback.show("Tapos na ang biyahe. Wala ka na sa pila.")
             } catch (e: Exception) {

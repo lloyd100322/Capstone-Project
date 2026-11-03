@@ -426,23 +426,6 @@ class IncidentViewModel @Inject constructor(
                             "Driver"
                         }
 
-                /*
-                 * Numero ng driver na itinatago SA mismong incident record.
-                 * Ang /users ay hindi mababasa ng mga driver (rules), kaya
-                 * para sa "Tawagan" button ng driver screen, ang numero ay
-                 * kinukuha dito. Ang doc ID ng user ay ang phone number.
-                 */
-                val driverPhone =
-                    driverDocument
-                        .id
-                        .trim()
-                        .ifBlank {
-                            driverDocument
-                                .getString("phoneNumber")
-                                .orEmpty()
-                                .trim()
-                        }
-
                 val data =
                     mapOf<String, Any>(
 
@@ -453,9 +436,6 @@ class IncidentViewModel @Inject constructor(
 
                         "driverName" to
                                 driverName,
-
-                        "driverPhone" to
-                                driverPhone,
 
                         "plateNumber" to
                                 plateNumber.trim(),

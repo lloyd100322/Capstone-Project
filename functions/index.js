@@ -295,6 +295,14 @@ exports.onIncidentShared = onDocumentWritten(
       before.exists && before.get("sentToDriver") === true;
     const incident = afterSnapshot.data() || {};
 
+    // Remove the legacy phone field when an incident is touched. A one-time
+    // dry-run-first migration script cleans old documents that are never edited.
+    if (Object.prototype.hasOwnProperty.call(incident, "driverPhone")) {
+      await afterSnapshot.ref.update({
+        driverPhone: FieldValue.delete(),
+      });
+    }
+
     if (incident.sentToDriver !== true || wasAlreadyShared) {
       return null;
     }
@@ -390,6 +398,64 @@ exports.onIncidentShared = onDocumentWritten(
     return null;
   }
 );
+
+/**
+ * Returns a driver's phone number only when an authenticated driver requests
+ * a shared incident. Phone numbers are not stored in member-readable incident
+ * documents and the callable is protected by App Check.
+ */
+exports.getIncidentDriverPhone = onCall(
+  { enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    }
+
+    const callerPhone = request.auth.token.phone_number;
+    if (typeof callerPhone !== "string" || !callerPhone) {
+      throw new HttpsError("permission-denied", "Walang verified phone number.");
+    }
+
+    const caller = await db.collection("users").doc(callerPhone).get();
+    if (!caller.exists || caller.get("role") !== "driver") {
+      throw new HttpsError("permission-denied", "Driver account lamang ang maaaring gumamit ng contact lookup.");
+    }
+
+    const incidentId = request.data && request.data.incidentId;
+    if (typeof incidentId !== "string" || !incidentId || incidentId.length > 180) {
+      throw new HttpsError("invalid-argument", "Invalid incident ID.");
+    }
+
+    const incident = await db.collection("incidents").doc(incidentId).get();
+    if (!incident.exists || incident.get("sentToDriver") !== true) {
+      throw new HttpsError("not-found", "Hindi makita ang ibinahaging insidente.");
+    }
+
+    const driverId = incident.get("driverId");
+    if (typeof driverId !== "string" || !driverId) {
+      throw new HttpsError("failed-precondition", "Walang naka-link na driver ang insidente.");
+    }
+
+    const driver = await db.collection("users")
+      .where("userId", "==", driverId)
+      .where("role", "==", "driver")
+      .limit(1)
+      .get();
+
+    if (driver.empty) {
+      throw new HttpsError("not-found", "Hindi makita ang driver account.");
+    }
+
+    const driverDoc = driver.docs[0];
+    const phoneNumber = driverDoc.get("phoneNumber") || driverDoc.id;
+    if (typeof phoneNumber !== "string" || !/^\+639[0-9]{9}$/.test(phoneNumber)) {
+      throw new HttpsError("failed-precondition", "Walang valid na numero ang driver.");
+    }
+
+    return { phoneNumber };
+  }
+);
+
 
 /**
  * Completes the authenticated driver's own queue entry. The server verifies
