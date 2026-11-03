@@ -67,7 +67,15 @@ fun HomeScreen(
     val emergencyContactsList by viewModel.emergencyContacts
         .collectAsStateWithLifecycle()
 
-    if (isAdmin) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+    ) {
+        NotificationCenterBar()
+
+        Box(modifier = Modifier.weight(1f)) {
+            if (isAdmin) {
         var selectedTab by remember { mutableStateOf(HomeTab.Home) }
         var showIncidentForm by remember { mutableStateOf(false) }
         var showEmergencyDialog by remember { mutableStateOf(false) }
@@ -289,15 +297,17 @@ fun HomeScreen(
                 }
             }
         }
-    } else {
-        DriverContent(
-            appNavigator = appNavigator,
-            emergencyContactName =
-                userProfile?.emergencyContactName,
-            emergencyContactNumber =
-                userProfile?.emergencyContactNumber,
-            adminContacts = emergencyContactsList
-        )
+            } else {
+                DriverContent(
+                    appNavigator = appNavigator,
+                    emergencyContactName =
+                        userProfile?.emergencyContactName,
+                    emergencyContactNumber =
+                        userProfile?.emergencyContactNumber,
+                    adminContacts = emergencyContactsList
+                )
+            }
+        }
     }
 }
 
