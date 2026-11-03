@@ -18,6 +18,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -35,7 +36,28 @@ class ContentViewModel @Inject constructor(
     private val _authState = MutableStateFlow<AppAuthState>(AppAuthState.Loading)
     val authState = _authState.asStateFlow()
 
+    // Bumped after logout so ContentView recreates the NavController.
+    // This guarantees the old authenticated destinations are not left
+    // underneath the Login screen in the Android Back stack.
+    private val _navigationResetVersion = MutableStateFlow(0)
+    val navigationResetVersion = _navigationResetVersion.asStateFlow()
+
+    private var hadActiveUserSession = false
+
     init {
+        viewModelScope.launch {
+            userSession.userProfileFlow.collect { profile ->
+                if (profile != null) {
+                    hadActiveUserSession = true
+                } else if (hadActiveUserSession && auth.currentUser == null) {
+                    hadActiveUserSession = false
+                    _authState.value = AppAuthState.Unauthenticated
+                    _navigationResetVersion.value =
+                        _navigationResetVersion.value + 1
+                }
+            }
+        }
+
         checkSession()
     }
 
