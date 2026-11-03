@@ -216,6 +216,7 @@ function previousSetupDocumentIds() {
     donations: [],
     emergencyContacts: [],
     activityLogs: [],
+    notifications: [],
   };
 
   const oldDriverIds = [];
@@ -277,6 +278,21 @@ function previousSetupDocumentIds() {
   }
   for (let i = 0; i < 5; i++) {
     ids.activityLogs.push("log_" + legacyTag(701 + i));
+  }
+
+  // The previous incident trigger generated one per-account document
+  // using "incident_" + incidentId. Remove only those exact old IDs.
+  const oldIncidentIds = ids.incidents.map(function (id) {
+    return "incident_" + id;
+  });
+  for (let i = 1; i <= 35; i++) {
+    const phone = "+639171" + String(i).padStart(6, "0");
+    oldIncidentIds.forEach(function (notificationId) {
+      ids.notifications.push({
+        phone: phone,
+        id: notificationId,
+      });
+    });
   }
 
   return ids;
@@ -731,7 +747,8 @@ function buildDataset(accounts, settings) {
       : "";
     const id = "contact_office_" + safeId(account.userId);
     add("emergencyContacts", id, {
-      name: "Tanggapan" + stationLabel + " — " + fullName(account),
+      name: (index === 0 ? "Dispatcher" : "Tanggapan") +
+        stationLabel + " — " + fullName(account),
       number: account.phoneNumber,
       addedBy: superadminName,
       isActive: true,
@@ -915,9 +932,18 @@ function legacyRefs() {
   const oldIds = previousSetupDocumentIds();
   const refs = [];
   Object.keys(oldIds).forEach(function (collection) {
+    if (collection === "notifications") return;
     oldIds[collection].forEach(function (id) {
       refs.push(db.collection(collection).doc(id));
     });
+  });
+  oldIds.notifications.forEach(function (entry) {
+    refs.push(
+      db.collection("users")
+        .doc(entry.phone)
+        .collection("notifications")
+        .doc(entry.id)
+    );
   });
   return refs;
 }
