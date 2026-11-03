@@ -56,15 +56,11 @@ fun DriverContent(
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
     var showIncidentForm by remember { mutableStateOf(false) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
-    var showAlertsSheet by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Fase 7: dispatch alert (banner + bell + sound)
     val dispatchAlert by viewModel.dispatchAlert.collectAsStateWithLifecycle()
-    val recentAlerts by viewModel.recentAlerts.collectAsStateWithLifecycle()
-    val hasUnreadAlerts by viewModel.hasUnreadAlerts.collectAsStateWithLifecycle()
-    val unreadAlertCount by viewModel.unreadAlertCount.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     /*
@@ -208,12 +204,6 @@ fun DriverContent(
                         dailyEarnings = uiState.dailyEarnings,
                         dispatchAlert = dispatchAlert,
                         dispatchSecondsLeft = alertSecondsLeft,
-                        hasUnreadAlerts = hasUnreadAlerts,
-                        unreadAlertCount = unreadAlertCount,
-                        onBellClick = {
-                            viewModel.markAlertsRead()
-                            showAlertsSheet = true
-                        },
                         onDismissAlert = {
                             viewModel.dismissDispatchAlert()
                         },
@@ -247,12 +237,6 @@ fun DriverContent(
                 )
             }
 
-            if (showAlertsSheet) {
-                DispatchAlertsSheet(
-                    alerts = recentAlerts,
-                    onDismiss = { showAlertsSheet = false }
-                )
-            }
         }
     }
 }
@@ -279,9 +263,6 @@ fun DriverDashboardContent(
     dailyEarnings: Double? = null,
     dispatchAlert: DriverDispatchAlert? = null,
     dispatchSecondsLeft: Int = 5,
-    hasUnreadAlerts: Boolean = false,
-    unreadAlertCount: Int = 0,
-    onBellClick: () -> Unit = {},
     onDismissAlert: () -> Unit = {},
     onTaposNa: () -> Unit = {},
     onEmergencyClick: () -> Unit = {}
@@ -317,7 +298,7 @@ fun DriverDashboardContent(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        // Header (may bell para sa mga dispatch alert)
+        // Dashboard header; the shared notification bell is above all screens.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -335,42 +316,6 @@ fun DriverDashboardContent(
                 color = Color.Black
             )
             Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = onBellClick) {
-                Box {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Mga Abiso",
-                        tint = Color.Black,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    if (hasUnreadAlerts) {
-                        /*
-                         * Badge na may BILANG ng bagong abiso (hal. "1",
-                         * "2", ... "9+") - hindi lang pulang tuldok.
-                         */
-                        Surface(
-                            modifier = Modifier
-                                .size(16.dp)
-                                .align(Alignment.TopEnd),
-                            shape = RoundedCornerShape(8.dp),
-                            color = ErrorRed
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = if (unreadAlertCount > 9) {
-                                        "9+"
-                                    } else {
-                                        unreadAlertCount.toString()
-                                    },
-                                    color = Color.White,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
