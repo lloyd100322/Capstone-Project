@@ -207,6 +207,7 @@ async function wipeCollections() {
   const collections = [
     "users",
     "userSecrets",
+    "driverPlateClaims",
     "queue",
     "incidents",
     "ledger",
