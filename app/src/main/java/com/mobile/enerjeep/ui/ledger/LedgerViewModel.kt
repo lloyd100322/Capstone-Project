@@ -100,10 +100,11 @@ class LedgerViewModel @Inject constructor(
                     )
                 }.sortedByDescending { it.createdAtMillis.takeIf { time -> time > 0L } ?: parseDateMillis(it.date) }
 
-                val today = LocalDate.now()
+                val manilaZone = ZoneId.of("Asia/Manila")
+                val today = LocalDate.now(manilaZone)
                 val todaysItems = items.filter { item ->
                     val millis = item.createdAtMillis.takeIf { it > 0L } ?: parseDateMillis(item.date)
-                    millis > 0L && Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate() == today
+                    millis > 0L && Instant.ofEpochMilli(millis).atZone(manilaZone).toLocalDate() == today
                 }
                 val todayIds = todaysItems.map { it.id }.toSet()
                 val history = items.filter { it.id !in todayIds }
@@ -178,20 +179,28 @@ class LedgerViewModel @Inject constructor(
     // In-flight guard: a double tap must not record the payment twice.
     private var savingCollection = false
 
-    fun addCollection(plateNumber: String, driverName: String, amount: Double, feeType: String) {
-        if (savingCollection) return
+    fun addCollection(
+        plateNumber: String,
+        driverName: String,
+        amount: Double,
+        feeType: String,
+        incidentId: String? = null,
+        onComplete: (success: Boolean, errorMessage: String?) -> Unit = { _, _ -> }
+    ) {
+        if (savingCollection) {
+            onComplete(false, "May kasalukuyang sine-save na bayad. Subukan muli.")
+            return
+        }
         savingCollection = true
 
         viewModelScope.launch {
             try {
                 val cleanPlateNumber = plateNumber.trim()
                 if (cleanPlateNumber.isBlank()) {
-                    _uiState.value = LedgerUiState.Error("Pumili muna ng plaka")
-                    return@launch
+                    throw IllegalArgumentException("Pumili muna ng plaka")
                 }
                 if (amount <= 0.0) {
-                    _uiState.value = LedgerUiState.Error("Dapat mas mataas sa ₱0 ang halaga")
-                    return@launch
+                    throw IllegalArgumentException("Dapat mas mataas sa ₱0 ang halaga")
                 }
 
                 /*
@@ -241,16 +250,23 @@ class LedgerViewModel @Inject constructor(
                     "source" to "ledger",
                     "createdAt" to FieldValue.serverTimestamp()
                 )
+                incidentId?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    data["incidentId"] = it
+                }
                 firestore.collection(FirestoreCollections.LEDGER).document(documentId).set(data).await()
 
                 com.mobile.enerjeep.data.ActivityLogger.log(
                     firestore,
                     userSession,
                     "Bayad ng Multa",
-                    "$plateNumber • $feeType • ₱$amount"
+                    "$plateNumber • $feeType • ₱$amount" +
+                        (incidentId?.let { " • Incident $it" } ?: "")
                 )
+                onComplete(true, null)
             } catch (e: Exception) {
-                _uiState.value = LedgerUiState.Error(e.message ?: "Hindi na-save ang collection")
+                val message = e.message ?: "Hindi na-save ang collection"
+                _uiState.value = LedgerUiState.Error(message)
+                onComplete(false, message)
             } finally {
                 savingCollection = false
             }

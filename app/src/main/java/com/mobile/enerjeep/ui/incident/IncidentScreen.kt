@@ -33,6 +33,7 @@ import com.mobile.enerjeep.ui.theme.TextSecondary
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import com.mobile.enerjeep.ui.components.ToastFeedback
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +52,8 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
     var showMultaModal by remember { mutableStateOf(false) }
     var multaPrefillPlate by remember { mutableStateOf("") }
     var multaPrefillAmount by remember { mutableStateOf("") }
+    var multaPrefillIncidentId by remember { mutableStateOf<String?>(null) }
+    var isSavingMulta by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(containerColor = LightGrayBackground) { padding ->
@@ -66,6 +69,8 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         onClick = {
                             multaPrefillPlate = ""
                             multaPrefillAmount = ""
+                            multaPrefillIncidentId = null
+                            isSavingMulta = false
                             showMultaModal = true
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
@@ -134,6 +139,8 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
             onRecordPayment = {
                 multaPrefillPlate = incident.plateNumber
                 multaPrefillAmount = incident.penalty.filter { it.isDigit() }
+                multaPrefillIncidentId = incident.id
+                isSavingMulta = false
                 selectedIncident = null
                 showMultaModal = true
             },
@@ -160,7 +167,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
     /* Ang dating "+ Idagdag" ng Talaan: multa payment form. */
     if (showMultaModal) {
         ModalBottomSheet(
-            onDismissRequest = { showMultaModal = false },
+            onDismissRequest = { if (!isSavingMulta) showMultaModal = false },
             sheetState = sheetState,
             containerColor = Color.White
         ) {
@@ -168,16 +175,31 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                 drivers = ledgerDrivers,
                 initialAmount = multaPrefillAmount.ifBlank { "50" },
                 initialPlate = multaPrefillPlate,
-                onCancel = { showMultaModal = false },
+                onCancel = { if (!isSavingMulta) showMultaModal = false },
                 onSubmit = { driver, amount, feeType ->
-                    ledgerViewModel.addCollection(
-                        driver.plateNumber,
-                        driver.driverName,
-                        amount,
-                        feeType
-                    )
-                    showMultaModal = false
-                }
+                    if (!isSavingMulta) {
+                        isSavingMulta = true
+                        ledgerViewModel.addCollection(
+                            driver.plateNumber,
+                            driver.driverName,
+                            amount,
+                            feeType,
+                            incidentId = multaPrefillIncidentId
+                        ) { success, errorMessage ->
+                            isSavingMulta = false
+                            if (success) {
+                                showMultaModal = false
+                                multaPrefillIncidentId = null
+                                ToastFeedback.show("Matagumpay na naitala ang bayad ng multa.")
+                            } else {
+                                ToastFeedback.show(
+                                    errorMessage ?: "Hindi na-save ang bayad ng multa."
+                                )
+                            }
+                        }
+                    }
+                },
+                isSubmitting = isSavingMulta
             )
         }
     }
