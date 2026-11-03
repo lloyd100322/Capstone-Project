@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
+import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.components.ToastFeedback
@@ -319,16 +321,13 @@ class DriverProfileViewModel @Inject constructor(
 
         val cleanPlate = state.plateNumber.trim().uppercase()
         val cleanLicense = state.licenseNumber.trim()
-        val oldPlate = oldProfile.plateNumber.orEmpty().trim().uppercase()
-        val oldLicense = oldProfile.licenseNumber.orEmpty().trim()
 
-        // Plate/license changes need server-side uniqueness checks and queue
-        // synchronization. Keep those fields unchanged until functions deploy.
-        if (cleanPlate != oldPlate || cleanLicense != oldLicense) {
-            ToastFeedback.show(
-                "Pansamantalang hindi mababago ang plate number at driver license. " +
-                    "I-enable ulit ito kapag na-deploy na ang Cloud Functions."
-            )
+        PhilippineIdentifiers.plateNumberError(cleanPlate)?.let { error ->
+            ToastFeedback.show(error)
+            return
+        }
+        PhilippineIdentifiers.licenseNumberError(cleanLicense)?.let { error ->
+            ToastFeedback.show(error)
             return
         }
 
@@ -351,20 +350,24 @@ class DriverProfileViewModel @Inject constructor(
             return
         }
 
-        val combinedEmergency = "$cleanEmergencyName - $cleanEmergencyNumber"
+        val combinedEmergency = EmergencyContact.combine(
+            cleanEmergencyName,
+            cleanEmergencyNumber
+        )
 
         viewModelScope.launch {
             try {
-                firestore.collection(FirestoreCollections.USERS)
-                    .document(currentPhone)
-                    .update(
+                FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("updateDriverProfile")
+                    .call(
                         mapOf(
                             "firstName" to cleanFirstName,
                             "lastName" to cleanLastName,
-                            "emergencyContact" to combinedEmergency,
+                            "licenseNumber" to cleanLicense,
+                            "plateNumber" to cleanPlate,
                             "emergencyContactName" to cleanEmergencyName,
                             "emergencyContactNumber" to cleanEmergencyNumber,
-                            "updatedAt" to FieldValue.serverTimestamp()
+                            "emergencyContact" to combinedEmergency
                         )
                     )
                     .await()
@@ -373,6 +376,8 @@ class DriverProfileViewModel @Inject constructor(
                     oldProfile.copy(
                         firstName = cleanFirstName,
                         lastName = cleanLastName,
+                        licenseNumber = cleanLicense,
+                        plateNumber = cleanPlate,
                         emergencyContact = combinedEmergency,
                         emergencyContactName = cleanEmergencyName,
                         emergencyContactNumber = cleanEmergencyNumber
