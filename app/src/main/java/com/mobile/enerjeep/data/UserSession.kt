@@ -62,7 +62,7 @@ data class UserProfile(
     val emergencyContact: String? = null,
     val emergencyContactName: String? = null,
     val emergencyContactNumber: String? = null,
-    // Istasyon ng admin (Marilao/Monumento) - display lang, walang
-    // epekto sa role/permiso. Wala nito ang driver at superadmin.
+    // Istasyon ng admin (Marilao/Monumento) - ginagamit upang limitahan
+    // ang queue modifications sa sariling terminal. Wala nito ang driver at superadmin.
     val adminStation: String? = null
 )

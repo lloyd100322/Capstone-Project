@@ -58,8 +58,23 @@ fun QueueScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     // 0: Marilao -> Monumento, 1: Monumento -> Marilao, 2: Kasaysayan
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember {
+        mutableStateOf(
+            if (
+                viewModel.canManageRoute(QueueViewModel.ROUTE_MA) &&
+                !viewModel.canManageRoute(QueueViewModel.ROUTE_AM)
+            ) 1 else 0
+        )
+    }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
+
+    val selectedRoute = if (selectedTab == 0) {
+        QueueViewModel.ROUTE_AM
+    } else {
+        QueueViewModel.ROUTE_MA
+    }
+    val canManageSelectedRoute = selectedTab != 2 &&
+        viewModel.canManageRoute(selectedRoute)
 
     // "Zoom out": smaller boxes so a long pila scrolls faster.
     // Pinch gesture ang nagpapalit nito (walang button).
@@ -222,6 +237,23 @@ fun QueueScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    if ((selectedTab == 0 || selectedTab == 1) && !canManageSelectedRoute) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF3F8)),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Text(
+                                text = "READ ONLY • Maaari mong tingnan ang pila ng kabilang terminal, pero hindi ka maaaring mag-dispatch, magkansela, o magbago ng posisyon dito.",
+                                modifier = Modifier.padding(14.dp),
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     /*
                      * Zoom: PINCH gestures na lang ang gamit (walang
                      * button). Pinch IN = maliit na box (zoom out),
@@ -236,7 +268,11 @@ fun QueueScreen(
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            text = "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon.",
+                            text = if (canManageSelectedRoute) {
+                                "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon."
+                            } else {
+                                "Pinch para mag-zoom • Tingnan lamang ang pila ng kabilang terminal."
+                            },
                             fontSize = 12.sp,
                             color = TextSecondary
                         )
@@ -352,7 +388,8 @@ fun QueueScreen(
                                                  * hila - lumilipat ng
                                                  * posisyon sa pila.
                                                  */
-                                                if (compactView &&
+                                                if (canManageSelectedRoute &&
+                                                    compactView &&
                                                     searchQuery.isBlank() &&
                                                     !vehicle.isCancelled
                                                 ) {
@@ -397,12 +434,23 @@ fun QueueScreen(
                                             vehicle = vehicle,
                                             displayPosition = vehicle.position,
                                             compact = compactView,
-                                            canReorder = searchQuery.isBlank(),
-                                            canDispatch = vehicle.id == frontOfLineId,
-                                            onDispatchClick = { vehicleToDispatch = vehicle },
-                                            onPositionUpdate = { newPosition -> viewModel.updateVehiclePosition(vehicle.id, newPosition) },
-                                            onCancelClick = { viewModel.cancelQueueEntry(vehicle.id) },
-                                            onRestoreClick = { viewModel.restoreQueueEntry(vehicle.id) }
+                                            canReorder = canManageSelectedRoute && searchQuery.isBlank(),
+                                            canDispatch = canManageSelectedRoute && vehicle.id == frontOfLineId,
+                                            canManage = canManageSelectedRoute,
+                                            onDispatchClick = {
+                                                if (canManageSelectedRoute) vehicleToDispatch = vehicle
+                                            },
+                                            onPositionUpdate = { newPosition ->
+                                                if (canManageSelectedRoute) {
+                                                    viewModel.updateVehiclePosition(vehicle.id, newPosition)
+                                                }
+                                            },
+                                            onCancelClick = {
+                                                if (canManageSelectedRoute) viewModel.cancelQueueEntry(vehicle.id)
+                                            },
+                                            onRestoreClick = {
+                                                if (canManageSelectedRoute) viewModel.restoreQueueEntry(vehicle.id)
+                                            }
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -524,6 +572,7 @@ fun QueueItem(
     compact: Boolean = false,
     canReorder: Boolean = true,
     canDispatch: Boolean = true,
+    canManage: Boolean = true,
     onDispatchClick: () -> Unit,
     onPositionUpdate: (Int) -> Unit,
     onCancelClick: () -> Unit,
@@ -620,29 +669,31 @@ fun QueueItem(
                  * the confirm dialog), or "Ibalik sa Pila" for cancelled
                  * rows. No more text button in the middle of the row.
                  */
-                if (vehicle.isCancelled) {
-                    TextButton(
-                        onClick = onRestoreClick,
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            text = "Ibalik",
-                            fontSize = 11.sp,
-                            color = SuccessGreen,
-                            maxLines = 1
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = { showCancelConfirm = true },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Kanselahin",
-                            tint = ErrorRed,
-                            modifier = Modifier.size(20.dp)
-                        )
+                if (canManage) {
+                    if (vehicle.isCancelled) {
+                        TextButton(
+                            onClick = onRestoreClick,
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = "Ibalik",
+                                fontSize = 11.sp,
+                                color = SuccessGreen,
+                                maxLines = 1
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = { showCancelConfirm = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Kanselahin",
+                                tint = ErrorRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }

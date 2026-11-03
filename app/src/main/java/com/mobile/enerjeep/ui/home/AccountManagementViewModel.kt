@@ -7,6 +7,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
@@ -321,131 +322,19 @@ class AccountManagementViewModel @Inject constructor(
             ?: return
 
         if (isCurrentAccount(account)) {
-            setError(
-                "Hindi maaaring burahin ang account na kasalukuyang naka-login."
-            )
+            setError("Hindi maaaring burahin ang account na kasalukuyang naka-login.")
             return
         }
-
-        if (accountId in _uiState.value.busyAccountIds) {
-            return
-        }
+        if (accountId in _uiState.value.busyAccountIds) return
 
         viewModelScope.launch {
             setBusy(accountId, true)
             clearError()
-
             try {
-                val userReference = firestore
-                    .collection(FirestoreCollections.USERS)
-                    .document(account.id)
-                val secretReference = firestore
-                    .collection(FirestoreCollections.USER_SECRETS)
-                    .document(account.id)
-                val queueControlReference = firestore
-                    .collection(FirestoreCollections.SETTINGS)
-                    .document("queueControl")
-
-                // Capture the queue revision before taking a queue snapshot.
-                // The transaction rejects this deletion if another queue
-                // operation changes the shared revision in the meantime.
-                val observedQueueRevision = queueControlReference.get().await()
-                    .getLong("revision") ?: 0L
-                val queueReferences = if (account.role == "Driver") {
-                    firestore.collection(FirestoreCollections.QUEUE)
-                        .get().await().documents.map { it.reference }
-                } else emptyList()
-
-                firestore.runTransaction { transaction ->
-                    val control = transaction.get(queueControlReference)
-                    val currentRevision = control.getLong("revision") ?: 0L
-                    if (currentRevision != observedQueueRevision) {
-                        throw IllegalStateException(
-                            "Nagbago ang pila habang binubura ang account. I-refresh at subukan muli."
-                        )
-                    }
-
-                    val userDocument = transaction.get(userReference)
-                    if (!userDocument.exists()) {
-                        throw IllegalStateException("Hindi na makita ang account.")
-                    }
-
-                    val normalizedPlate = PhilippineIdentifiers
-                        .normalizePlateNumber(account.plateNumber)
-                    val plateClaimReference = if (
-                        account.role == "Driver" && normalizedPlate.isNotBlank()
-                    ) {
-                        firestore.collection(FirestoreCollections.DRIVER_PLATE_CLAIMS)
-                            .document(normalizedPlate)
-                    } else {
-                        null
-                    }
-                    val plateClaim = plateClaimReference?.let {
-                        transaction.get(it)
-                    }
-
-                    if (account.role == "Driver") {
-                        val queueDocuments = queueReferences
-                            .map { transaction.get(it) }
-                            .filter { it.exists() }
-
-                        val entriesToDelete = queueDocuments.filter {
-                            it.getString("driverId") == account.userId &&
-                                isOpenQueueStatus(it.getString("status"))
-                        }
-                        val deletedIds = entriesToDelete.map { it.id }.toSet()
-
-                        entriesToDelete.forEach { transaction.delete(it.reference) }
-
-                        // Queue positions are independent per route.
-                        queueDocuments
-                            .filter {
-                                it.id !in deletedIds &&
-                                    isOpenQueueStatus(it.getString("status"))
-                            }
-                            .groupBy { it.getString("route").orEmpty() }
-                            .values
-                            .forEach { routeEntries ->
-                                routeEntries
-                                    .sortedWith(
-                                        compareBy<DocumentSnapshot> {
-                                            if (it.getBoolean("isCancelled") == true) 1 else 0
-                                        }.thenBy {
-                                            it.getLong("position") ?: Long.MAX_VALUE
-                                        }.thenBy {
-                                            queueDateSeconds(it, "createdAt") ?: Long.MAX_VALUE
-                                        }
-                                    )
-                                    .forEachIndexed { index, document ->
-                                        transaction.update(
-                                            document.reference,
-                                            mapOf(
-                                                "position" to index + 1,
-                                                "updatedAt" to FieldValue.serverTimestamp()
-                                            )
-                                        )
-                                    }
-                            }
-                    }
-
-                    // Preserve completed dispatch and ledger history.
-                    transaction.delete(userReference)
-                    transaction.delete(secretReference)
-                    if (
-                        plateClaimReference != null &&
-                        plateClaim?.getString("phoneNumber") == account.phone
-                    ) {
-                        transaction.delete(plateClaimReference)
-                    }
-                    transaction.set(
-                        queueControlReference,
-                        mapOf(
-                            "revision" to currentRevision + 1L,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                }.await()
+                FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("deleteAccount")
+                    .call(mapOf("phoneNumber" to account.id))
+                    .await()
 
                 ActivityLogger.log(
                     firestore,
@@ -453,11 +342,9 @@ class AccountManagementViewModel @Inject constructor(
                     "Binura ang Account",
                     accountId
                 )
-
+                ToastFeedback.show("Matagumpay na nabura ang account.")
             } catch (e: Exception) {
-                setError(
-                    e.message ?: "Hindi mabura ang account."
-                )
+                setError(e.message ?: "Hindi mabura ang account.")
             } finally {
                 setBusy(accountId, false)
             }

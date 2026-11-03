@@ -6,7 +6,7 @@ rules_version = '2';
 // The security model:
 //   - Every request must come from a signed-in Firebase Auth user whose
 //     phone number belongs to a real account in /users (isMember).
-//   - "admins" manage accounts, the queue, ledger, incidents and reports.
+//   - "superadmin" manages all queues; station admins manage only their assigned terminal.
 //   - "drivers" read the shared operational data (queue, incidents) and
 //     their own earnings (kita, ledger), and edit only their own profile.
 //   - Credentials live in /userSecrets and are ONLY readable by their
@@ -176,11 +176,47 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // /queue - operational queue (drivers read, admins manage)
+    // /queue - everyone can view both terminals; local administrators
+    // can only change queue entries belonging to their assigned station.
     // ------------------------------------------------------------------
+    function ownAdminStation() {
+      return signedIn() && authPhone() != null
+        ? get(/databases/$(database)/documents/users/$(authPhone())).data.get('adminStation', '')
+        : '';
+    }
+
+    function ownAccountIsActive() {
+      return signedIn() && authPhone() != null
+        && get(/databases/$(database)/documents/users/$(authPhone())).data.get('status', 'active') == 'active';
+    }
+
+    function queueRouteStation(route) {
+      return route is string && route.matches('(?i)^marilao.*') ? 'marilao'
+        : route is string && route.matches('(?i)^monumento.*') ? 'monumento'
+        : null;
+    }
+
+    function canManageQueueRoute(route) {
+      return (
+        (isSuperadmin() && ownAccountIsActive())
+        || (
+          ownRole() == 'admin'
+          && ownAccountIsActive()
+          && queueRouteStation(route) != null
+          && ownAdminStation() == queueRouteStation(route)
+        );
+    }
+
     match /queue/{entryId} {
       allow read: if isMember();
-      allow create, update, delete: if isAdmin();
+      allow create: if canManageQueueRoute(request.resource.data.route);
+      allow update: if (isSuperadmin() && ownAccountIsActive())
+                    || (
+                      canManageQueueRoute(resource.data.route)
+                      && queueRouteStation(request.resource.data.route)
+                         == queueRouteStation(resource.data.route)
+                    );
+      allow delete: if canManageQueueRoute(resource.data.route);
     }
 
     // ------------------------------------------------------------------
@@ -194,14 +230,26 @@ service cloud.firestore {
     match /settings/{docId} {
       allow read: if isMember();
 
+      // A station admin only needs to advance the shared queue revision
+      // for actions on their own route. Rotation metadata is global.
       allow create: if isSuperadmin()
-        || (isAdmin()
-            && !request.resource.data.keys().hasAny(['cutoffHour']));
+        || (
+          isAdmin()
+          && docId == 'queueControl'
+          && request.resource.data.keys().hasOnly(['revision', 'updatedAt'])
+          && request.resource.data.revision is int
+          && request.resource.data.revision == 1
+        );
 
       allow update: if isSuperadmin()
-        || (isAdmin()
-            && !request.resource.data.diff(resource.data).affectedKeys()
-                 .hasAny(['cutoffHour']));
+        || (
+          isAdmin()
+          && docId == 'queueControl'
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['revision', 'updatedAt'])
+          && request.resource.data.revision is int
+          && request.resource.data.revision == resource.data.revision + 1
+        );
 
       allow delete: if isSuperadmin();
     }

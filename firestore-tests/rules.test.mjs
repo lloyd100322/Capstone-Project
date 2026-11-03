@@ -28,6 +28,7 @@ import {
   collection,
   getDoc,
   getDocs,
+  deleteDoc,
   query,
   where,
   serverTimestamp,
@@ -40,6 +41,7 @@ let testEnv;
 const DRIVER_PHONE = "+639171000001";
 const ADMIN_PHONE = "+639171000002";
 const SUPER_PHONE = "+639171000003";
+const MONUMENTO_ADMIN_PHONE = "+639171000004";
 
 const driverId = "user-driver-1";
 
@@ -65,19 +67,26 @@ beforeEach(async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, `users/${DRIVER_PHONE}`), {
-      role: "driver", userId: driverId, plateNumber: "TXA 448",
+      role: "driver", status: "active", userId: driverId, plateNumber: "TXA 448",
     });
     await setDoc(doc(db, `users/${ADMIN_PHONE}`), {
-      role: "admin", userId: "user-admin-1",
+      role: "admin", status: "active", adminStation: "marilao", userId: "user-admin-1",
+    });
+    await setDoc(doc(db, `users/${MONUMENTO_ADMIN_PHONE}`), {
+      role: "admin", status: "active", adminStation: "monumento", userId: "user-admin-2",
     });
     await setDoc(doc(db, `users/${SUPER_PHONE}`), {
-      role: "superadmin", userId: "user-super-1",
+      role: "superadmin", status: "active", userId: "user-super-1",
     });
     await setDoc(doc(db, "queue/q-drv"), {
       driverId, status: "Nakapila", position: 3, route: "marilao",
     });
     await setDoc(doc(db, "queue/q-oth"), {
       driverId: "user-other-1", status: "Nakapila", position: 4, route: "marilao",
+    });
+    await setDoc(doc(db, "queue/q-monument"), {
+      driverId: "user-monument-1", status: "Nakapila", position: 1,
+      route: "Monumento – Marilao",
     });
     await setDoc(doc(db, "settings/queueRotation"), {
       cutoffHour: 21, lastQueueDay: "20260101",
@@ -160,13 +169,92 @@ test("driver CANNOT change another entry's status or identity fields", async () 
   );
 });
 
-test("admin CAN dispatch-style update any queue entry", async () => {
+test("Marilao admin can manage its own queue but can only read Monumento", async () => {
   const db = dbAs(ADMIN_PHONE, "u-admin");
+
   await assertSucceeds(
     updateDoc(doc(db, "queue/q-oth"), {
       status: "dispatched",
       position: 0,
       income: 500,
+    })
+  );
+
+  // The whole queue remains readable, including the other terminal.
+  await assertSucceeds(getDocs(collection(db, "queue")));
+  await assertSucceeds(getDoc(doc(db, "queue/q-monument")));
+
+  // New entries may be added only to the administrator's own terminal.
+  await assertSucceeds(
+    setDoc(doc(db, "queue/q-created-own-terminal"), {
+      driverId: "user-new-own",
+      status: "Nakapila",
+      position: 5,
+      route: "Marilao – Monumento",
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, "queue/q-monument"), {
+      status: "dispatched",
+      position: 0,
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, "queue/q-monument"), { isCancelled: true })
+  );
+  await assertFails(
+    updateDoc(doc(db, "queue/q-drv"), { route: "Monumento – Marilao" })
+  );
+  await assertFails(deleteDoc(doc(db, "queue/q-monument")));
+  await assertFails(
+    setDoc(doc(db, "queue/q-created-on-other-terminal"), {
+      driverId: "user-new",
+      status: "Nakapila",
+      position: 2,
+      route: "Monumento – Marilao",
+    })
+  );
+});
+
+test("Monumento admin can manage Monumento but cannot modify Marilao", async () => {
+  const db = dbAs(MONUMENTO_ADMIN_PHONE, "u-monumento-admin");
+  await assertSucceeds(
+    updateDoc(doc(db, "queue/q-monument"), {
+      position: 2,
+      updatedAt: new Date(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, "queue/q-drv"), {
+      status: "dispatched",
+      position: 0,
+    })
+  );
+});
+
+test("superadmin can manage both terminal queues", async () => {
+  const db = dbAs(SUPER_PHONE, "u-super");
+  await assertSucceeds(
+    updateDoc(doc(db, "queue/q-monument"), { position: 3 })
+  );
+  await assertSucceeds(
+    updateDoc(doc(db, "queue/q-drv"), { position: 2 })
+  );
+});
+
+test("deactivated station admin cannot modify a queue with an old session", async () => {
+  const superDb = dbAs(SUPER_PHONE, "u-super");
+  await assertSucceeds(
+    updateDoc(doc(superDb, `users/${ADMIN_PHONE}`), {
+      status: "inactive",
+    })
+  );
+
+  const oldAdminSession = dbAs(ADMIN_PHONE, "u-admin");
+  await assertFails(
+    updateDoc(doc(oldAdminSession, "queue/q-drv"), {
+      position: 6,
+      updatedAt: new Date(),
     })
   );
 });
@@ -210,12 +298,44 @@ test("admin CANNOT change the cut-off hour", async () => {
   );
 });
 
-test("admin CAN maintain the rotation meta fields (auto-reset engine)", async () => {
+test("station admin CANNOT change global queue rotation metadata", async () => {
   const db = dbAs(ADMIN_PHONE, "u-admin");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "settings/queueRotation"), {
       lastQueueDay: "20260102",
       updatedAt: new Date(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, "settings/queueRotation"), {
+      routesNormalized: true,
+    })
+  );
+});
+
+test("station admin can create and increment only the shared queue revision", async () => {
+  const db = dbAs(ADMIN_PHONE, "u-admin");
+  await assertSucceeds(
+    setDoc(doc(db, "settings/queueControl"), {
+      revision: 1,
+      updatedAt: new Date(),
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(db, "settings/queueControl"), {
+      revision: 2,
+      updatedAt: new Date(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, "settings/queueControl"), {
+      revision: 3,
+      routesNormalized: true,
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, "settings/queueControl"), {
+      revision: 10,
     })
   );
 });
