@@ -13,6 +13,8 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
@@ -35,6 +37,9 @@ class LoginViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val userSession: UserSession
 ) : ViewModel() {
+
+    // verifyLoginCredentials is deployed in the default Cloud Functions region.
+    private val functions = FirebaseFunctions.getInstance("us-central1")
 
     private val _uiState =
         MutableStateFlow<LoginUiState>(LoginUiState.Idle)
@@ -91,58 +96,65 @@ class LoginViewModel @Inject constructor(
 
         if (_uiState.value is LoginUiState.Loading) return
 
-        pendingPassword = password
-        currentPhoneNumber = cleanPhoneNumber
-
         viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
 
-            // Device-only fallback: if this phone has a still-valid encrypted
-            // verifier from an earlier successful login, reject a wrong
-            // password before requesting any SMS. New devices have no cache
-            // and continue through OTP so the account is not locked out.
-            when (SecureLoginCache.verify(cleanPhoneNumber, password)) {
-                false -> {
-                    _uiState.value = LoginUiState.CachedPasswordMismatch(
+            // Check the credentials on the trusted server BEFORE requesting
+            // SMS. The client never downloads or reads the password hash.
+            try {
+                val result = functions
+                    .getHttpsCallable("verifyLoginCredentials")
+                    .call(
+                        mapOf(
+                            "phoneNumber" to cleanPhoneNumber,
+                            "password" to password
+                        )
+                    )
+                    .await()
+
+                val response = result.data as? Map<*, *>
+                val credentialsValid = response?.get("valid") == true
+
+                if (!credentialsValid) {
+                    pendingPassword = null
+                    currentPhoneNumber = null
+                    _uiState.value = LoginUiState.Error(
                         "Maling numero o password. Hindi ipinadala ang OTP."
                     )
                     return@launch
                 }
-
-                true, null -> Unit
+            } catch (e: FirebaseFunctionsException) {
+                Log.e("LoginPrecheck", "Server credential check failed", e)
+                pendingPassword = null
+                currentPhoneNumber = null
+                val message =
+                    if (e.code == FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED) {
+                        e.message
+                            ?: "Masyadong maraming pagsubok. Maghintay ng 15 minuto."
+                    } else {
+                        "Hindi ma-verify ang credentials. Suriin ang internet at App Check, pagkatapos ay subukan muli."
+                    }
+                _uiState.value = LoginUiState.Error(message)
+                return@launch
+            } catch (e: Exception) {
+                Log.e("LoginPrecheck", "Unable to call credential verification", e)
+                pendingPassword = null
+                currentPhoneNumber = null
+                _uiState.value = LoginUiState.Error(
+                    "Hindi ma-verify ang credentials. Pakisuri ang internet connection at subukan muli."
+                )
+                return@launch
             }
 
-            // First login on a device (or an expired cache): OTP must happen
-            // before the private Firestore hash can be read securely.
+            // Only a successful server check reaches Firebase Phone Auth.
+            pendingPassword = password
+            currentPhoneNumber = cleanPhoneNumber
             triggerSmsVerification(
                 phoneNumber = cleanPhoneNumber,
                 activity = activity,
                 isResend = false
             )
         }
-    }
-
-    /**
-     * Recovery for users whose password was changed on another device.
-     * This is a deliberate one-time bypass of the local cache only; the
-     * server-side Firestore password verification still runs after OTP.
-     */
-    fun continueWithOtpAfterCacheMismatch(activity: Activity) {
-        if (_uiState.value !is LoginUiState.CachedPasswordMismatch) return
-
-        val phone = currentPhoneNumber
-        if (phone.isNullOrBlank()) {
-            _uiState.value = LoginUiState.Error(
-                "Nawala ang session. Mag-login muli."
-            )
-            return
-        }
-
-        triggerSmsVerification(
-            phoneNumber = phone,
-            activity = activity,
-            isResend = false
-        )
     }
 
     fun resendVerificationCode(activity: Activity) {
@@ -641,7 +653,4 @@ sealed interface LoginUiState {
         val message: String
     ) : LoginUiState
 
-    data class CachedPasswordMismatch(
-        val message: String
-    ) : LoginUiState
 }
