@@ -518,13 +518,13 @@ function buildDataset(accounts, settings) {
     });
   });
 
-  // Dispatch and earnings history spread over the last six calendar months.
+  // Dispatch and earnings history spread over the last twelve calendar months.
   // Every active driver receives at least one matching queue + ledger record.
-  const eventCount = Math.max(drivers.length, 24);
+  const eventCount = Math.max(drivers.length, 36);
   const dispatchEvents = [];
   for (let i = 0; i < eventCount; i++) {
     const driver = drivers[i % drivers.length];
-    const monthOffset = i % 6;
+    const monthOffset = i % 12;
     const cycle = Math.floor(i / 6);
     const dispatchAt = monthOffset === 0
       ? daysAgo(0, 6 + ((cycle * 2) % 11), (10 + cycle * 7) % 60)
