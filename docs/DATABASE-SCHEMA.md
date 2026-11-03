@@ -17,7 +17,7 @@ datos ito ng sistema — hindi ito bahagi ng app screen.)
 | `firstName`, `lastName` | Pangalan. |
 | `phoneNumber` | Kapareho ng docId. |
 | `role` | `superadmin` \| `admin` \| `driver` (maliit na titik; case-sensitive sa rules). |
-| `status` | `Activated` \| `Deactivated`. |
+| `status` | `active` \| `inactive` (lowercase). `isVehicleActive` is a separate driver-vehicle flag. |
 | `plateNumber` | Para sa driver; `null` para sa admin. |
 | `seater` | Bilang ng upuan (16/22) — batayan ng dispatch deduction. |
 | `isVehicleActive` | Aktibo ba ang sasakyan ng driver. |
