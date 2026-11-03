@@ -188,10 +188,12 @@ are **not** in the code:
 
    **Legacy incident contact cleanup:** older incident documents may still
    contain `driverPhone`. After deploying the updated Functions, from the
-   `functions` folder run `node scripts/remove-incident-phone-fields.js`
-   first as a dry run. Verify the selected project and take a backup before
-   an operator runs it with `--apply`. Do not run the apply mode until the
-   dry-run count and target project have been checked.
+   `functions` folder run
+   `node scripts/remove-incident-phone-fields.js --project enerjeep-b8f3a`
+   first as a dry run. The script requires the project ID explicitly.
+   Take a backup before an operator reruns it with `--project enerjeep-b8f3a
+   --apply`. Do not run the apply mode until the dry-run count and target
+   project have been checked.
 
    The scheduled function uses Cloud Scheduler. Confirm the Cloud Scheduler
    API is enabled in the Google Cloud project; scheduled functions need a
