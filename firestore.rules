@@ -204,7 +204,7 @@ service cloud.firestore {
           && ownAccountIsActive()
           && queueRouteStation(route) != null
           && ownAdminStation() == queueRouteStation(route)
-        );
+        ));
     }
 
     match /queue/{entryId} {
