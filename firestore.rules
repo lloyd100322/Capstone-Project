@@ -300,7 +300,9 @@ service cloud.firestore {
       allow read: if isAdmin()
                   || (isMember() && resource.data.driverId ==
                        get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
-      allow create, update, delete: if isAdmin();
+      // RETIRED: earnings are read from /ledger. Keep this collection
+      // read-only so it cannot become a second source of truth.
+      allow create, update, delete: if false;
     }
 
     // ------------------------------------------------------------------
