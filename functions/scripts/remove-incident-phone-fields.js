@@ -13,20 +13,29 @@
 "use strict";
 
 const admin = require("firebase-admin");
+const args = process.argv.slice(2);
+const projectArg = args.find((arg) => arg.startsWith("--project="));
+const projectIndex = args.indexOf("--project");
+const projectId =
+  (projectArg && projectArg.slice("--project=".length)) ||
+  (projectIndex >= 0 ? args[projectIndex + 1] : null) ||
+  process.env.GCLOUD_PROJECT ||
+  process.env.GOOGLE_CLOUD_PROJECT;
 
-admin.initializeApp();
+if (!projectId || !projectId.trim()) {
+  console.error(
+    "A Firebase project ID is required. Pass --project enerjeep-b8f3a. No database request was made."
+  );
+  process.exit(1);
+}
+
+admin.initializeApp({ projectId: projectId.trim() });
 const db = admin.firestore();
-const APPLY = process.argv.includes("--apply");
+const APPLY = args.includes("--apply");
 const PAGE_SIZE = 400;
 
 async function main() {
-  const projectId =
-    admin.app().options.projectId ||
-    process.env.GCLOUD_PROJECT ||
-    process.env.GOOGLE_CLOUD_PROJECT ||
-    "unknown";
-
-  console.log(`Project: ${projectId}`);
+  console.log(`Project: ${projectId.trim()}`);
   console.log(
     APPLY
       ? "Mode: APPLY (will remove driverPhone fields)"
