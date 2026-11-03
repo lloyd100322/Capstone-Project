@@ -640,6 +640,23 @@ exports.updateDriverProfile = onCall(
           throw new HttpsError("already-exists", "Ginagamit na ng ibang driver ang plate number na ito.");
         }
 
+        const oldNormalizedPlate = String(userSnap.get("plateNumber") || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "");
+        const claimCollection = db.collection("driverPlateClaims");
+        const newClaimRef = claimCollection.doc(normalizedPlate);
+        const oldClaimRef = oldNormalizedPlate
+          ? claimCollection.doc(oldNormalizedPlate)
+          : null;
+        const newClaim = await tx.get(newClaimRef);
+        const oldClaim = oldClaimRef && oldNormalizedPlate !== normalizedPlate
+          ? await tx.get(oldClaimRef)
+          : newClaim;
+
+        if (newClaim.exists && newClaim.get("phoneNumber") !== phone) {
+          throw new HttpsError("already-exists", "May nakareserba nang ibang account sa plate number na ito.");
+        }
+
         const queueSnapshot = await tx.get(
           db.collection("queue").where("driverId", "==", driverId)
         );
@@ -660,6 +677,23 @@ exports.updateDriverProfile = onCall(
         const driverName = [firstName, lastName]
           .filter((value) => value)
           .join(" ") || "Driver";
+
+        if (
+          oldNormalizedPlate &&
+          oldNormalizedPlate !== normalizedPlate &&
+          oldClaim.exists &&
+          oldClaim.get("phoneNumber") === phone
+        ) {
+          tx.delete(oldClaimRef);
+        }
+        tx.set(newClaimRef, {
+          phoneNumber: phone,
+          driverId,
+          createdAt: newClaim.exists
+            ? (newClaim.get("createdAt") || FieldValue.serverTimestamp())
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
 
         queueSnapshot.docs.forEach((document) => {
           const status = String(document.get("status") || "").toLowerCase();
