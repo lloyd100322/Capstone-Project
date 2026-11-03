@@ -276,203 +276,248 @@ exports.dailyQueueReset = onSchedule(
  * app. Ang in-app banner/bell naman ang gumagana kapag bukas ang app
  * (tahimik ang push doon para hindi mag-doble).
  */
+/**
+ * Every notification is stored under the recipient's own user document.
+ * The deterministic document ID makes Firestore trigger retries idempotent.
+ */
+async function createUserNotification(userRef, notificationId, payload) {
+  const notificationRef = userRef.collection("notifications").doc(notificationId);
+  try {
+    await notificationRef.create({
+      ...payload,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    if (error && (error.code === 6 || error.code === "already-exists")) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function isActiveEnerJeepMember(userDocument) {
+  const role = String(userDocument.get("role") || "").toLowerCase();
+  return ["admin", "superadmin", "driver"].includes(role) &&
+    String(userDocument.get("status") || "active").toLowerCase() === "active";
+}
+
+async function sendUserNotificationPush(userDocument, title, body, data, channelId) {
+  const token = userDocument.get("fcmToken");
+  if (typeof token !== "string" || token.length === 0) return;
+
+  try {
+    await admin.messaging().send({
+      token,
+      notification: { title, body },
+      data,
+      android: {
+        priority: "high",
+        notification: {
+          channel_id: channelId,
+          sound: "default",
+        },
+      },
+    });
+  } catch (error) {
+    const code = error && error.code;
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token" ||
+      code === "messaging/invalid-argument"
+    ) {
+      await userDocument.ref.update({ fcmToken: FieldValue.delete() });
+      console.log("Inalis ang expired FCM token:", userDocument.id);
+    } else {
+      console.error("Hindi naipadala ang notification push sa", userDocument.id, error);
+    }
+  }
+}
+
+/**
+ * Kapag may bagong dispatch, nagse-save ng notification para sa lahat ng
+ * active account roles. Ang mismong driver ay makakakita ng "Na-dispatch ka!";
+ * makikita naman ng admin at superadmin kung sinong driver ang na-dispatch.
+ */
 exports.onQueueDispatched = onDocumentUpdated(
   { document: "queue/{entryId}", region: "asia-east2" },
   async (event) => {
-    const before = event.data.before.data();
-    const after = event.data.after.data();
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
 
-    // Tanging ang PAGPASOK sa "dispatched" lang - hindi bawat update.
-    if ((after.status || "") !== "dispatched") return null;
-    if ((before.status || "") === "dispatched") return null;
+    if (String(after.status || "").toLowerCase() !== "dispatched") return null;
+    if (String(before.status || "").toLowerCase() === "dispatched") return null;
 
-    const driverId = after.driverId;
+    const driverId = String(after.driverId || "");
     if (!driverId) return null;
 
-    // Hanapin ang user doc ng driver (driverId -> users.userId) para
-    // makuha ang fcmToken ng device.
-    const users = await db
-      .collection("users")
-      .where("userId", "==", driverId)
-      .limit(1)
-      .get();
-    if (users.empty) return null;
+    const memberSnapshot = await db.collection("users").get();
+    const activeMembers = memberSnapshot.docs.filter(isActiveEnerJeepMember);
+    if (activeMembers.length === 0) return null;
 
-    const userRef = users.docs[0].ref;
-    const token = users.docs[0].get("fcmToken");
-    if (!token || typeof token !== "string") return null;
+    const entryId = String(event.params.entryId);
+    const driverName = String(after.driverName || "Driver");
+    const plate = String(after.plateNumber || "");
+    const route = String(after.route || "");
+    const details = [driverName, plate, route]
+      .filter((part) => part.trim().length > 0)
+      .join(" • ")
+      .slice(0, 180);
 
-    const plate = after.plateNumber || "";
-    const route = after.route || "";
-    const body = [plate, route].filter((x) => x && String(x).trim() !== "").join(" • ");
-
-    try {
-      await admin.messaging().send({
-        token,
-        // Notification payload: ipinapakita ito ng system kahit
-        // nakasara ang app.
-        notification: {
-          title: "Na-dispatch ka!",
-          body: body || "Tingnan ang Pila para sa detalye.",
-        },
-        data: {
-          type: "dispatch",
-          entryId: event.params.entryId,
-          plateNumber: plate,
-          route,
-        },
-        android: {
-          notification: {
-            channel_id: "enerjeep_dispatch",
-            sound: "default",
-          },
-        },
+    const createdRecipients = [];
+    for (const userDocument of activeMembers) {
+      const isDispatchedDriver =
+        String(userDocument.get("userId") || "") === driverId &&
+        String(userDocument.get("role") || "").toLowerCase() === "driver";
+      const title = isDispatchedDriver
+        ? "Na-dispatch ka!"
+        : "May Na-dispatch na Driver";
+      const body = details || "May bagong driver na na-dispatch sa pila.";
+      const notificationId = "dispatch_" + entryId;
+      const created = await createUserNotification(userDocument.ref, notificationId, {
+        type: "dispatch",
+        title,
+        body,
+        entityId: entryId,
+        driverId,
+        driverName,
+        plateNumber: plate,
+        route,
       });
-      console.log(`onQueueDispatched: naipadala ang push sa ${users.docs[0].id}`);
-    } catch (error) {
-      const code = error && error.code;
-      if (
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
-        code === "messaging/invalid-argument"
-      ) {
-        // Lipas na ang token ng device - alisin para hindi na subukan.
-        await userRef.update({ fcmToken: FieldValue.delete() });
-        console.log(`onQueueDispatched: inalis ang lipas na token (${code})`);
-      } else {
-        console.error("onQueueDispatched: hindi naipadala:", error);
+      if (created) {
+        createdRecipients.push({
+          userDocument,
+          title,
+          body,
+          data: {
+            type: "dispatch",
+            entryId,
+            driverId,
+            driverName,
+            plateNumber: plate,
+            route,
+          },
+        });
       }
     }
+
+    await Promise.all(createdRecipients.map((recipient) =>
+      sendUserNotificationPush(
+        recipient.userDocument,
+        recipient.title,
+        recipient.body,
+        recipient.data,
+        "enerjeep_dispatch"
+      )
+    ));
+
+    console.log(
+      "onQueueDispatched: na-save ang abiso sa " +
+      createdRecipients.length + " active account(s)."
+    );
     return null;
   }
 );
 
-
 /**
- * PUSH NOTIFICATION para sa mga insidenteng ibinahagi sa lahat ng active member.
- *
- * Nagpapadala lamang kapag bagong ginawa na may sentToDriver=true, o
- * kapag ang draft ay unang ipinadala (false -> true). Hindi nagno-notify
- * sa draft at hindi inuulit ang push sa ordinaryong edits/resolution.
- *
- * Gumagamit ito ng notification payload para maipakita ng Android system
- * ang abiso kahit nasa background o nakasara ang app.
+ * Bawat bagong incident report ay ipinapaalam sa lahat ng active roles,
+ * kahit sentToDriver=false at kahit resolved na ang initial status.
+ * Kapag nag-transition mula unresolved tungo sa resolved, nagpapadala rin
+ * ng isang hiwalay na status update; ordinaryong edits ay hindi duplicate.
  */
 exports.onIncidentShared = onDocumentWritten(
   { document: "incidents/{incidentId}", region: "asia-east2" },
   async (event) => {
-    const before = event.data.before;
+    const beforeSnapshot = event.data.before;
     const afterSnapshot = event.data.after;
-
     if (!afterSnapshot.exists) return null;
 
-    const wasAlreadyShared =
-      before.exists && before.get("sentToDriver") === true;
+    const before = beforeSnapshot.exists ? (beforeSnapshot.data() || {}) : {};
     const incident = afterSnapshot.data() || {};
 
-    // Remove the legacy phone field when an incident is touched. A one-time
-    // dry-run-first migration script cleans old documents that are never edited.
+    // Remove the legacy phone field when an incident is touched.
     if (Object.prototype.hasOwnProperty.call(incident, "driverPhone")) {
       await afterSnapshot.ref.update({
         driverPhone: FieldValue.delete(),
       });
     }
 
-    if (incident.sentToDriver !== true || wasAlreadyShared) {
-      return null;
-    }
+    const isResolved = incident.isResolved === true ||
+      String(incident.status || "").toLowerCase() === "resolved";
+    const wasResolved = before.isResolved === true ||
+      String(before.status || "").toLowerCase() === "resolved";
+    const isNewIncident = !beforeSnapshot.exists;
+    const becameResolved = beforeSnapshot.exists && !wasResolved && isResolved;
 
-    // All active EnerJeep roles receive the same system incident notification.
-    const memberSnapshot = await db.collection("users").get();
-
-    const recipients = memberSnapshot.docs
-      .filter((doc) =>
-        String(doc.get("status") || "active").toLowerCase() === "active"
-      )
-      .map((doc) => ({
-        ref: doc.ref,
-        token: doc.get("fcmToken"),
-      }))
-      .filter((item) => typeof item.token === "string" && item.token.length > 0);
-
-    if (recipients.length === 0) {
-      console.log("onIncidentShared: walang active member device token na naka-register.");
-      return null;
-    }
+    if (!isNewIncident && !becameResolved) return null;
 
     const incidentId = String(event.params.incidentId);
+    const notificationId = isNewIncident
+      ? "incident_" + incidentId
+      : "incident_" + incidentId + "_resolved";
+    const statusLabel = isResolved ? "Naayos" : "Hindi pa naayos";
+    const title = isNewIncident
+      ? (isResolved ? "Bagong Insidente • Naayos" : "Bagong Insidente sa Kooperatiba")
+      : "Naayos na ang Insidente";
     const plate = String(incident.plateNumber || "");
     const incidentTitle = String(incident.title || "Insidente");
     const location = String(incident.location || "");
-    const body = [plate, incidentTitle, location]
+    const body = [plate, incidentTitle, location, statusLabel]
       .filter((part) => part.trim().length > 0)
       .join(" • ")
       .slice(0, 180);
 
+    const memberSnapshot = await db.collection("users").get();
+    const activeMembers = memberSnapshot.docs.filter(isActiveEnerJeepMember);
+    const createdRecipients = [];
+
+    for (const userDocument of activeMembers) {
+      const created = await createUserNotification(userDocument.ref, notificationId, {
+        type: "incident",
+        title,
+        body,
+        entityId: incidentId,
+        incidentId,
+        driverId: String(incident.driverId || ""),
+        plateNumber: plate,
+        incidentTitle,
+        location,
+        status: isResolved ? "resolved" : "open",
+        statusLabel,
+      });
+      if (created) {
+        createdRecipients.push(userDocument);
+      }
+    }
+
     const data = {
       type: "incident",
       incidentId,
-      driverId: String(incident.driverId || ""),
+      status: isResolved ? "resolved" : "open",
+      statusLabel,
       plateNumber: plate,
       incidentTitle,
       location,
     };
 
-    let successCount = 0;
-    const invalidTokenUpdates = [];
-
-    // FCM multicast accepts at most 500 tokens per request.
-    for (let offset = 0; offset < recipients.length; offset += 500) {
-      const batch = recipients.slice(offset, offset + 500);
-      const result = await admin.messaging().sendEachForMulticast({
-        tokens: batch.map((item) => item.token),
-        notification: {
-          title: "Bagong Insidente sa Kooperatiba",
-          body: body || "May bagong insidenteng ibinahagi sa EnerJeep.",
-        },
+    await Promise.all(createdRecipients.map((userDocument) =>
+      sendUserNotificationPush(
+        userDocument,
+        title,
+        body || "May bagong ulat ng insidente sa EnerJeep.",
         data,
-        android: {
-          priority: "high",
-          notification: {
-            channel_id: "enerjeep_incident",
-            sound: "default",
-          },
-        },
-      });
-
-      result.responses.forEach((response, index) => {
-        if (response.success) {
-          successCount += 1;
-          return;
-        }
-
-        const code = response.error && response.error.code;
-        if (
-          code === "messaging/registration-token-not-registered" ||
-          code === "messaging/invalid-registration-token" ||
-          code === "messaging/invalid-argument"
-        ) {
-          invalidTokenUpdates.push(
-            batch[index].ref.update({ fcmToken: FieldValue.delete() })
-          );
-        } else {
-          console.error("onIncidentShared: hindi naipadala sa isang device:", response.error);
-        }
-      });
-    }
-
-    if (invalidTokenUpdates.length > 0) {
-      await Promise.all(invalidTokenUpdates);
-    }
+        "enerjeep_incident"
+      )
+    ));
 
     console.log(
-      `onIncidentShared: naipadala sa ${successCount} sa ${recipients.length} registered member device(s).`
+      "onIncidentShared: na-save ang abiso sa " +
+      createdRecipients.length + " active account(s)."
     );
     return null;
   }
 );
-
-
 
 /**
  * Deletes an account and its active queue entries through the trusted Admin SDK.
@@ -529,7 +574,7 @@ exports.deleteAccount = onCall(
           const hasForeignActiveQueueEntry = queueSnapshot.docs.some((document) =>
             document.get("driverId") === targetDriverId &&
             queueStatusIsActive(document.data()) &&
-            queueRouteStation(document.get("route")) !== transactionCaller.station
+            queueRouteStation(document.get("route")) !== caller.station
           );
           if (hasForeignActiveQueueEntry) {
             throw new HttpsError(
