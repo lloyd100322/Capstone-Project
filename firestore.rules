@@ -129,6 +129,17 @@ service cloud.firestore {
                ])
         );
 
+      // Each member can read only their own server-created notifications.
+      match /notifications/{notificationId} {
+        allow read: if isMember() && isOwner(phone);
+        allow update: if isMember()
+          && isOwner(phone)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['read', 'readAt'])
+          && request.resource.data.read == true;
+        allow create, delete: if false;
+      }
+
       allow delete: if isAdmin();
     }
 
