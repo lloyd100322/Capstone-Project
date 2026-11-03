@@ -11,7 +11,7 @@ Ang mga record na mabubuo ay lalabas sa app gamit ang normal na labels at format
 | Firestore collection | Mga record na ginagawa |
 |---|---|
 | users | Lahat ng kasalukuyang account profiles ay ginagamit bilang source; hindi binabago |
-| queue | Kasalukuyang pila para sa bawat active driver sa dalawang ruta, dispatch history sa loob ng anim na buwan, at cancelled entry |
+| queue | Kasalukuyang pila para sa bawat active driver sa dalawang ruta, dispatch history sa loob ng labindalawang buwan, at cancelled entry |
 | ledger | Dispatch earnings para sa bawat driver, gross/net values at seat deductions, kasama ang hiwalay na bayad ng multa |
 | incidents | Mga bukas at naayos na incident reports, may driver, plaka, lokasyon, petsa, detalye at penalty |
 | donations | Mga natanggap na ambag at nagamit na pondo na may petsa, source at notes |
