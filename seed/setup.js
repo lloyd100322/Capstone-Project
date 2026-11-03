@@ -319,6 +319,10 @@ async function loadExistingAccounts() {
     };
   });
 
+  const snapshotByDocId = new Map(snapshot.docs.map(function (document) {
+    return [document.id, document.data() || {}];
+  }));
+
   const recognized = accounts.filter(function (account) {
     return isMemberRole(account.role);
   });
@@ -349,13 +353,30 @@ async function loadExistingAccounts() {
   }
 
   const invalidDrivers = activeDrivers.filter(function (driver) {
+    const source = snapshotByDocId.get(driver.docId) || {};
     return !driver.userId || !driver.phoneNumber ||
-      !driver.firstName || !driver.lastName || !driver.plateNumber;
+      !driver.firstName || !driver.lastName || !driver.plateNumber ||
+      !String(source.licenseNumber || "").trim() ||
+      !String(source.emergencyContactName || "").trim() ||
+      !String(source.emergencyContactNumber || "").trim() ||
+      driver.seater <= 0;
   });
   if (invalidDrivers.length > 0) {
     throw new Error(
-      "May active driver account na kulang ang userId, pangalan, phoneNumber " +
-      "o plateNumber. Kumpletuhin muna ang account profiles sa app at ulitin."
+      "May active driver account na kulang ang userId, pangalan, phoneNumber, " +
+      "plaka, lisensya, seater o emergency contact. Kumpletuhin muna ang " +
+      "Driver Profile at ulitin. Walang account ang binago ng script."
+    );
+  }
+
+  const invalidAdmins = admins.filter(function (account) {
+    return account.adminStation !== "marilao" &&
+      account.adminStation !== "monumento";
+  });
+  if (invalidAdmins.length > 0) {
+    throw new Error(
+      "May admin account na walang valid adminStation (marilao o monumento). " +
+      "Itakda muna ang tamang terminal assignment bago mag-refresh."
     );
   }
 
@@ -906,7 +927,12 @@ function previousManifestRefs(manifest) {
     ? manifest.collectionIds
     : {};
 
+  const allowedCollections = new Set([
+    "queue", "incidents", "ledger", "donations",
+    "emergencyContacts", "activityLogs",
+  ]);
   Object.keys(collectionIds).forEach(function (collection) {
+    if (!allowedCollections.has(collection)) return;
     (collectionIds[collection] || []).forEach(function (id) {
       refs.push(db.collection(collection).doc(id));
     });
