@@ -135,6 +135,7 @@ class DriverViewModel @Inject constructor(
             }
 
         incidentListener = firestore.collection(FirestoreCollections.INCIDENTS)
+            .whereEqualTo("sentToDriver", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
                 updateIncidentState(snapshot.documents)
@@ -498,6 +499,7 @@ class DriverViewModel @Inject constructor(
          * data of the other drivers is exposed.
          */
         val openIncidents = documents
+            .filter { it.getBoolean("sentToDriver") == true }
             .filter { !(it.getBoolean("isResolved") ?: false) && (it.getString("status") ?: "open").lowercase() != "resolved" }
 
         val incident = openIncidents

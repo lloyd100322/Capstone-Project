@@ -849,9 +849,6 @@ class QueueViewModel @Inject constructor(
                         queueReference,
                         mapOf(
                             "status" to "dispatched",
-                            "income" to income,
-                            "otherFees" to otherFees,
-                            "netAmount" to netAmount,
                             "dispatchedAt" to FieldValue.serverTimestamp(),
                             "updatedAt" to FieldValue.serverTimestamp(),
                             "position" to 0

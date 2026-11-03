@@ -27,7 +27,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 exports.deleteAuthUserOnAccountDelete = onDocumentDeleted(
-  { document: "users/{phone}", retry: true },
+  { document: "users/{phone}", region: "asia-east2", retry: true },
   async (event) => {
     // The document id of /users is the phone number, e.g. "+639171234567".
     const phone = event.params.phone;
@@ -115,7 +115,7 @@ function queueDayIdManila(now, cutoffHour) {
 }
 
 exports.dailyQueueReset = onSchedule(
-  { schedule: "0 * * * *", timeZone: "Asia/Manila" },
+  { schedule: "0 * * * *", timeZone: "Asia/Manila", region: "us-central1" },
   async () => {
     const metaRef = db.collection("settings").doc("queueRotation");
 
@@ -202,7 +202,7 @@ exports.dailyQueueReset = onSchedule(
  * (tahimik ang push doon para hindi mag-doble).
  */
 exports.onQueueDispatched = onDocumentUpdated(
-  "queue/{entryId}",
+  { document: "queue/{entryId}", region: "asia-east2" },
   async (event) => {
     const before = event.data.before.data();
     const after = event.data.after.data();
@@ -284,7 +284,7 @@ exports.onQueueDispatched = onDocumentUpdated(
  * ang abiso kahit nasa background o nakasara ang app.
  */
 exports.onIncidentShared = onDocumentWritten(
-  { document: "incidents/{incidentId}" },
+  { document: "incidents/{incidentId}", region: "asia-east2" },
   async (event) => {
     const before = event.data.before;
     const afterSnapshot = event.data.after;
@@ -405,7 +405,7 @@ exports.onIncidentShared = onDocumentWritten(
  * documents and the callable is protected by App Check.
  */
 exports.getIncidentDriverPhone = onCall(
-  { enforceAppCheck: true },
+  { enforceAppCheck: true, region: "us-central1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
@@ -463,7 +463,7 @@ exports.getIncidentDriverPhone = onCall(
  * Admin SDK transaction; clients cannot reorder another driver's queue row.
  */
 exports.finishDriverTravel = onCall(
-  { enforceAppCheck: true },
+  { enforceAppCheck: true, region: "us-central1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
@@ -558,7 +558,7 @@ exports.finishDriverTravel = onCall(
  * best-effort client-side list query.
  */
 exports.updateDriverProfile = onCall(
-  { enforceAppCheck: true },
+  { enforceAppCheck: true, region: "us-central1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
@@ -783,7 +783,7 @@ function verifyStoredPassword(password, secretData) {
 }
 
 exports.verifyLoginCredentials = onCall(
-  { enforceAppCheck: true, maxInstances: 20 },
+  { enforceAppCheck: true, maxInstances: 20, region: "us-central1" },
   async (request) => {
     const data = request.data || {};
     const phone = typeof data.phoneNumber === "string"

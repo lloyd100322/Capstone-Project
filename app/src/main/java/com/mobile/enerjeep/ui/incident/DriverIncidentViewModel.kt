@@ -143,6 +143,7 @@ class DriverIncidentViewModel @Inject constructor(
         listener?.remove()
 
         listener = firestore.collection(FirestoreCollections.INCIDENTS)
+            .whereEqualTo("sentToDriver", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(
@@ -161,7 +162,7 @@ class DriverIncidentViewModel @Inject constructor(
                  * explicitly sent to them.
                  */
                 val incidents = snapshot.documents
-                    .filter { it.getBoolean("sentToDriver") != false }
+                    .filter { it.getBoolean("sentToDriver") == true }
                     .map { mapIncident(it) }
                     .sortedByDescending { it.sortMillis }
 
@@ -227,7 +228,7 @@ class DriverIncidentViewModel @Inject constructor(
             date = document.getString("date").orEmpty(),
             isResolved = document.getBoolean("isResolved") == true || document.getString("status")?.lowercase() == "resolved",
             multiya = (document.get("penalty") as? Number)?.toDouble() ?: 0.0,
-            isSentToDriver = document.getBoolean("sentToDriver") ?: true,
+            isSentToDriver = document.getBoolean("sentToDriver") ?: false,
             sortMillis = (
                     document.safeTimestamp("resolvedAt")
                         ?: document.safeTimestamp("createdAt")

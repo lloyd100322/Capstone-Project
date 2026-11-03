@@ -28,6 +28,8 @@ import {
   collection,
   getDoc,
   getDocs,
+  query,
+  where,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -92,19 +94,21 @@ beforeEach(async () => {
     await setDoc(doc(db, "activityLogs/log-1"), {
       actorName: "Admin", action: "Dispatch", detail: "x",
     });
+    await setDoc(doc(db, "incidents/shared-1"), { title: "Shared incident", sentToDriver: true, isResolved: false });
+    await setDoc(doc(db, "incidents/draft-1"), { title: "Admin draft", sentToDriver: false, isResolved: false });
+    await setDoc(doc(db, "ledger/dispatch-driver"), { driverId, amount: 450, grossAmount: 500, otherFees: 50, netAmount: 450 });
+    await setDoc(doc(db, "ledger/dispatch-other"), { driverId: "user-other-1", amount: 600, grossAmount: 650, otherFees: 50, netAmount: 600 });
   });
 });
 
 // ---------------------------------------------------------- queue / end-travel
 
-test("driver CAN finish his own travel (status completed + position 0)", async () => {
+test("driver CANNOT directly finish queue travel; the trusted callable owns completion", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-drv"), {
-      status: "completed",
-      position: 0,
-      endTravelAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      status: "completed", position: 0,
+      endTravelAt: serverTimestamp(), updatedAt: serverTimestamp(),
     })
   );
 });
@@ -165,6 +169,33 @@ test("admin CAN dispatch-style update any queue entry", async () => {
       income: 500,
     })
   );
+});
+
+// ---------------------------------------------------------- incident sharing
+
+test("drivers can read only incidents explicitly shared with drivers", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertSucceeds(getDoc(doc(db, "incidents/shared-1")));
+  await assertFails(getDoc(doc(db, "incidents/draft-1")));
+  await assertSucceeds(
+    getDocs(query(collection(db, "incidents"), where("sentToDriver", "==", true)))
+  );
+  await assertFails(getDocs(collection(db, "incidents")));
+
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  await assertSucceeds(getDoc(doc(adminDb, "incidents/draft-1")));
+});
+
+// --------------------------------------------------------------- ledger privacy
+
+test("drivers can read only ledger entries matching their stable userId", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertSucceeds(getDoc(doc(db, "ledger/dispatch-driver")));
+  await assertFails(getDoc(doc(db, "ledger/dispatch-other")));
+  await assertSucceeds(
+    getDocs(query(collection(db, "ledger"), where("driverId", "==", driverId)))
+  );
+  await assertFails(getDocs(collection(db, "ledger")));
 });
 
 // --------------------------------------------------------------- settings
