@@ -28,6 +28,7 @@ import {
   collection,
   getDoc,
   getDocs,
+  serverTimestamp,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
@@ -102,18 +103,18 @@ test("driver CAN finish his own travel (status completed + position 0)", async (
     updateDoc(doc(db, "queue/q-drv"), {
       status: "completed",
       position: 0,
-      endTravelAt: new Date(),
-      updatedAt: new Date(),
+      endTravelAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     })
   );
 });
 
-test("driver CAN sync name/plate on his own entry (profile rename)", async () => {
+test("driver CANNOT directly rewrite queue display identity fields", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-drv"), {
       driverName: "Juan Dela Cruz",
-      plateNumber: "TXA 448",
+      plateNumber: "HIJACKED 123",
       updatedAt: new Date(),
     })
   );
@@ -129,9 +130,9 @@ test("driver CANNOT move his own entry up the queue (queue-jump)", async () => {
   );
 });
 
-test("driver CAN renumber other entries (position-only end-travel reflow)", async () => {
+test("driver CANNOT renumber another driver's queue entry", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-oth"), {
       position: 2,
       updatedAt: new Date(),
@@ -260,11 +261,10 @@ test("a user can read ONLY his own password secret", async () => {
   );
 });
 
-test("password hash is readable pre-login (credential check) but never listable", async () => {
+test("unauthenticated clients CANNOT read password secrets before OTP", async () => {
   const anon = testEnv.unauthenticatedContext().firestore();
-  await assertSucceeds(getDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(getDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`)));
   await assertFails(getDocs(collection(anon, "userSecrets")));
-  // writes stay owner-only even pre-login
   await assertFails(
     setDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`), {
       passwordHash: "x",
@@ -274,7 +274,7 @@ test("password hash is readable pre-login (credential check) but never listable"
   );
 });
 
-test("an admin cannot promote anyone - only the superadmin changes roles", async () => {
+test("an admin cannot change roles; the superadmin can", async () => {
   await assertFails(
     updateDoc(doc(dbAs(ADMIN_PHONE, "u-admin"), `users/${DRIVER_PHONE}`), {
       role: "superadmin",
@@ -282,23 +282,32 @@ test("an admin cannot promote anyone - only the superadmin changes roles", async
   );
   await assertSucceeds(
     updateDoc(doc(dbAs(SUPER_PHONE, "u-super"), `users/${DRIVER_PHONE}`), {
-      firstName: "Renamed",
+      role: "admin",
     })
   );
 });
 
-test("a user may edit ONLY his own profile fields (name/license/plate/emergency)", async () => {
+test("a user may edit only the profile fields allowed by the current rules", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
   await assertSucceeds(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
       firstName: "Renamed",
       lastName: "Driver",
-      licenseNumber: "N01-123456",
-      plateNumber: "TXA 448",
       emergencyContactName: "Inay",
       emergencyContactNumber: "+639171234502",
+      emergencyContact: "Inay - +639171234502",
       fcmToken: "device-push-token",
       updatedAt: new Date(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      plateNumber: "TXB 449",
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      licenseNumber: "N01-123456",
     })
   );
 });
@@ -342,6 +351,25 @@ test("a legacy plaintext password field can be REMOVED but never SET", async () 
   await assertSucceeds(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
       password: deleteField(),
+    })
+  );
+});
+
+test("only admins can read and manage driver plate claims", async () => {
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  await assertSucceeds(
+    setDoc(doc(adminDb, "driverPlateClaims/TXA448"), {
+      phoneNumber: DRIVER_PHONE,
+      driverId,
+    })
+  );
+  await assertFails(
+    getDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), "driverPlateClaims/TXA448"))
+  );
+  await assertFails(
+    setDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), "driverPlateClaims/ABC1234"), {
+      phoneNumber: DRIVER_PHONE,
+      driverId,
     })
   );
 });
