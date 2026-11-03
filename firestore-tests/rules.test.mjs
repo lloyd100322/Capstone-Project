@@ -257,6 +257,11 @@ test("deactivated station admin cannot modify a queue with an old session", asyn
       updatedAt: new Date(),
     })
   );
+  await assertFails(
+    setDoc(doc(oldAdminSession, "settings/queueControl"), {
+      revision: 1,
+    })
+  );
 });
 
 // ---------------------------------------------------------- incident sharing

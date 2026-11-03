@@ -232,18 +232,20 @@ service cloud.firestore {
 
       // A station admin only needs to advance the shared queue revision
       // for actions on their own route. Rotation metadata is global.
-      allow create: if isSuperadmin()
+      allow create: if (isSuperadmin() && ownAccountIsActive())
         || (
           isAdmin()
+          && ownAccountIsActive()
           && docId == 'queueControl'
           && request.resource.data.keys().hasOnly(['revision', 'updatedAt'])
           && request.resource.data.revision is int
           && request.resource.data.revision == 1
         );
 
-      allow update: if isSuperadmin()
+      allow update: if (isSuperadmin() && ownAccountIsActive())
         || (
           isAdmin()
+          && ownAccountIsActive()
           && docId == 'queueControl'
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['revision', 'updatedAt'])
@@ -251,7 +253,7 @@ service cloud.firestore {
           && request.resource.data.revision == resource.data.revision + 1
         );
 
-      allow delete: if isSuperadmin();
+      allow delete: if isSuperadmin() && ownAccountIsActive();
     }
 
     // ------------------------------------------------------------------
