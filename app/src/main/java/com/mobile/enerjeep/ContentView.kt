@@ -24,10 +24,14 @@ fun ContentView(
     activity: MainActivity,
     viewModel: ContentViewModel = hiltViewModel()
 ) {
-    val navController = rememberNavController()
     val authState by viewModel.authState.collectAsStateWithLifecycle()
+    val navigationResetVersion by
+        viewModel.navigationResetVersion.collectAsStateWithLifecycle()
 
-    EnerjeepTheme {
+    key(navigationResetVersion) {
+        val navController = rememberNavController()
+
+        EnerjeepTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = LightGrayBackground
@@ -75,6 +79,7 @@ fun ContentView(
                     }
                 }
             }
+        }
         }
     }
 }
