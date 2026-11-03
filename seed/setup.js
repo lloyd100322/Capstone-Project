@@ -1,936 +1,1107 @@
 #!/usr/bin/env node
 /**
- * EnerJeep — paghahanda ng datos ng Firestore (tunay na datos ng
- * kooperatiba para sa unang takbo ng app).
+ * EnerJeep operational dataset refresh.
  *
- * Lumilikha ng handa-nang-gamitin na mga account, queue entries sa
- * dalawang ruta, mga insidente, dispatch ledger records, mga donasyon,
- * settings, emergency contacts at audit log — kumpleto ang bawat
- * feature nang walang manwal na pag-encode.
+ * Builds realistic queue, incident, earnings, fine, donation, notification,
+ * emergency-contact and audit records using the existing Firestore accounts.
  *
- * Usage:
- *   node setup.js --serviceAccount /path/to/serviceAccount.json
- *   node setup.js                      (uses GOOGLE_APPLICATION_CREDENTIALS)
- *
- * Options:
- *   --wipe     delete existing docs in the collections first
- *              (DANGEROUS - never on a project with real data)
- *
- * Ang password hash ay kapareho ng PasswordHasher ng app:
- * PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte salt, 256-bit
- * output, hex-encoded. Ang password ay plain ASCII kaya pareho ang
- * Java at Node encoding.
- *
- * NEVER commit the service-account key. Keep it outside the repo.
+ * Safety:
+ * - Never creates, deletes, or rewrites users, userSecrets, Firebase Auth users,
+ *   driverPlateClaims, or account profile fields.
+ * - Replaces only documents recorded in settings/operationsIndex plus the
+ *   exact document IDs written by the previous setup.js version.
+ * - Dry-run is the default. Pass --apply to write changes.
+ * - Keep service-account credentials outside this repository.
  */
 
 const admin = require("firebase-admin");
-const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
-// ---------------------------------------------------------------- args
-const args = process.argv.slice(2);
-const wipe = args.includes("--wipe");
-const serviceAccountArgIdx = args.indexOf("--serviceAccount");
-const serviceAccountPath =
-  serviceAccountArgIdx >= 0 ? args[serviceAccountArgIdx + 1] : null;
+// --------------------------------------------------------------------- CLI
+function readArg(name) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : null;
+}
 
-if (serviceAccountPath) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccountPath),
-  });
-} else {
-  // Uses GOOGLE_APPLICATION_CREDENTIALS or the default service account.
-  admin.initializeApp();
+const args = new Set(process.argv.slice(2));
+const applyChanges = args.has("--apply");
+const showHelp = args.has("--help") || args.has("-h");
+const projectId = readArg("--project");
+const serviceAccountPath = readArg("--serviceAccount");
+const EXPECTED_PROJECT_ID = "enerjeep-b8f3a";
+
+if (showHelp) {
+  console.log(
+    "Usage:\n" +
+    "  node setup.js --project " + EXPECTED_PROJECT_ID + "\n" +
+    "  node setup.js --project " + EXPECTED_PROJECT_ID + " --apply\n" +
+    "  node setup.js --serviceAccount C:\\\\path\\\\serviceAccount.json " +
+      "--project " + EXPECTED_PROJECT_ID + " --apply\n\n" +
+    "Without --apply the script only previews the planned changes."
+  );
+  process.exit(0);
+}
+
+if (!projectId) {
+  console.error("Kailangan ang --project para matiyak ang target Firebase project.");
+  process.exit(1);
+}
+
+if (projectId !== EXPECTED_PROJECT_ID) {
+  console.error("Hindi tugma ang project. Inaasahan: " + EXPECTED_PROJECT_ID);
+  process.exit(1);
+}
+
+try {
+  if (serviceAccountPath) {
+    const absolutePath = path.resolve(serviceAccountPath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error("Hindi makita ang service-account file: " + absolutePath);
+    }
+    const serviceAccount = JSON.parse(fs.readFileSync(absolutePath, "utf8"));
+    if (serviceAccount.project_id !== projectId) {
+      throw new Error(
+        "Ang service-account key ay para sa " + serviceAccount.project_id +
+        ", hindi sa " + projectId + "."
+      );
+    }
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: projectId,
+    });
+  } else {
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+      projectId: projectId,
+    });
+  }
+} catch (error) {
+  console.error("Hindi ma-initialize ang Firebase Admin SDK:", error.message);
+  process.exit(1);
 }
 
 const db = admin.firestore();
+const FieldValue = admin.firestore.FieldValue;
+const Timestamp = admin.firestore.Timestamp;
+const TIME_ZONE = "Asia/Manila";
+const INDEX_REF = db.collection("settings").doc("operationsIndex");
+const ROUTE_AM = "Marilao – Monumento";
+const ROUTE_MA = "Monumento – Marilao";
 
-// ------------------------------------------------------------- helpers
-// Must match PasswordHasher.ITERATIONS in the Android app.
-const PBKDF2_ITERATIONS = 210_000;
-
-function pbkdf2(password, saltHex) {
-  return crypto
-    .pbkdf2Sync(
-      password,
-      Buffer.from(saltHex, "hex"),
-      PBKDF2_ITERATIONS,
-      32,
-      "sha256"
-    )
-    .toString("hex");
-}
-
-function makeSalt() {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-function makeSecrets(password) {
-  const salt = makeSalt();
-  return {
-    passwordHash: pbkdf2(password, salt),
-    passwordSalt: salt,
-    iterations: PBKDF2_ITERATIONS,
-  };
-}
-
-/** Firestore Timestamp from a JS Date. */
-function ts(date) {
-  return admin.firestore.Timestamp.fromDate(date);
-}
-
-function daysAgo(back, hh = 9, mm = 0) {
-  const d = new Date();
-  d.setDate(d.getDate() - back);
-  d.setHours(hh, mm, 0, 0);
-  return d;
-}
-
-function timeLabel(d) {
-  return d.toLocaleTimeString("en-US", {
+// --------------------------------------------------------------------- dates
+function manilaParts(date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const value = {};
+  parts.forEach(function (part) {
+    if (part.type !== "literal") value[part.type] = Number(part.value);
   });
+  return value;
 }
 
-function dateLabel(d) {
-  return d.toLocaleDateString("en-US", {
+function daysAgo(days, hour, minute) {
+  const p = manilaParts(new Date());
+  return new Date(Date.UTC(
+    p.year,
+    p.month - 1,
+    p.day - days,
+    hour - 8,
+    minute,
+    0,
+    0
+  ));
+}
+
+function monthDate(monthsAgo, day, hour, minute) {
+  const p = manilaParts(new Date());
+  const monthIndex = (p.year * 12 + (p.month - 1)) - monthsAgo;
+  const year = Math.floor(monthIndex / 12);
+  const month = monthIndex % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const safeDay = Math.min(Math.max(day, 1), lastDay);
+  return new Date(Date.UTC(year, month, safeDay, hour - 8, minute, 0, 0));
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function timestamp(date) {
+  return Timestamp.fromDate(date);
+}
+
+function dateLabel(date) {
+  return date.toLocaleDateString("en-US", {
+    timeZone: TIME_ZONE,
     month: "short",
     day: "2-digit",
     year: "numeric",
   });
 }
 
-/** Maikling pantay na suffix para sa mga tunay na doc id (deterministic). */
-function tag(n) {
-  return (0xa100 + n).toString(16);
+function timeLabel(date) {
+  return date.toLocaleTimeString("en-US", {
+    timeZone: TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
-// ---------------------------------------------------------------- data
-const ROUTE_AM = "Marilao – Monumento"; // entry route
-const ROUTE_MA = "Monumento – Marilao"; // fills up after dispatches
+function queueDayId(date, cutoffHour) {
+  const p = manilaParts(date);
+  const shift = p.hour >= cutoffHour ? 1 : 0;
+  const operatingDay = new Date(Date.UTC(
+    p.year, p.month - 1, p.day + shift
+  ));
+  return String(operatingDay.getUTCFullYear()) +
+    String(operatingDay.getUTCMonth() + 1).padStart(2, "0") +
+    String(operatingDay.getUTCDate()).padStart(2, "0");
+}
 
-/*
- * TUNAY NA LISTAHAN NG TERMINAL (mula sa aktwal na listahan ng terminal).
- * Pangalan at plate number lang ang nasa listahan; ang ibang fields
- * (apelyido, cellphone, lisensya, seater, emergency contact) ay
- * pinunan para kompleto ang account sa app.
- *
- * Dalawang pangalan ang blanko sa listahan (#8 at ang DLH 781 na walang
- * numero) - "Bong" at "Marlon" ang mga pansamantalang pangalan.
- */
-const roster = [
-  ["Roger", "TXA 448"],
-  ["Jess", "DGT 463"], // may pangalawang plate sa listahan: APT 255
-  ["Joel", "PWU 904"], // may pangalawang plate sa listahan: DKP 874
-  ["Gadaw", "CLJ 406"],
-  ["Bobet", "DDZ 726"],
-  ["Ryan", "PWD 501"],
-  ["Jhomson", "DKZ 231"],
-  ["Bong", "TWL 530"], // walang pangalan sa listahan - pansamantalang pangalan
-  ["Dong", "PIJ 242"],
-  ["Loloy", "DGV 885"],
-  ["Saludo", "BBG 981"],
-  ["Romie", "DGP 374"],
-  ["Dexter", "TVV 252"],
-  ["Joey", "PWS 831"],
-  ["Greg", "TXV 421"],
-  ["Narcing", "CWJ 183"],
-  ["Abet", "NVV 571"],
-  ["Champoy", "DGN 444"],
-  ["Jimmy", "DFH 706"],
-  ["Efren", "TXB 786"],
-  ["Batemg", "TWG 363"],
-  ["Ben", "NVW 659"],
-  ["Aljon", "CVP 680"],
-  ["Mark", "CVR 895"],
-  ["Terry", "EFM 592"],
-  ["Boyet", "PXE 220"],
-  ["Kemmeth", "TWK 437"],
-  ["Lamdo", "NYZ 488"],
-  ["Billy", "TGM 352"],
-  ["Michael", "TCL 133"],
-  ["Pat", "CVB 871"],
-  ["Jun", "TVA 282"],
-  ["Marlon", "DLH 781"], // walang numero/pangalan sa listahan - pansamantalang pangalan
-];
+function safeId(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^A-Za-z0-9_-]/g, "_");
+}
 
-// Mga apelyidong pantulong lang (wala sa listahan) - pinunan para kumpleto.
-const LAST_NAMES = [
-  "Santos", "Reyes", "Cruz", "Bautista", "Mendoza", "Garcia", "Ramos",
-  "Torres", "Dela Cruz", "Fernandez", "Aquino", "Castillo", "Ramirez",
-  "Gonzales", "Francisco", "Diaz", "Lopez", "Rivera", "Gomez", "Alvarez",
-  "Romero", "Navarro", "Pascual", "Sandoval", "Marquez", "Estrada",
-  "Domingo", "Aguirre", "Padilla", "Manalo", "Mercado", "Del Rosario",
-  "Valdez",
-];
+function fullName(account) {
+  return [account.firstName, account.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
 
-const ACCOUNT_PASSWORD = "Enerjeep@2026";
+function accountRoleLabel(role) {
+  if (role === "superadmin") return "Superadmin";
+  if (role === "admin") return "Admin";
+  return "Driver";
+}
 
-const users = [
-  {
-    phone: "+639171000001",
-    userId: "USR-0001",
-    firstName: "Ramon",
-    lastName: "Villanueva",
-    role: "superadmin",
-  },
-  {
-    phone: "+639171000002",
-    userId: "USR-0002",
-    firstName: "Maria",
-    lastName: "Santos",
-    role: "admin",
-    adminStation: "marilao", // "Admin - Marilao" ang badge
-  },
-  // Drivers - tunay na pangalan at plate mula sa listahan ng terminal.
-  ...roster.map(([name, plate], i) => ({
-    phone: "+639171" + String(3 + i).padStart(6, "0"),
-    userId: "USR-" + String(3 + i).padStart(4, "0"),
-    firstName: name,
-    lastName: LAST_NAMES[i],
-    role: "driver",
-    plate,
-    seater: i % 2 === 0 ? 16 : 22,
-    license:
-      "N" + String(i + 1).padStart(2, "0") +
-      "-" + String(21 + i).padStart(2, "0") +
-      "-" + String(100001 + i),
-  })),
-];
+function isAccountActive(data) {
+  return String(data.status || "active").toLowerCase() !== "inactive";
+}
 
-const drivers = users.filter((u) => u.role === "driver");
+function isMemberRole(role) {
+  return role === "admin" || role === "superadmin" || role === "driver";
+}
 
-// ------------------------------------------------------------ writing
-async function wipeCollections() {
-  const collections = [
-    "users",
-    "userSecrets",
-    "driverPlateClaims",
-    "queue",
-    "incidents",
-    "ledger",
-    "kita",
-    "donations",
-    "settings",
-    "activityLogs",
-    "emergencyContacts",
-    "kitaHistory",
-  ];
-  for (const name of collections) {
-    const snap = await db.collection(name).limit(500).get();
-    if (snap.empty) continue;
-    const batch = db.batch();
-    snap.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    console.log(`  wiped ${snap.size} docs from ${name}/`);
+function amountForSeat(seater, tiers) {
+  const key = String(seater);
+  const configured = Number(tiers[key]);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  return seater > 0 ? seater * 2 : 0;
+}
+
+function legacyTag(number) {
+  return (0xa100 + number).toString(16);
+}
+
+// --------------------------------------------------------------------- old dataset IDs
+// Only the exact operational document IDs from the previous setup.js are
+// removed. Account and password documents are deliberately excluded.
+function previousSetupDocumentIds() {
+  const ids = {
+    queue: [],
+    incidents: [],
+    ledger: [],
+    donations: [],
+    emergencyContacts: [],
+    activityLogs: [],
+  };
+
+  const oldDriverIds = [];
+  for (let i = 3; i <= 35; i++) {
+    oldDriverIds.push("USR-" + String(i).padStart(4, "0"));
   }
-}
 
-/*
- * Linisin ang mga lumang doc (mga nakaraang bersyon ng datos) para
- * hindi na kailangan ng --wipe tuwing muling tatakbo laban sa may
- * datos nang database. Kasama rito ang:
- *   - mga doc na may "seed" sa id (lumang scheme ng id);
- *   - LAHAT ng doc sa "kita"/"kitaHistory" (lumang manual entries -
- *     gastos/multa/pamasahe na binabawas sa kita; ang kita ng driver
- *     ay dispatch records lang sa "ledger" ngayon);
- *   - mga ledger record na nag-uugnay ng donasyon sa kita ng driver
- *     (DAPAT hiwalay ang donasyon - hindi ito binabawas sa sinuman).
- * Walang epekto kung wala na ang mga doc na ito.
- */
-async function cleanupLegacyDocs() {
-  const collections = [
-    "users",
-    "userSecrets",
-    "queue",
-    "incidents",
-    "ledger",
-    "kita",
-    "donations",
-    "activityLogs",
-    "emergencyContacts",
-    "kitaHistory",
-  ];
-
-  const donationWord = /donasyon|donation|ambag/i;
-
-  for (const name of collections) {
-    const snap = await db.collection(name).limit(500).get();
-    if (snap.empty) continue;
-
-    const doomed = snap.docs.filter((doc) => {
-      if (doc.id.toLowerCase().includes("seed")) return true;
-
-      // Ang "kita"/"kitaHistory" ay hindi na ginagamit - lahat ng
-      // laman ay legacy (manual entries na binabawas sa kita).
-      if (name === "kita" || name === "kitaHistory") return true;
-
-      // Ang donasyon ay nasa /donations lang - walang record sa kita
-      // o ledger na dapat magbanggit nito (lalo na bilang bawas).
-      if (name === "kita" || name === "ledger") {
-        const x = doc.data();
-        const text = [x.title, x.type, x.feeType, x.note, x.source]
-          .filter(Boolean)
-          .join(" ");
-        if (donationWord.test(text)) return true;
-      }
-      return false;
-    });
-
-    if (doomed.length === 0) continue;
-    const batch = db.batch();
-    doomed.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
-    console.log(`  cleanup: inalis ang ${doomed.length} lumang doc sa ${name}/`);
+  // Previous active queue entries on Marilao – Monumento.
+  for (let i = 0; i <= 16; i++) {
+    ids.queue.push(
+      "queue_" + oldDriverIds[i] + "_" + legacyTag(i)
+    );
   }
-}
 
-async function writeUsers() {
-  for (const u of users) {
-    const isDriver = u.role === "driver";
-    const doc = {
-      userId: u.userId,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      phoneNumber: u.phone,
-      role: u.role,
-      status: "active",
-      createdAt: ts(daysAgo(30)),
-    };
-    if (isDriver) {
-      doc.licenseNumber = u.license;
-      doc.plateNumber = u.plate;
-      doc.seater = u.seater;
-      doc.emergencyContactName = "Bahay ni " + u.firstName;
-      doc.emergencyContactNumber = "+6391755500" + u.phone.slice(-2);
-      doc.emergencyContact =
-        "Bahay ni " + u.firstName + " - +6391755500" + u.phone.slice(-2);
-      doc.isVehicleActive = true;
-    }
-    if (u.adminStation) {
-      doc.adminStation = u.adminStation;
-    }
-    await db.collection("users").doc(u.phone).set(doc);
-
-    if (isDriver) {
-      const normalizedPlate = String(u.plate || "")
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, "");
-      await db.collection("driverPlateClaims").doc(normalizedPlate).set({
-        phoneNumber: u.phone,
-        driverId: u.userId,
-        createdAt: ts(daysAgo(30)),
-        updatedAt: ts(daysAgo(30)),
-      });
-    }
-
-    await db
-      .collection("userSecrets")
-      .doc(u.phone)
-      .set({
-        ...makeSecrets(ACCOUNT_PASSWORD),
-        createdAt: ts(daysAgo(30)),
-      });
+  // Previous active queue entries on Monumento – Marilao (except #1,
+  // which was the returning queue entry written after a dispatch).
+  for (let i = 1; i <= 15; i++) {
+    ids.queue.push(
+      "queue_" + oldDriverIds[17 + i] + "_" + legacyTag(100 + i)
+    );
   }
-  console.log(`  users + userSecrets: ${users.length} accounts`);
-}
 
-async function writeQueue() {
-  /*
-   * Tunay na pila ng terminal: lahat ng 33 drayber mula sa listahan,
-   * hinati sa dalawang ruta (17 sa Marilao-Monumento, 16 sa
-   * Monumento-Marilao). May dagdag na isang tapos na biyahe kahapon at
-   * isang nakansela para makita ang estado ng Kasaysayan at Nakansela.
-   *
-   * Ang bawat na-dispatch na biyahe ay may tatlong doc, gaya ng
-   * sinusulat ng app: ang na-dispatch na entry (kasaysayan), ang
-   * muling pila (`queue_<driverId>_after_<entryId>`), at ang ledger
-   * record (`<entryId>_dispatch`).
-   */
-  const amDrivers = drivers.slice(0, 17);
-  const maDrivers = drivers.slice(17);
-  let batch = db.batch();
+  const oldRogerDispatch =
+    "queue_" + oldDriverIds[0] + "_" + legacyTag(201);
+  const oldJessDispatch =
+    "queue_" + oldDriverIds[1] + "_" + legacyTag(202);
+  const oldJimmyDispatch =
+    "queue_" + oldDriverIds[17] + "_" + legacyTag(203);
 
-  // ---- kahapon: kumpletong biyahe ni Roger (dispatch -> requeue -> tapos)
-  const rogerDispatchId = `queue_${drivers[0].userId}_${tag(201)}`;
-  batch.set(db.collection("queue").doc(rogerDispatchId), {
-    id: rogerDispatchId,
-    driverId: drivers[0].userId,
-    plateNumber: drivers[0].plate,
-    driverName: `${drivers[0].firstName} ${drivers[0].lastName}`.trim(),
-    route: ROUTE_AM,
-    position: 0,
-    status: "dispatched",
-    isCancelled: false,
-    income: 1152,
-    otherFees: 32,
-    netAmount: 1120,
-    time: timeLabel(daysAgo(1, 4, 50)),
-    createdAt: ts(daysAgo(1, 4, 50)),
-    dispatchedAt: ts(daysAgo(1, 8, 0)),
-    updatedAt: ts(daysAgo(1, 8, 0)),
-  });
-
-  const rogerRequeueId = `queue_${drivers[0].userId}_after_${rogerDispatchId}`;
-  batch.set(db.collection("queue").doc(rogerRequeueId), {
-    id: rogerRequeueId,
-    driverId: drivers[0].userId,
-    plateNumber: drivers[0].plate,
-    driverName: `${drivers[0].firstName} ${drivers[0].lastName}`.trim(),
-    route: ROUTE_MA,
-    position: 0,
-    status: "completed",
-    isCancelled: false,
-    time: timeLabel(daysAgo(1, 8, 0)),
-    createdAt: ts(daysAgo(1, 8, 0)),
-    endTravelAt: ts(daysAgo(1, 12, 30)),
-    updatedAt: ts(daysAgo(1, 12, 30)),
-  });
-
-  // ---- 2 araw na nakalipas: na-dispatch si Jess (nasa aktibong pila
-  //      muli ngayon sa ibaba).
-  const jessDispatchId = `queue_${drivers[1].userId}_${tag(202)}`;
-  batch.set(db.collection("queue").doc(jessDispatchId), {
-    id: jessDispatchId,
-    driverId: drivers[1].userId,
-    plateNumber: drivers[1].plate,
-    driverName: `${drivers[1].firstName} ${drivers[1].lastName}`.trim(),
-    route: ROUTE_AM,
-    position: 0,
-    status: "dispatched",
-    isCancelled: false,
-    income: 1584,
-    otherFees: 44,
-    netAmount: 1540,
-    time: timeLabel(daysAgo(2, 6, 30)),
-    createdAt: ts(daysAgo(2, 6, 30)),
-    dispatchedAt: ts(daysAgo(2, 7, 55)),
-    updatedAt: ts(daysAgo(2, 7, 55)),
-  });
-
-  // ---- ngayong umaga: na-dispatch si Jimmy mula sa Marilao-Monumento,
-  //      kaya #1 na siya ngayon sa Monumento-Marilao.
-  const jimmyDispatchId = `queue_${drivers[17].userId}_${tag(203)}`;
-  batch.set(db.collection("queue").doc(jimmyDispatchId), {
-    id: jimmyDispatchId,
-    driverId: drivers[17].userId,
-    plateNumber: drivers[17].plate,
-    driverName: `${drivers[17].firstName} ${drivers[17].lastName}`.trim(),
-    route: ROUTE_AM,
-    position: 0,
-    status: "dispatched",
-    isCancelled: false,
-    income: 1364,
-    otherFees: 44,
-    netAmount: 1320,
-    time: timeLabel(daysAgo(0, 5, 30)),
-    createdAt: ts(daysAgo(0, 5, 30)),
-    dispatchedAt: ts(daysAgo(0, 7, 40)),
-    updatedAt: ts(daysAgo(0, 7, 40)),
-  });
-
-  const jimmyRequeueId = `queue_${drivers[17].userId}_after_${jimmyDispatchId}`;
-
-  amDrivers.forEach((d, i) => {
-    const at = daysAgo(0, 5 + (i % 12), 10 + (i % 6) * 8);
-    const id = `queue_${d.userId}_${tag(i)}`;
-    batch.set(db.collection("queue").doc(id), {
-      id,
-      driverId: d.userId,
-      plateNumber: d.plate,
-      driverName: `${d.firstName} ${d.lastName}`.trim(),
-      route: ROUTE_AM,
-      position: i + 1,
-      status: "Nakapila",
-      isCancelled: false,
-      time: timeLabel(at),
-      createdAt: ts(at),
-    });
-  });
-
-  maDrivers.forEach((d, i) => {
-    // Ang unang entry ng kabilang ruta = ang muling pila ni Jimmy pagkatapos
-    // ng dispatch (7:40 AM) - gaya ng ginagawa ng app.
-    if (i === 0) {
-      batch.set(db.collection("queue").doc(jimmyRequeueId), {
-        id: jimmyRequeueId,
-        driverId: d.userId,
-        plateNumber: d.plate,
-        driverName: `${d.firstName} ${d.lastName}`.trim(),
-        route: ROUTE_MA,
-        position: 1,
-        status: "Nakapila",
-        isCancelled: false,
-        time: timeLabel(daysAgo(0, 7, 40)),
-        createdAt: ts(daysAgo(0, 7, 40)),
-      });
-      return;
-    }
-
-    const at = daysAgo(0, 6 + (i % 10), 5 + (i % 6) * 9);
-    const id = `queue_${d.userId}_${tag(100 + i)}`;
-    batch.set(db.collection("queue").doc(id), {
-      id,
-      driverId: d.userId,
-      plateNumber: d.plate,
-      driverName: `${d.firstName} ${d.lastName}`.trim(),
-      route: ROUTE_MA,
-      position: i + 1,
-      status: "Nakapila",
-      isCancelled: false,
-      time: timeLabel(at),
-      createdAt: ts(at),
-    });
-  });
-
-  /*
-   * Isang nakanselang entry (Nakansela, nakikita pa rin sa listahan).
-   * Gaya ng ginagawa ng app: nananatiling "Nakapila" ang status,
-   * ang `isCancelled` flag ang nagtatakda ng "Nakansela", at nasa
-   * pinakadulo ng pila.
-   */
-  const cancelledId = `queue_${drivers[1].userId}_${tag(204)}`;
-  batch.set(db.collection("queue").doc(cancelledId), {
-    id: cancelledId,
-    driverId: drivers[1].userId,
-    plateNumber: drivers[1].plate,
-    driverName: `${drivers[1].firstName} ${drivers[1].lastName}`.trim(),
-    route: ROUTE_AM,
-    position: 34,
-    status: "Nakapila",
-    isCancelled: true,
-    time: timeLabel(daysAgo(0, 5, 55)),
-    createdAt: ts(daysAgo(0, 5, 55)),
-    cancelledAt: ts(daysAgo(0, 6, 20)),
-    updatedAt: ts(daysAgo(0, 6, 20)),
-  });
-
-  await batch.commit();
-  console.log(
-    "  queue: 33 drayber sa dalawang ruta (17 + 16) + 4 kasaysayan + 1 nakansela"
+  ids.queue.push(oldRogerDispatch);
+  ids.queue.push(oldJessDispatch);
+  ids.queue.push(oldJimmyDispatch);
+  ids.queue.push(
+    "queue_" + oldDriverIds[0] + "_after_" + oldRogerDispatch
+  );
+  ids.queue.push(
+    "queue_" + oldDriverIds[17] + "_after_" + oldJimmyDispatch
+  );
+  ids.queue.push(
+    "queue_" + oldDriverIds[1] + "_" + legacyTag(204)
   );
 
+  [301, 302, 303, 304].forEach(function (n) {
+    ids.incidents.push("incident_" + legacyTag(n));
+  });
+
+  [oldRogerDispatch, oldJessDispatch, oldJimmyDispatch].forEach(function (id) {
+    ids.ledger.push(id + "_dispatch");
+  });
+  [801, 802].forEach(function (n) {
+    ids.ledger.push("fee_" + legacyTag(n));
+  });
+
+  for (let i = 0; i < 5; i++) {
+    ids.donations.push("donation_" + legacyTag(501 + i));
+  }
+  for (let i = 0; i < 4; i++) {
+    ids.emergencyContacts.push("contact_" + legacyTag(601 + i));
+  }
+  for (let i = 0; i < 5; i++) {
+    ids.activityLogs.push("log_" + legacyTag(701 + i));
+  }
+
+  return ids;
+}
+
+// --------------------------------------------------------------------- read accounts
+async function loadExistingAccounts() {
+  const snapshot = await db.collection("users").get();
+  const accounts = snapshot.docs.map(function (document) {
+    const data = document.data() || {};
+    const role = String(data.role || "").trim().toLowerCase();
+    return {
+      docId: document.id,
+      phoneNumber: String(data.phoneNumber || document.id).trim(),
+      userId: String(data.userId || "").trim(),
+      firstName: String(data.firstName || "").trim(),
+      lastName: String(data.lastName || "").trim(),
+      role: role,
+      status: String(data.status || "active").trim().toLowerCase(),
+      adminStation: String(data.adminStation || "").trim().toLowerCase(),
+      plateNumber: String(data.plateNumber || "").trim().toUpperCase(),
+      seater: Math.max(0, Math.trunc(Number(data.seater || 0))),
+      isVehicleActive: data.isVehicleActive !== false,
+    };
+  });
+
+  const recognized = accounts.filter(function (account) {
+    return isMemberRole(account.role);
+  });
+  const activeMembers = recognized.filter(function (account) {
+    return account.status !== "inactive";
+  });
+  const activeDrivers = activeMembers.filter(function (account) {
+    return account.role === "driver" && account.isVehicleActive;
+  });
+  const admins = activeMembers.filter(function (account) {
+    return account.role === "admin";
+  });
+  const superadmins = activeMembers.filter(function (account) {
+    return account.role === "superadmin";
+  });
+
+  if (superadmins.length === 0) {
+    throw new Error("Walang active superadmin account sa /users.");
+  }
+  if (admins.length === 0) {
+    throw new Error("Walang active admin account sa /users.");
+  }
+  if (activeDrivers.length < 4) {
+    throw new Error(
+      "Kailangan ng hindi bababa sa 4 active driver accounts. " +
+      "Nakita: " + activeDrivers.length + "."
+    );
+  }
+
+  const invalidDrivers = activeDrivers.filter(function (driver) {
+    return !driver.userId || !driver.phoneNumber ||
+      !driver.firstName || !driver.lastName || !driver.plateNumber;
+  });
+  if (invalidDrivers.length > 0) {
+    throw new Error(
+      "May active driver account na kulang ang userId, pangalan, phoneNumber " +
+      "o plateNumber. Kumpletuhin muna ang account profiles sa app at ulitin."
+    );
+  }
+
+  const userIds = recognized.map(function (account) {
+    return account.userId;
+  }).filter(Boolean);
+  if (new Set(userIds).size !== userIds.length) {
+    throw new Error("May duplicate userId sa /users. Ayusin muna ang account records.");
+  }
+
+  const plates = activeDrivers.map(function (driver) {
+    return driver.plateNumber.replace(/[^A-Z0-9]/g, "");
+  });
+  if (new Set(plates).size !== plates.length) {
+    throw new Error("May duplicate plateNumber sa active driver accounts.");
+  }
+
+  activeDrivers.sort(function (a, b) {
+    return a.userId.localeCompare(b.userId);
+  });
+  admins.sort(function (a, b) {
+    return a.userId.localeCompare(b.userId);
+  });
+  superadmins.sort(function (a, b) {
+    return a.userId.localeCompare(b.userId);
+  });
+
   return {
-    rogerDispatchId,
-    jessDispatchId,
-    jimmyDispatchId,
+    all: recognized,
+    activeMembers: activeMembers,
+    activeDrivers: activeDrivers,
+    admins: admins,
+    superadmins: superadmins,
   };
 }
 
-async function writeIncidents() {
-  const incidents = [
-    {
-      id: `incident_${tag(301)}`,
-      open: true,
-      title: "Flat tire sa gulong",
-      plate: drivers[0].plate,
-      driver: drivers[0],
-      location: "McArthur Highway, Meycauayan, Bulacan",
-      description:
-        "Napunit ang gulong sa kaliwang bahagi habang papunta ng Monumento. Nagpapalit na ng gulong.",
-      daysBack: 0,
-      hour: 7,
-      multiya: 0,
-      sent: true, // lahat ng insidente ay naipadala na -> nakikita ng driver
-    },
-    {
-      id: `incident_${tag(302)}`,
-      open: true,
-      title: "Overheating ng makina",
-      plate: drivers[2].plate,
-      driver: drivers[2],
-      location: "Marilao Town Proper, Marilao, Bulacan",
-      description:
-        "Umaandar ang makina ngunit mabilis uminit. Huminto para magpalamig bago magpatuloy.",
-      daysBack: 0,
-      hour: 9,
-      multiya: 0,
-      sent: true,
-    },
-    {
-      id: `incident_${tag(303)}`,
-      open: false,
-      title: "Minor collision sa Monumento",
-      plate: drivers[1].plate,
-      driver: drivers[1],
-      location: "Monumento Circle, Caloocan City",
-      description:
-        "Dumikit sa panaklong ang harap na bahagi habang pumipila sa biyahe. Walang sugatan.",
-      daysBack: 1,
-      hour: 15,
-      multiya: 150,
-      sent: true,
-    },
-    {
-      id: `incident_${tag(304)}`,
-      open: false,
-      title: "Nawalang side mirror",
-      plate: drivers[3].plate,
-      driver: drivers[3],
-      location: "Brgy. Malinta, Valenzuela City",
-      description:
-        "Natanggal ang kanang side mirror matapos ang siksikang biyahe. Naipalit na.",
-      daysBack: 2,
-      hour: 11,
-      multiya: 0,
-      sent: true,
-    },
-  ];
+// --------------------------------------------------------------------- settings
+async function loadSettings(drivers) {
+  const refs = {
+    tiers: db.collection("settings").doc("deductionTiers"),
+    rotation: db.collection("settings").doc("queueRotation"),
+    queueControl: db.collection("settings").doc("queueControl"),
+  };
 
-  let batch = db.batch();
-  for (const it of incidents) {
-    const at = daysAgo(it.daysBack, it.hour, 20);
-    batch.set(db.collection("incidents").doc(it.id), {
-      id: it.id,
-      driverId: it.driver.userId,
-      driverName: `${it.driver.firstName} ${it.driver.lastName}`,
-      driverPhone: it.driver.phone,
-      plateNumber: it.plate,
-      title: it.title,
-      location: it.location,
-      description: it.description,
-      date: dateLabel(at),
-      isResolved: !it.open,
-      status: it.open ? "open" : "resolved",
-      penalty: it.multiya,
-      sentToDriver: it.sent,
-      createdAt: ts(at),
-    });
-  }
-  await batch.commit();
-  console.log(
-    "  incidents: 2 bukas + 2 naayos (may multa ang isa) — " +
-      "sentToDriver: true sa lahat = nakikita ng driver"
-  );
+  const snapshots = await Promise.all([
+    refs.tiers.get(),
+    refs.rotation.get(),
+    refs.queueControl.get(),
+  ]);
+
+  const tiersData = snapshots[0].exists ? (snapshots[0].data() || {}) : {};
+  const tiers = Object.assign({}, tiersData);
+  if (!Number.isFinite(Number(tiers["16"]))) tiers["16"] = 32;
+  if (!Number.isFinite(Number(tiers["22"]))) tiers["22"] = 44;
+
+  drivers.forEach(function (driver) {
+    if (driver.seater > 0 && !Number.isFinite(Number(tiers[String(driver.seater)]))) {
+      tiers[String(driver.seater)] = driver.seater * 2;
+    }
+  });
+
+  const storedCutoff = snapshots[1].exists
+    ? Number(snapshots[1].get("cutoffHour"))
+    : 21;
+  const cutoffHour = Number.isInteger(storedCutoff) &&
+    storedCutoff >= 0 && storedCutoff <= 23
+    ? storedCutoff
+    : 21;
+
+  const previousRevision = snapshots[2].exists
+    ? Number(snapshots[2].get("revision") || 0)
+    : 0;
+
+  return {
+    tiers: tiers,
+    cutoffHour: cutoffHour,
+    nextQueueRevision: previousRevision + 1,
+  };
 }
 
-async function writeLedger(dispatchIds) {
-  let batch = db.batch();
-  let n = 0;
+// --------------------------------------------------------------------- dataset generation
+function buildDataset(accounts, settings) {
+  const drivers = accounts.activeDrivers;
+  const admins = accounts.admins;
+  const superadmin = accounts.superadmins[0];
+  const adminActor = admins[0];
 
-  /*
-   * Ang kita ng driver ay nagmumula lang sa mga dispatch record sa
-   * "ledger" (mga "<entryId>_dispatch"). WALANG manual na entries sa
-   * "kita" collection: hindi nire-record sa app ang sariling gastos
-   * ng driver (diesel, toll, atbp.) at walang binabawas sa kita
-   * ("walang bawas na kahit ano").
-   *
-   * TANDAAN: ang donasyon ay HIWALAY sa kita ng mga driver - nasa
-   * /donations lang ito at hindi kailanman binabawas sa kita.
-   *
-   * Dispatch ledger records (kaakibat ng mga na-dispatch na queue
-   * entry sa itaas). Ang id ay `<entryId>_dispatch` - eksaktong hugis
-   * na sinusulat ng app (QueueViewModel.dispatchVehicle), kaya kahit
-   * ulitin ang dispatch ay isang record lang ang mananatili.
-   */
-  const dispatches = [
-    [dispatchIds.jimmyDispatchId, drivers[17], daysAgo(0, 7, 40), 1320],
-    [dispatchIds.rogerDispatchId, drivers[0], daysAgo(1, 8, 0), 1120],
-    [dispatchIds.jessDispatchId, drivers[1], daysAgo(2, 7, 55), 1540],
-  ];
-  dispatches.forEach(([queueId, driver, d, net]) => {
-    const id = `${queueId}_dispatch`;
-    const tierBySeater = { 16: 32, 22: 44 }; // settings/deductionTiers
-    const tier = tierBySeater[driver.seater] ?? driver.seater * 2;
-    batch.set(db.collection("ledger").doc(id), {
-      id,
+  const collections = {
+    queue: [],
+    incidents: [],
+    ledger: [],
+    donations: [],
+    emergencyContacts: [],
+    activityLogs: [],
+  };
+  const notifications = [];
+  const add = function (collection, id, data) {
+    collections[collection].push({
+      id: id,
+      ref: db.collection(collection).doc(id),
+      data: data,
+    });
+  };
+  const notification = function (account, id, data) {
+    notifications.push({
+      userDocumentId: account.docId,
+      id: id,
+      ref: db.collection("users")
+        .doc(account.docId)
+        .collection("notifications")
+        .doc(id),
+      data: data,
+    });
+  };
+
+  const driverName = function (driver) {
+    return fullName(driver) || "Driver";
+  };
+
+  // One current queue entry for every active driver, split across both routes.
+  const routePositions = { marilao: 0, monumento: 0 };
+  drivers.forEach(function (driver, index) {
+    const station = index % 2 === 0 ? "marilao" : "monumento";
+    const route = station === "marilao" ? ROUTE_AM : ROUTE_MA;
+    routePositions[station] += 1;
+    const joinedAt = daysAgo(0, 5, Math.min(55, index));
+    const id = "queue_" + safeId(driver.userId) + "_daily";
+    add("queue", id, {
+      id: id,
       driverId: driver.userId,
-      driverName: `${driver.firstName} ${driver.lastName}`,
-      plateNumber: driver.plate,
-      queueId,
-      date: dateLabel(d),
-      amount: net,
-      grossAmount: net + tier,
-      otherFees: tier,
+      plateNumber: driver.plateNumber,
+      driverName: driverName(driver),
+      route: route,
+      position: routePositions[station],
+      status: "Nakapila",
+      isCancelled: false,
+      time: timeLabel(joinedAt),
+      createdAt: timestamp(joinedAt),
+    });
+  });
+
+  // Dispatch and earnings history spread over the last six calendar months.
+  // Every active driver receives at least one matching queue + ledger record.
+  const eventCount = Math.max(drivers.length, 24);
+  const dispatchEvents = [];
+  for (let i = 0; i < eventCount; i++) {
+    const driver = drivers[i % drivers.length];
+    const monthOffset = i % 6;
+    const cycle = Math.floor(i / 6);
+    const dispatchAt = monthOffset === 0
+      ? daysAgo(0, 6 + ((cycle * 2) % 11), (10 + cycle * 7) % 60)
+      : monthDate(monthOffset, [5, 13, 22][cycle % 3], 7 + (cycle % 8), (cycle * 11) % 60);
+
+    const joinedAt = addMinutes(dispatchAt, -35);
+    const route = (i + 1) % 2 === 0 ? ROUTE_AM : ROUTE_MA;
+    const seater = driver.seater > 0 ? driver.seater : 16;
+    const deduction = amountForSeat(seater, settings.tiers);
+    const gross = 1050 + ((i * 73) % 620);
+    const net = Math.max(0, gross - deduction);
+    const status = monthOffset === 0 && cycle < 2
+      ? "dispatched"
+      : "completed";
+
+    const queueId = "queue_" + safeId(driver.userId) +
+      "_history_" + String(monthOffset + 1).padStart(2, "0") +
+      "_" + String(cycle + 1).padStart(2, "0");
+
+    const queueData = {
+      id: queueId,
+      driverId: driver.userId,
+      plateNumber: driver.plateNumber,
+      driverName: driverName(driver),
+      route: route,
+      position: 0,
+      status: status,
+      isCancelled: false,
+      income: gross,
+      otherFees: deduction,
       netAmount: net,
-      seater: driver.seater,
-      seaterDeduction: tier,
+      time: timeLabel(joinedAt),
+      createdAt: timestamp(joinedAt),
+      dispatchedAt: timestamp(dispatchAt),
+      updatedAt: timestamp(dispatchAt),
+    };
+    if (status === "completed") {
+      queueData.endTravelAt = timestamp(addMinutes(dispatchAt, 150 + (i % 5) * 20));
+    }
+    add("queue", queueId, queueData);
+
+    const ledgerId = queueId + "_dispatch";
+    add("ledger", ledgerId, {
+      id: ledgerId,
+      driverId: driver.userId,
+      driverName: driverName(driver),
+      plateNumber: driver.plateNumber,
+      queueId: queueId,
+      date: dateLabel(dispatchAt),
+      amount: net,
+      grossAmount: gross,
+      otherFees: deduction,
+      netAmount: net,
+      seater: seater,
+      seaterDeduction: deduction,
       deductionCustomized: false,
       feeType: "Dispatch",
       status: "Bayad",
       source: "queue_dispatch",
-      createdAt: ts(d),
+      createdAt: timestamp(dispatchAt),
     });
-    n++;
+
+    dispatchEvents.push({
+      id: queueId,
+      driver: driver,
+      route: route,
+      at: dispatchAt,
+      gross: gross,
+      deduction: deduction,
+      net: net,
+      ledgerId: ledgerId,
+    });
+  }
+
+  // A cancelled entry remains in history, not among the active queue rows.
+  const cancelledDriver = drivers[1];
+  const cancelledAt = daysAgo(0, 5, 45);
+  const cancelledId = "queue_" + safeId(cancelledDriver.userId) + "_cancelled";
+  add("queue", cancelledId, {
+    id: cancelledId,
+    driverId: cancelledDriver.userId,
+    plateNumber: cancelledDriver.plateNumber,
+    driverName: driverName(cancelledDriver),
+    route: ROUTE_AM,
+    position: 0,
+    status: "cancelled",
+    isCancelled: true,
+    time: timeLabel(daysAgo(0, 5, 15)),
+    createdAt: timestamp(daysAgo(0, 5, 15)),
+    cancelledAt: timestamp(cancelledAt),
+    updatedAt: timestamp(cancelledAt),
   });
 
-  /*
-   * Mga bayad ng multa (Talaan -> "I-record ang Bayad ng Multa").
-   * Nasa ledger ang mga ito (feeType "Multa") - para sa "Ulat ng
-   * Multa" ng admin. HIWALAY ang mga ito sa kita ng driver: hindi
-   * binabawas sa kita kahit na kano. Eksaktong hugis na sinusulat ng
-   * LedgerViewModel.addCollection, kaya lumalabas din ang mga ito sa
-   * Talaan gaya ng totoong record.
-   */
-  const fines = [
-    // Bayad sa multa ng "Minor collision sa Monumento" (insidente).
-    [drivers[1], daysAgo(1, 16, 0), 150],
-    // Multa sa trapiko na diretsong inirekord sa Talaan.
-    [drivers[2], daysAgo(2, 9, 30), 150],
+  // Incident records: open and resolved items with dates, locations and penalties.
+  const incidentTemplates = [
+    {
+      title: "Flat tire sa likurang gulong",
+      location: "MacArthur Highway, Marilao, Bulacan",
+      description: "Nabutas ang likurang gulong habang bumibiyahe. Naiparada nang ligtas ang sasakyan at napalitan ang gulong.",
+      daysBack: 0, hour: 7, minute: 20, penalty: 0, resolved: false,
+    },
+    {
+      title: "Pag-init ng makina",
+      location: "Lias Road, Marilao, Bulacan",
+      description: "Uminit ang makina habang mabigat ang daloy ng trapiko. Pansamantalang huminto ang driver at sinuri ang cooling system.",
+      daysBack: 0, hour: 9, minute: 10, penalty: 0, resolved: false,
+    },
+    {
+      title: "Minor collision sa gilid ng kalsada",
+      location: "Monumento Circle, Caloocan City",
+      description: "Nagkaroon ng gasgas sa harapang bahagi habang pumapasok sa pila. Walang naiulat na nasaktan at na-inspeksyon ang sasakyan.",
+      daysBack: 2, hour: 14, minute: 35, penalty: 250, resolved: true,
+    },
+    {
+      title: "Nasirang side mirror",
+      location: "Brgy. Malinta, Valenzuela City",
+      description: "Natamaan ang kanang side mirror sa masikip na kalsada. Napalitan na ang piyesa at nasuri ang pagkakakabit.",
+      daysBack: 5, hour: 11, minute: 5, penalty: 0, resolved: true,
+    },
+    {
+      title: "Pagtagas ng hangin sa preno",
+      location: "Longos, Meycauayan City, Bulacan",
+      description: "Napansin ang pagbabago sa tunog ng preno bago bumiyahe. Itinigil muna ang operasyon at ipinatingin ang brake line.",
+      daysBack: 1, hour: 8, minute: 40, penalty: 0, resolved: false,
+    },
+    {
+      title: "Paglabag sa itinakdang paradahan",
+      location: "Poblacion, Meycauayan City, Bulacan",
+      description: "Nakatanggap ng citation matapos huminto sa bahaging hindi itinalaga para sa pagsasakay at pagbaba ng pasahero.",
+      daysBack: 18, hour: 10, minute: 25, penalty: 200, resolved: true,
+    },
   ];
-  fines.forEach(([driver, d, amount], i) => {
-    const id = `fee_${tag(801 + i)}`;
-    batch.set(db.collection("ledger").doc(id), {
-      id,
+
+  const incidents = incidentTemplates.map(function (template, index) {
+    const driver = drivers[index % drivers.length];
+    const id = "incident_" + String(index + 1).padStart(2, "0");
+    const createdAt = daysAgo(
+      template.daysBack,
+      template.hour,
+      template.minute
+    );
+    const resolvedAt = template.resolved
+      ? addMinutes(createdAt, 95 + index * 13)
+      : null;
+    const statusLabel = template.resolved ? "Naayos" : "Hindi pa naayos";
+    const incidentData = {
+      id: id,
       driverId: driver.userId,
-      plateNumber: driver.plate,
-      driverName: `${driver.firstName} ${driver.lastName}`.trim(),
-      date: dateLabel(d),
-      amount,
-      grossAmount: amount,
-      otherFees: 0.0,
-      netAmount: amount,
+      driverName: driverName(driver),
+      plateNumber: driver.plateNumber,
+      title: template.title,
+      location: template.location,
+      description: template.description,
+      date: dateLabel(createdAt),
+      penalty: template.penalty,
+      reportedBy: adminActor.userId,
+      sentToDriver: true,
+      isResolved: template.resolved,
+      status: template.resolved ? "resolved" : "open",
+      createdAt: timestamp(createdAt),
+      updatedAt: timestamp(resolvedAt || createdAt),
+    };
+    if (resolvedAt) incidentData.resolvedAt = timestamp(resolvedAt);
+    add("incidents", id, incidentData);
+
+    return {
+      id: id,
+      driver: driver,
+      title: template.title,
+      location: template.location,
+      date: createdAt,
+      resolved: template.resolved,
+      penalty: template.penalty,
+      statusLabel: statusLabel,
+    };
+  });
+
+  // Fine ledger entries are separate from the driver's dispatch earnings.
+  incidents.filter(function (incident) {
+    return incident.penalty > 0;
+  }).forEach(function (incident, index) {
+    const fineId = "fee_" + safeId(incident.driver.userId) + "_" +
+      String(index + 1).padStart(2, "0");
+    const paidAt = addMinutes(incident.date, 120);
+    add("ledger", fineId, {
+      id: fineId,
+      driverId: incident.driver.userId,
+      plateNumber: incident.driver.plateNumber,
+      driverName: driverName(incident.driver),
+      date: dateLabel(paidAt),
+      amount: incident.penalty,
+      grossAmount: incident.penalty,
+      otherFees: 0,
+      netAmount: incident.penalty,
       feeType: "Multa",
       status: "Bayad",
       source: "ledger",
-      createdAt: ts(d),
+      createdAt: timestamp(paidAt),
     });
-    n++;
   });
 
-  await batch.commit();
-  console.log(
-    `  ledger: ${n} records (${dispatches.length} dispatch + ${fines.length} bayad ng multa)`
+  // Cooperative fund activity with both incoming donations and expenses.
+  const donationEntries = [
+    [0, 12, 0, "Mga Kasapi ng Kooperatiba", 2500, "Ambag para sa tulong at maintenance ng mga sasakyan", "Mga Kasapi", "donate"],
+    [1, 10, 30, "Samahan ng mga Driver", 1500, "Karagdagang pondo para sa agarang pagkukumpuni", "Kooperatiba", "donate"],
+    [7, 9, 15, "Mga Kaibigan ng Kooperatiba", 3000, "Suporta para sa kaligtasan at operasyon", "Donasyon", "donate"],
+    [14, 14, 0, "Pondo ng Kooperatiba", 650, "Mga gamit sa opisina at dokumentasyon", "Operasyon", "gamit"],
+    [45, 11, 20, "Pondo ng Kooperatiba", 1200, "Tulong sa agarang pangangailangan ng isang kasapi", "Tulong sa Kasapi", "gamit"],
+    [90, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
+  ];
+
+  donationEntries.forEach(function (entry, index) {
+    const date = daysAgo(entry[0], entry[1], entry[2]);
+    const id = "donation_cooperative_" + String(index + 1).padStart(2, "0");
+    add("donations", id, {
+      id: id,
+      donor: entry[3],
+      amount: entry[4],
+      date: dateLabel(date),
+      note: entry[5],
+      source: entry[6],
+      type: entry[7],
+      createdAt: timestamp(date),
+    });
+  });
+
+  // Emergency directory uses the actual phone numbers already stored on admin accounts.
+  const superadminName = fullName(superadmin) || "Superadmin";
+  add("emergencyContacts", "contact_national_emergency", {
+    name: "Pambansang Emergency Hotline",
+    number: "911",
+    addedBy: superadminName,
+    isActive: true,
+    createdAt: timestamp(daysAgo(30, 9, 0)),
+  });
+
+  admins.forEach(function (account, index) {
+    const stationLabel = account.adminStation
+      ? " – " + account.adminStation.charAt(0).toUpperCase() +
+        account.adminStation.slice(1)
+      : "";
+    const id = "contact_office_" + safeId(account.userId);
+    add("emergencyContacts", id, {
+      name: "Tanggapan" + stationLabel + " — " + fullName(account),
+      number: account.phoneNumber,
+      addedBy: superadminName,
+      isActive: true,
+      createdAt: timestamp(daysAgo(20 + index, 9, 0)),
+    });
+  });
+
+  // Notifications are stored under each account. IDs match Cloud Function
+  // conventions so retries do not create duplicates.
+  accounts.activeMembers.forEach(function (member) {
+    incidents.forEach(function (incident) {
+      const title = incident.resolved
+        ? "Bagong Insidente • Naayos"
+        : "Bagong Insidente sa Kooperatiba";
+      const body = [
+        incident.driver.plateNumber,
+        incident.title,
+        incident.location,
+        incident.statusLabel,
+      ].filter(Boolean).join(" • ").slice(0, 180);
+      const id = "incident_" + incident.id;
+
+      notification(member, id, {
+        type: "incident",
+        title: title,
+        body: body,
+        entityId: incident.id,
+        incidentId: incident.id,
+        driverId: incident.driver.userId,
+        plateNumber: incident.driver.plateNumber,
+        incidentTitle: incident.title,
+        location: incident.location,
+        status: incident.resolved ? "resolved" : "open",
+        statusLabel: incident.statusLabel,
+        read: false,
+        createdAt: timestamp(incident.date),
+      });
+    });
+
+    const latestDispatch = dispatchEvents[0];
+    const isTargetDriver =
+      member.role === "driver" &&
+      member.userId === latestDispatch.driver.userId;
+    const dispatchTitle = isTargetDriver
+      ? "Na-dispatch ka!"
+      : "May Na-dispatch na Driver";
+    const dispatchBody = [
+      fullName(latestDispatch.driver),
+      latestDispatch.driver.plateNumber,
+      latestDispatch.route,
+    ].filter(Boolean).join(" • ").slice(0, 180);
+    const dispatchNotificationId = "dispatch_" + latestDispatch.id;
+
+    notification(member, dispatchNotificationId, {
+      type: "dispatch",
+      title: dispatchTitle,
+      body: dispatchBody,
+      entityId: latestDispatch.id,
+      driverId: latestDispatch.driver.userId,
+      driverName: fullName(latestDispatch.driver),
+      plateNumber: latestDispatch.driver.plateNumber,
+      route: latestDispatch.route,
+      read: false,
+      createdAt: timestamp(latestDispatch.at),
+    });
+  });
+
+  // Superadmin activity trail uses real account identities and each writer's own phone.
+  const activityEntries = [
+    {
+      actor: adminActor,
+      action: "Dispatch",
+      detail: dispatchEvents[0].driver.plateNumber + " → " + dispatchEvents[0].route,
+      date: dispatchEvents[0].at,
+    },
+    {
+      actor: dispatchEvents[1].driver,
+      action: "Tapos Na Bumyahe",
+      detail: dispatchEvents[1].driver.plateNumber,
+      date: addMinutes(dispatchEvents[1].at, 150),
+    },
+    {
+      actor: adminActor,
+      action: "Bagong Insidente",
+      detail: incidents[0].driver.plateNumber + " • " + incidents[0].title,
+      date: incidents[0].date,
+    },
+    {
+      actor: adminActor,
+      action: "Naayos na Insidente",
+      detail: incidents[2].driver.plateNumber + " • " + incidents[2].title,
+      date: incidents[2].date,
+    },
+    {
+      actor: superadmin,
+      action: "Settings",
+      detail: "Oras ng reset: " +
+        (((settings.cutoffHour + 11) % 12) + 1) + ":00 " +
+        (settings.cutoffHour < 12 ? "AM" : "PM") +
+        " | Bawas kada upuan: " +
+        Object.keys(settings.tiers).sort(function (a, b) {
+          return Number(a) - Number(b);
+        }).map(function (key) {
+          return key + "=" + settings.tiers[key];
+        }).join(", "),
+      date: daysAgo(1, 16, 10),
+    },
+    {
+      actor: adminActor,
+      action: "I-record ang Bayad ng Multa",
+      detail: incidents[2].driver.plateNumber + " • ₱" + incidents[2].penalty,
+      date: addMinutes(incidents[2].date, 120),
+    },
+  ];
+
+  activityEntries.forEach(function (entry, index) {
+    const id = "log_operations_" + String(index + 1).padStart(2, "0");
+    add("activityLogs", id, {
+      actorName: fullName(entry.actor),
+      actorPhone: entry.actor.phoneNumber,
+      actorRole: accountRoleLabel(entry.actor.role),
+      action: entry.action,
+      detail: entry.detail,
+      createdAt: timestamp(entry.date),
+    });
+  });
+
+  return {
+    collections: collections,
+    notifications: notifications,
+    counts: {
+      activeDrivers: drivers.length,
+      activeAdmins: admins.length,
+      activeSuperadmins: accounts.superadmins.length,
+      activeMembers: accounts.activeMembers.length,
+      activeQueue: drivers.length,
+      historyQueue: dispatchEvents.length,
+      incidents: incidents.length,
+      dispatchLedger: dispatchEvents.length,
+      fineLedger: incidents.filter(function (incident) {
+        return incident.penalty > 0;
+      }).length,
+      donations: donationEntries.length,
+      emergencyContacts: admins.length + 1,
+      activityLogs: activityEntries.length,
+      notifications: notifications.length,
+    },
+  };
+}
+
+// --------------------------------------------------------------------- manifest + writes
+function previousManifestRefs(manifest) {
+  const refs = [];
+  const collectionIds = manifest && manifest.collectionIds
+    ? manifest.collectionIds
+    : {};
+
+  Object.keys(collectionIds).forEach(function (collection) {
+    (collectionIds[collection] || []).forEach(function (id) {
+      refs.push(db.collection(collection).doc(id));
+    });
+  });
+
+  (manifest && Array.isArray(manifest.notifications)
+    ? manifest.notifications
+    : []).forEach(function (entry) {
+      (entry.ids || []).forEach(function (id) {
+        refs.push(
+          db.collection("users")
+            .doc(entry.userDocumentId)
+            .collection("notifications")
+            .doc(id)
+        );
+      });
+    });
+
+  return refs;
+}
+
+function legacyRefs() {
+  const oldIds = previousSetupDocumentIds();
+  const refs = [];
+  Object.keys(oldIds).forEach(function (collection) {
+    oldIds[collection].forEach(function (id) {
+      refs.push(db.collection(collection).doc(id));
+    });
+  });
+  return refs;
+}
+
+async function commitDeletes(refs) {
+  for (let start = 0; start < refs.length; start += 450) {
+    const batch = db.batch();
+    refs.slice(start, start + 450).forEach(function (ref) {
+      batch.delete(ref);
+    });
+    await batch.commit();
+  }
+}
+
+async function commitWrites(operations) {
+  for (let start = 0; start < operations.length; start += 450) {
+    const batch = db.batch();
+    operations.slice(start, start + 450).forEach(function (operation) {
+      if (operation.merge) {
+        batch.set(operation.ref, operation.data, { merge: true });
+      } else {
+        batch.set(operation.ref, operation.data);
+      }
+    });
+    await batch.commit();
+  }
+}
+
+function buildWriteOperations(dataset, settings, oldQueueRevision) {
+  const operations = [];
+  Object.keys(dataset.collections).forEach(function (collection) {
+    dataset.collections[collection].forEach(function (item) {
+      operations.push({
+        ref: item.ref,
+        data: item.data,
+        merge: false,
+      });
+    });
+  });
+
+  dataset.notifications.forEach(function (item) {
+    operations.push({
+      ref: item.ref,
+      data: item.data,
+      merge: false,
+    });
+  });
+
+  const currentTime = new Date();
+  const tiersRef = db.collection("settings").doc("deductionTiers");
+  const rotationRef = db.collection("settings").doc("queueRotation");
+  const queueControlRef = db.collection("settings").doc("queueControl");
+
+  operations.push({
+    ref: tiersRef,
+    data: settings.tiers,
+    merge: true,
+  });
+  operations.push({
+    ref: rotationRef,
+    data: {
+      cutoffHour: settings.cutoffHour,
+      lastQueueDay: queueDayId(currentTime, settings.cutoffHour),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    merge: true,
+  });
+  operations.push({
+    ref: queueControlRef,
+    data: {
+      revision: oldQueueRevision,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    merge: true,
+  });
+
+  return operations;
+}
+
+function buildManifest(dataset) {
+  const collectionIds = {};
+  Object.keys(dataset.collections).forEach(function (collection) {
+    collectionIds[collection] = dataset.collections[collection].map(function (item) {
+      return item.id;
+    });
+  });
+
+  const groupedNotifications = new Map();
+  dataset.notifications.forEach(function (item) {
+    if (!groupedNotifications.has(item.userDocumentId)) {
+      groupedNotifications.set(item.userDocumentId, []);
+    }
+    groupedNotifications.get(item.userDocumentId).push(item.id);
+  });
+
+  return {
+    version: 2,
+    collectionIds: collectionIds,
+    notifications: Array.from(groupedNotifications.entries()).map(function (entry) {
+      return {
+        userDocumentId: entry[0],
+        ids: entry[1],
+      };
+    }),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+async function main() {
+  const accounts = await loadExistingAccounts();
+  const settings = await loadSettings(accounts.activeDrivers);
+  const dataset = buildDataset(accounts, settings);
+  const previousIndex = await INDEX_REF.get();
+  const previousManifest = previousIndex.exists
+    ? previousIndex.data()
+    : null;
+
+  const removeRefs = previousManifestRefs(previousManifest).concat(legacyRefs());
+  const operations = buildWriteOperations(
+    dataset,
+    settings,
+    settings.nextQueueRevision
   );
-}
+  const manifest = buildManifest(dataset);
 
-async function writeDonations() {
-  let batch = db.batch();
-  /*
-   * type "donate" = idinagdag sa pondo (boluntaryo, kahit kanino).
-   * type "gamit"  = ibinawas mula sa pondo (ginamit ng kooperatiba).
-   * HIWALAY ang donasyon sa kita ng mga driver - hindi binabawas sa
-   * kita ng sinuman.
-   */
-  const donations = [
-    [0, 10, 0, "Tulong para sa gulong", 2000, "Donasyon ng may-ari", "sponsor", "donate"],
-    [1, 15, 30, "Ambag para sa ayuda", 1500, "Mula sa pondo ng kooperatiba", "kooperatiba", "donate"],
-    [3, 9, 0, "Tulong sa pamilya ng driver", 1000, "Donasyon ng mga kasapi", "kasapi", "donate"],
-    [1, 11, 0, "Tulong sa miyembro", 500, "Gamit ng pondo - tulong pangkalusugan", "tulong", "gamit"],
-    [2, 14, 0, "Gamit sa opisina", 300, "Papel at supplies ng kooperatiba", "opisina", "gamit"],
-  ];
-  donations.forEach((e, i) => {
-    const [back, hh, mm, donor, amount, note, source, type] = e;
-    const d = daysAgo(back, hh, mm);
-    const id = `donation_${tag(501 + i)}`;
-    batch.set(db.collection("donations").doc(id), {
-      id,
-      donor,
-      amount,
-      date: dateLabel(d),
-      note,
-      source,
-      type,
-      createdAt: ts(d),
-    });
-  });
-  await batch.commit();
-  console.log("  donations: 5 entries (3 donate, 2 gamit)");
-}
+  console.log("");
+  console.log("EnerJeep — Operational Data Refresh");
+  console.log("Firebase project: " + projectId);
+  console.log("Mode: " + (applyChanges ? "APPLY" : "PREVIEW ONLY"));
+  console.log("");
+  console.log("Existing accounts (profiles and credentials remain unchanged):");
+  console.log("  Superadmin: " + dataset.counts.activeSuperadmins);
+  console.log("  Admin: " + dataset.counts.activeAdmins);
+  console.log("  Active drivers: " + dataset.counts.activeDrivers);
+  console.log("");
+  console.log("Records to create or replace:");
+  console.log("  Current queue entries: " + dataset.counts.activeQueue);
+  console.log("  Dispatch history (six-month range): " + dataset.counts.historyQueue);
+  console.log("  Incident reports: " + dataset.counts.incidents);
+  console.log("  Dispatch earnings: " + dataset.counts.dispatchLedger);
+  console.log("  Paid fines: " + dataset.counts.fineLedger);
+  console.log("  Cooperative fund entries: " + dataset.counts.donations);
+  console.log("  Emergency contacts: " + dataset.counts.emergencyContacts);
+  console.log("  Activity records: " + dataset.counts.activityLogs);
+  console.log("  Per-account notifications: " + dataset.counts.notifications);
+  console.log("");
+  console.log("Old generated operational document IDs queued for removal: " + removeRefs.length);
+  console.log("User profiles, password hashes, Auth accounts and plate claims: NOT MODIFIED");
+  console.log("Unrelated Firestore records: PRESERVED");
 
-async function writeSettings() {
-  await db
-    .collection("settings")
-    .doc("deductionTiers")
-    .set({ 16: 32, 22: 44 });
-
-  const cutoffHour = 21; // default 9 PM - editable in Superadmin Settings
-  await db
-    .collection("settings")
-    .doc("queueRotation")
-    .set({
-      cutoffHour,
-      lastQueueDay: queueDayId(new Date(), cutoffHour),
-      updatedAt: ts(new Date()),
-    });
-
-  console.log("  settings: deductionTiers + queueRotation (cutoffHour 21)");
-}
-
-function queueDayId(date, cutoffHour) {
-  const cal = new Date(date);
-  if (cal.getHours() >= cutoffHour) {
-    cal.setDate(cal.getDate() + 1);
-  }
-  const y = cal.getFullYear();
-  const m = String(cal.getMonth() + 1).padStart(2, "0");
-  const d = String(cal.getDate()).padStart(2, "0");
-  return `${y}${m}${d}`;
-}
-
-async function writeEmergency() {
-  let batch = db.batch();
-  const contacts = [
-    ["Emergency Hotline (National)", "911"],
-    ["Dispatcher", "+639171234502"],
-    ["Marilao Police Station", "+639171234567"],
-    ["Barangay Marilao Hall", "+639181234567"],
-  ];
-  contacts.forEach((c, i) => {
-    batch.set(db.collection("emergencyContacts").doc(`contact_${tag(601 + i)}`), {
-      name: c[0],
-      number: c[1],
-      addedBy: "Ramon Villanueva",
-    });
-  });
-  await batch.commit();
-  console.log("  emergencyContacts: 4 entries (kasama ang Dispatcher)");
-}
-
-/*
- * I-verify ang aktwal na laman ng incidents collection pagkatapos
- * mag-encode: ipinapakita kung alin ang nakikita ng driver
- * (sentToDriver) at kung resolved o hindi. Ito ang totoong estado sa
- * database.
- */
-async function verifyIncidents() {
-  const snap = await db.collection("incidents").get();
-  console.log("  verify (aktwal sa database):");
-  snap.docs.forEach((d) => {
-    const x = d.data();
-    const resolved = x.isResolved === true || x.status === "resolved";
-    const sent = x.sentToDriver !== false;
-    console.log(
-      `    ${d.id} | ${resolved ? "Naayos" : "Di-naayos"} | sentToDriver: ${x.sentToDriver === undefined ? "wala" : x.sentToDriver} -> ${sent ? "NAKIKITA ng driver" : "HIDDEN (draft)"}`
-    );
-  });
-}
-
-/*
- * Tseke: walang record sa kita/ledger na nagbabawas mula sa kita ng
- * driver dahil sa donasyon. Ang donasyon ay nasa /donations lang.
- */
-async function verifyNoDonationDeductions() {
-  const donationWord = /donasyon|donation|ambag/i;
-  const bad = [];
-  for (const name of ["kita", "ledger"]) {
-    const snap = await db.collection(name).limit(500).get();
-    snap.docs.forEach((doc) => {
-      const x = doc.data();
-      const text = [x.title, x.type, x.feeType, x.note, x.source]
-        .filter(Boolean)
-        .join(" ");
-      if (donationWord.test(text)) bad.push(`${name}/${doc.id}`);
-    });
-  }
-  if (bad.length === 0) {
-    console.log(
-      "  verify: WALANG donasyon na nakabawas sa kita ng driver (tama)"
-    );
-  } else {
-    console.log("  BABALA: may record na nag-uugnay ng donasyon sa kita:");
-    bad.forEach((id) => console.log(`    ${id}`));
-  }
-}
-
-/*
- * Tseke: ang kita ng driver ay dispatch records lang. Walang manual
- * entries sa "kita" collection (walang gastos/multa na binabawas) at
- * walang ledger record na iba pa sa dispatch o bayad ng multa.
- */
-async function verifyDriverEarnings() {
-  const stray = [];
-
-  const kita = await db.collection("kita").limit(500).get();
-  kita.docs.forEach((d) => stray.push(`kita/${d.id}`));
-
-  const ledger = await db.collection("ledger").limit(500).get();
-  ledger.docs.forEach((d) => {
-    const x = d.data();
-    const source = String(x.source || "").toLowerCase();
-    const feeType = String(x.feeType || "").toLowerCase();
-    const isDispatch = source === "queue_dispatch" || feeType === "dispatch";
-    const isMulta = feeType === "multa";
-    if (!isDispatch && !isMulta) stray.push(`ledger/${d.id}`);
-  });
-
-  if (stray.length === 0) {
-    console.log(
-      "  verify: kita ng driver = dispatch records lang; multa ay nasa Talaan (walang bawas sa kita) ✓"
-    );
-  } else {
-    console.log("  BABALA: may record na hindi dispatch/bayad ng multa:");
-    stray.forEach((id) => console.log(`    ${id}`));
-  }
-}
-
-async function writeLogs() {
-  let batch = db.batch();
-  // [actorName, actorRole, actorPhone, action, detail, back, hh, mm]
-  // Ang actorPhone ay laging ang phone number ng SARILING nagsulat -
-  // pareho ito ng panuntunan sa firestore.rules (audit binding).
-  const logs = [
-    ["Maria Santos", "Admin", "+639171000002", "Dispatch", `${drivers[17].plate} → Monumento – Marilao`, 0, 7, 40],
-    [`${drivers[0].firstName} ${drivers[0].lastName}`, "Driver", drivers[0].phone, "Tapos Na Bumyahe", drivers[0].plate, 1, 12, 30],
-    ["Ramon Villanueva", "Superadmin", "+639171000001", "Settings", "Oras ng reset: 9:00 PM | Bawas kada upuan: 16=32, 22=44", 1, 16, 10],
-    ["Ramon Villanueva", "Superadmin", "+639171000001", "Bagong Account", "Maria Santos (admin)", 20, 9, 0],
-    ["Maria Santos", "Admin", "+639171000002", "Insidente", "Inayos: Minor collision sa Monumento", 1, 16, 45],
-  ];
-  logs.forEach((l, i) => {
-    const [actorName, actorRole, actorPhone, action, detail, back, hh, mm] = l;
-    const d = daysAgo(back, hh, mm);
-    batch.set(db.collection("activityLogs").doc(`log_${tag(701 + i)}`), {
-      actorName,
-      actorPhone,
-      actorRole,
-      action,
-      detail,
-      createdAt: ts(d),
-    });
-  });
-  await batch.commit();
-  console.log("  activityLogs: 5 entries");
-}
-
-/*
- * Linisin ang mga LEGACY na plaintext password field sa /users (lumang
- * bersyon). Sa bagong bersyon, ang password ay nasa /userSecrets lang
- * bilang salted hash - walang dahilan para manatili ang plaintext kahit
- * kailan.
- */
-async function cleanupLegacyPasswords() {
-  const snap = await db.collection("users").limit(500).get();
-  const doomed = snap.docs.filter((d) => "password" in d.data());
-  if (doomed.length === 0) {
-    console.log("  verify: walang legacy plaintext password sa /users ✓");
+  if (!applyChanges) {
+    console.log("");
+    console.log("Walang binago sa Firestore. Suriin ang bilang sa itaas.");
+    console.log("Kapag tama, ulitin ang command at idagdag ang --apply.");
     return;
   }
-  const batch = db.batch();
-  doomed.forEach((d) =>
-    batch.update(d.ref, { password: admin.firestore.FieldValue.delete() })
-  );
-  await batch.commit();
-  console.log(`  cleanup: inalis ang legacy plaintext password sa ${doomed.length} users doc`);
+
+  console.log("");
+  console.log("Inaalis ang dating generated operational records...");
+  await commitDeletes(removeRefs);
+
+  console.log("Isinusulat ang bagong records...");
+  await commitWrites(operations);
+
+  console.log("Ina-update ang internal document index...");
+  await INDEX_REF.set(manifest, { merge: false });
+
+  console.log("");
+  console.log("Matagumpay na na-update ang operational data.");
+  console.log("Hindi binago ang kasalukuyang user accounts o password credentials.");
+  console.log("I-restart ang EnerJeep app upang i-refresh ang lahat ng screens.");
 }
 
-// ---------------------------------------------------------------- main
-(async () => {
-  try {
-    console.log("EnerJeep — paghahanda ng datos");
-    if (wipe) {
-      console.log("Binubura ang lumang datos muna (--wipe)...");
-      await wipeCollections();
+main()
+  .then(function () {
+    return admin.app().delete();
+  })
+  .catch(async function (error) {
+    console.error("");
+    console.error("Hindi natapos ang data refresh:", error.stack || error.message);
+    try {
+      await admin.app().delete();
+    } catch (_) {
+      // Ignore shutdown errors after reporting the original failure.
     }
-    await cleanupLegacyDocs();
-    await cleanupLegacyPasswords();
-    await writeUsers();
-    const dispatchIds = await writeQueue();
-    await writeIncidents();
-    await writeLedger(dispatchIds);
-    await writeDonations();
-    await writeSettings();
-    await writeEmergency();
-    await writeLogs();
-    await verifyNoDonationDeductions();
-    await verifyDriverEarnings();
-    await verifyIncidents();
-    console.log("\nTapos. Login: alinmang numero ng account, password " + ACCOUNT_PASSWORD);
-    console.log("(Gamitin ang naka-configure na phone numbers sa Firebase para sa OTP - tingnan ang seed/README.md)");
-    process.exit(0);
-  } catch (err) {
-    console.error("Nabigo ang paghahanda ng datos:", err.message);
-    process.exit(1);
-  }
-})();
+    process.exitCode = 1;
+  });
