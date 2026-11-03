@@ -9,6 +9,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
+import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -442,11 +443,16 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun signOut() {
+        val phone = userSession.userProfile?.phoneNumber.orEmpty()
+
         viewModelScope.launch {
             try {
                 // Firebase signOut is synchronous and clears its persisted session.
                 auth.signOut()
             } finally {
+                // Remove the optional pre-OTP verifier for this account too.
+                SecureLoginCache.clear(phone)
+
                 // The root ContentViewModel observes this and replaces the
                 // entire navigation controller with a fresh Login back stack.
                 userSession.clear()
