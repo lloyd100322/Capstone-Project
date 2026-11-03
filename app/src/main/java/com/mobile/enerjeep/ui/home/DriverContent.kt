@@ -222,7 +222,7 @@ fun DriverContent(
                     KitaScreen()
                 }
                 DriverTab.Profile -> {
-                    DriverProfileScreen(appNavigator = appNavigator)
+                    DriverProfileScreen()
                 }
             }
 
