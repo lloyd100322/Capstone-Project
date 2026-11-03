@@ -104,6 +104,12 @@ beforeEach(async () => {
       actorName: "Admin", action: "Dispatch", detail: "x",
     });
     await setDoc(doc(db, "incidents/shared-1"), { title: "Shared incident", sentToDriver: true, isResolved: false });
+    await setDoc(doc(db, `users/${DRIVER_PHONE}/notifications/dispatch_sample`), {
+      type: "dispatch", title: "Na-dispatch ka!", body: "TXA 448", read: false,
+    });
+    await setDoc(doc(db, `users/${ADMIN_PHONE}/notifications/incident_sample`), {
+      type: "incident", title: "Bagong Insidente", body: "TXA 448", read: false,
+    });
     await setDoc(doc(db, "incidents/draft-1"), { title: "Admin draft", sentToDriver: false, isResolved: false });
     await setDoc(doc(db, "ledger/dispatch-driver"), { driverId, amount: 450, grossAmount: 500, otherFees: 50, netAmount: 450 });
     await setDoc(doc(db, "ledger/dispatch-other"), { driverId: "user-other-1", amount: 600, grossAmount: 650, otherFees: 50, netAmount: 600 });
@@ -277,6 +283,40 @@ test("drivers can read only incidents explicitly shared with drivers", async () 
 
   const adminDb = dbAs(ADMIN_PHONE, "u-admin");
   await assertSucceeds(getDoc(doc(adminDb, "incidents/draft-1")));
+});
+
+// ------------------------------------------------------- notification privacy
+
+test("each active role can read only its own notification center", async () => {
+  const driverDb = dbAs(DRIVER_PHONE, "u-driver");
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  const superDb = dbAs(SUPER_PHONE, "u-super");
+
+  await assertSucceeds(getDocs(collection(driverDb, `users/${DRIVER_PHONE}/notifications`)));
+  await assertFails(getDocs(collection(driverDb, `users/${ADMIN_PHONE}/notifications`)));
+  await assertSucceeds(getDocs(collection(adminDb, `users/${ADMIN_PHONE}/notifications`)));
+  await assertSucceeds(getDocs(collection(superDb, `users/${SUPER_PHONE}/notifications`)));
+});
+
+test("members can mark their own notifications read but cannot create or rewrite them", async () => {
+  const driverDb = dbAs(DRIVER_PHONE, "u-driver");
+  const ownNotification = doc(driverDb, `users/${DRIVER_PHONE}/notifications/dispatch_sample`);
+
+  await assertSucceeds(updateDoc(ownNotification, {
+    read: true,
+    readAt: new Date(),
+  }));
+  await assertFails(updateDoc(ownNotification, {
+    title: "Tampered notification",
+  }));
+  await assertFails(setDoc(doc(driverDb, `users/${DRIVER_PHONE}/notifications/fake`), {
+    type: "incident", title: "Fake", read: false,
+  }));
+  await assertFails(deleteDoc(ownNotification));
+  await assertFails(updateDoc(
+    doc(driverDb, `users/${ADMIN_PHONE}/notifications/incident_sample`),
+    { read: true }
+  ));
 });
 
 // --------------------------------------------------------------- ledger privacy
