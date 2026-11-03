@@ -166,6 +166,16 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
+    // /driverPlateClaims - normalized unique plate ownership.
+    // Only administrators can read or maintain these transactional claims.
+    // ------------------------------------------------------------------
+    match /driverPlateClaims/{normalizedPlate} {
+      allow get: if isAdmin();
+      allow list: if false;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------------
     // /queue - dispatch queue (drivers read, admins manage)
     // ------------------------------------------------------------------
     match /queue/{entryId} {
