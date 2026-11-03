@@ -18,7 +18,7 @@
  *   firebase deploy --only functions
  */
 
-const { onDocumentDeleted, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentDeleted, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
@@ -272,6 +272,124 @@ exports.onQueueDispatched = onDocumentUpdated(
   }
 );
 
+
+/**
+ * PUSH NOTIFICATION para sa mga insidenteng ibinahagi sa lahat ng driver.
+ *
+ * Nagpapadala lamang kapag bagong ginawa na may sentToDriver=true, o
+ * kapag ang draft ay unang ipinadala (false -> true). Hindi nagno-notify
+ * sa draft at hindi inuulit ang push sa ordinaryong edits/resolution.
+ *
+ * Gumagamit ito ng notification payload para maipakita ng Android system
+ * ang abiso kahit nasa background o nakasara ang app.
+ */
+exports.onIncidentShared = onDocumentWritten(
+  { document: "incidents/{incidentId}" },
+  async (event) => {
+    const before = event.data.before;
+    const afterSnapshot = event.data.after;
+
+    if (!afterSnapshot.exists) return null;
+
+    const wasAlreadyShared =
+      before.exists && before.get("sentToDriver") === true;
+    const incident = afterSnapshot.data() || {};
+
+    if (incident.sentToDriver !== true || wasAlreadyShared) {
+      return null;
+    }
+
+    // Ang form ng app ay nagsasabing ipinapadala ang shared incident
+    // sa mga driver, kaya lahat ng driver na may registered device token
+    // ay tatanggap ng push.
+    const driverSnapshot = await db
+      .collection("users")
+      .where("role", "==", "driver")
+      .get();
+
+    const recipients = driverSnapshot.docs
+      .map((doc) => ({
+        ref: doc.ref,
+        token: doc.get("fcmToken"),
+      }))
+      .filter((item) => typeof item.token === "string" && item.token.length > 0);
+
+    if (recipients.length === 0) {
+      console.log("onIncidentShared: walang driver device token na naka-register.");
+      return null;
+    }
+
+    const incidentId = String(event.params.incidentId);
+    const plate = String(incident.plateNumber || "");
+    const incidentTitle = String(incident.title || "Insidente");
+    const location = String(incident.location || "");
+    const body = [plate, incidentTitle, location]
+      .filter((part) => part.trim().length > 0)
+      .join(" • ")
+      .slice(0, 180);
+
+    const data = {
+      type: "incident",
+      incidentId,
+      driverId: String(incident.driverId || ""),
+      plateNumber: plate,
+      incidentTitle,
+      location,
+    };
+
+    let successCount = 0;
+    const invalidTokenUpdates = [];
+
+    // FCM multicast accepts at most 500 tokens per request.
+    for (let offset = 0; offset < recipients.length; offset += 500) {
+      const batch = recipients.slice(offset, offset + 500);
+      const result = await admin.messaging().sendEachForMulticast({
+        tokens: batch.map((item) => item.token),
+        notification: {
+          title: "Bagong Insidente sa Kooperatiba",
+          body: body || "May bagong insidenteng ibinahagi sa EnerJeep.",
+        },
+        data,
+        android: {
+          priority: "high",
+          notification: {
+            channel_id: "enerjeep_incident",
+            sound: "default",
+          },
+        },
+      });
+
+      result.responses.forEach((response, index) => {
+        if (response.success) {
+          successCount += 1;
+          return;
+        }
+
+        const code = response.error && response.error.code;
+        if (
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token" ||
+          code === "messaging/invalid-argument"
+        ) {
+          invalidTokenUpdates.push(
+            batch[index].ref.update({ fcmToken: FieldValue.delete() })
+          );
+        } else {
+          console.error("onIncidentShared: hindi naipadala sa isang device:", response.error);
+        }
+      });
+    }
+
+    if (invalidTokenUpdates.length > 0) {
+      await Promise.all(invalidTokenUpdates);
+    }
+
+    console.log(
+      `onIncidentShared: naipadala sa ${successCount} sa ${recipients.length} registered driver device(s).`
+    );
+    return null;
+  }
+);
 
 /**
  * Completes the authenticated driver's own queue entry. The server verifies
