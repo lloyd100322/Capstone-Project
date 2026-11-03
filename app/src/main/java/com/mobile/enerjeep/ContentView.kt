@@ -15,6 +15,7 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.EnerjeepTheme
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.components.ToastFeedbackHost
+import com.mobile.enerjeep.ui.components.NotificationCenterBar
 
 
 @Composable
@@ -42,12 +43,16 @@ fun ContentView(
                         )
                     }
                     is AppAuthState.Authenticated -> {
-                        NavGraph(
-                            navController = navController,
-                            appNavigator = appNavigator,
-                            activity = activity,
-                            startDestination = state.startDestination
-                        )
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            NotificationCenterBar()
+                            NavGraph(
+                                navController = navController,
+                                appNavigator = appNavigator,
+                                activity = activity,
+                                startDestination = state.startDestination,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                     is AppAuthState.Unauthenticated -> {
                         NavGraph(
