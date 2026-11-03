@@ -62,7 +62,7 @@ Ang ibang Firestore records na hindi pag-aari ng dataset refresh ay pinananatili
 ## Bago patakbuhin
 
 1. Siguraduhing may existing active account para sa superadmin, admin, at hindi bababa sa apat na driver.
-2. Siguraduhing ang bawat active driver ay may userId, first name, last name, phone number at plate number.
+2. Siguraduhing ang bawat active driver ay may userId, first name, last name, phone number, plate number, license number, seater at emergency contact name/number. Kailangan ding may valid na adminStation (marilao o monumento) ang bawat admin account.
 3. Kailangan ang Node.js at internet connection.
 4. Kumuha ng Firebase service-account key sa Firebase Console → Project settings → Service accounts → Generate new private key.
 5. Ilagay ang JSON key sa labas ng repository, halimbawa sa Downloads folder. Huwag itong i-commit o i-upload sa GitHub.
