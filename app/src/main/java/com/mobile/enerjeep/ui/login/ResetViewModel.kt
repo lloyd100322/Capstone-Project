@@ -14,6 +14,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
+import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -343,6 +344,13 @@ class ResetPasswordViewModel @Inject constructor(
                 )
 
                 batch.commit().await()
+
+                SecureLoginCache.save(
+                    fullPhone(),
+                    salted.salt,
+                    salted.hash,
+                    salted.iterations
+                )
 
                 // Password saved: end the temporary OTP session so the app
                 // never keeps this phone logged in without the password.

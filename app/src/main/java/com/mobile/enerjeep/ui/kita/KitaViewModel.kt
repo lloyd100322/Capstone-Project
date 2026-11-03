@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import javax.inject.Inject
 
 /**
@@ -48,10 +49,8 @@ class KitaViewModel @Inject constructor(
     val uiState: StateFlow<KitaUiState> = _uiState.asStateFlow()
 
     private var ledgerListener: ListenerRegistration? = null
-    private val ledgerPlateListeners = mutableListOf<ListenerRegistration>()
 
     private var driverLedgerDocuments: List<DocumentSnapshot> = emptyList()
-    private val plateLedgerSnapshots = mutableMapOf<String, List<DocumentSnapshot>>()
     private var dispatchLedgerDocuments: List<DocumentSnapshot> = emptyList()
 
     // users.userId the listeners are currently attached for.
@@ -76,11 +75,8 @@ class KitaViewModel @Inject constructor(
 
     private fun stopListeners() {
         ledgerListener?.remove()
-        ledgerPlateListeners.forEach { it.remove() }
-        ledgerPlateListeners.clear()
         ledgerListener = null
         driverLedgerDocuments = emptyList()
-        plateLedgerSnapshots.clear()
         dispatchLedgerDocuments = emptyList()
     }
 
@@ -122,57 +118,20 @@ class KitaViewModel @Inject constructor(
                 refreshDispatchLedgerDocuments()
             }
 
-        // Fallback for existing ledger records linked by plate instead of driverId.
-        // Query both the stored and uppercase form because older records may differ in case.
-        val storedPlate = profile?.plateNumber?.trim().orEmpty()
-        val plateValues = listOf(storedPlate, storedPlate.uppercase(Locale.ROOT))
-            .filter { it.isNotBlank() }
-            .distinct()
 
-        plateValues.forEach { plateValue ->
-            val listener = firestore
-                .collection(FirestoreCollections.LEDGER)
-                .whereEqualTo("plateNumber", plateValue)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null || snapshot == null) {
-                        reportListenerError(error)
-                        return@addSnapshotListener
-                    }
-
-                    plateLedgerSnapshots[plateValue] = snapshot.documents
-                    refreshDispatchLedgerDocuments()
-                }
-
-            ledgerPlateListeners.add(listener)
-        }
     }
 
     private fun refreshDispatchLedgerDocuments() {
-        // A document can match both the driverId and plate queries; keep it once.
-        dispatchLedgerDocuments = (driverLedgerDocuments + plateLedgerSnapshots.values.flatten())
-            .distinctBy { it.id }
+        // Firestore rules grant driver access by users.userId only.
+        // Plate numbers can be reused and are never an authorization key.
+        dispatchLedgerDocuments = driverLedgerDocuments
+            .filter { it.getString("driverId")?.trim() == listeningUserId }
             .filter { document ->
-                // The plate fallback may match a record of another driver who
-                // used the same jeepney. Only keep records that belong to this
-                // driver (users.userId) or have no driver recorded at all.
-                val owner = document.getString("driverId").orEmpty().trim()
-                owner.isBlank() || owner == listeningUserId
-            }
-            .filter { document ->
-                /*
-                 * Dispatch records lang ang kita ng driver. Ang mga
-                 * bayad ng multa (feeType "Multa") na isinusulat ng
-                 * Talaan ay para sa "Ulat ng Multa" ng admin - hindi
-                 * kasama sa kita ng driver.
-                 */
                 val source = document.getString("source").orEmpty().trim()
                 val feeType = document.getString("feeType").orEmpty().trim()
-
                 source.equals("queue_dispatch", ignoreCase = true) ||
-                        feeType.equals("Dispatch", ignoreCase = true)
+                    feeType.equals("Dispatch", ignoreCase = true)
             }
-            // One earning per dispatched queue entry, even if older retries
-            // already created several ledger documents for the same dispatch.
             .distinctBy { document ->
                 document.getString("queueId")?.trim()?.takeIf { it.isNotBlank() }
                     ?: document.id
@@ -256,7 +215,9 @@ class KitaViewModel @Inject constructor(
     private fun isToday(createdAtMillis: Long): Boolean {
         if (createdAtMillis <= 0L) return false
 
-        val dayKey = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+        val dayKey = SimpleDateFormat("yyyyMMdd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("Asia/Manila")
+        }
         val currentDay = dayKey.format(Date())
         val recordDay = dayKey.format(Date(createdAtMillis))
         return currentDay == recordDay
@@ -271,7 +232,6 @@ class KitaViewModel @Inject constructor(
 
     override fun onCleared() {
         ledgerListener?.remove()
-        ledgerPlateListeners.forEach { it.remove() }
         super.onCleared()
     }
 }

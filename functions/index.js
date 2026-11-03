@@ -18,7 +18,8 @@
  *   firebase deploy --only functions
  */
 
-const { onDocumentDeleted, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentDeleted, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -26,7 +27,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 exports.deleteAuthUserOnAccountDelete = onDocumentDeleted(
-  "users/{phone}",
+  { document: "users/{phone}", region: "asia-east2", retry: true },
   async (event) => {
     // The document id of /users is the phone number, e.g. "+639171234567".
     const phone = event.params.phone;
@@ -43,9 +44,8 @@ exports.deleteAuthUserOnAccountDelete = onDocumentDeleted(
         return;
       }
 
-      // Never throw: the Firestore deletion already happened and failing
-      // here would only retry forever. Log for the operator instead.
-      console.error(`Failed to delete Auth user for ${phone}:`, error);
+      console.error(`Failed to delete Auth user for ${phone}; retrying:`, error);
+      throw error;
     }
   }
 );
@@ -115,15 +115,22 @@ function queueDayIdManila(now, cutoffHour) {
 }
 
 exports.dailyQueueReset = onSchedule(
-  { schedule: "0 * * * *", timeZone: "Asia/Manila" },
+  { schedule: "0 * * * *", timeZone: "Asia/Manila", region: "us-central1" },
   async () => {
     const metaRef = db.collection("settings").doc("queueRotation");
 
     // Simple read muna para makuha ang mga id (walang query sa loob ng
     // transaction sa mobile/admin SDK - pareho ng QueueRotation).
+    const queueControlRef = db.collection("settings").doc("queueControl");
+    const observedRevision = (await queueControlRef.get()).get("revision") || 0;
     const queueIds = (await db.collection("queue").get()).docs.map((d) => d.id);
 
     const rotated = await db.runTransaction(async (tx) => {
+      const queueControl = await tx.get(queueControlRef);
+      const currentRevision = queueControl.get("revision") || 0;
+      if (currentRevision !== observedRevision) {
+        throw new Error("Queue changed during scheduled reset; retry on next schedule.");
+      }
       const meta = await tx.get(metaRef);
       const rawHour = meta.get("cutoffHour");
       const cutoffHour =
@@ -169,6 +176,11 @@ exports.dailyQueueReset = onSchedule(
         { lastQueueDay: today, updatedAt: FieldValue.serverTimestamp() },
         { merge: true }
       );
+      tx.set(
+        queueControlRef,
+        { revision: currentRevision + 1, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
       return true;
     });
 
@@ -190,7 +202,7 @@ exports.dailyQueueReset = onSchedule(
  * (tahimik ang push doon para hindi mag-doble).
  */
 exports.onQueueDispatched = onDocumentUpdated(
-  "queue/{entryId}",
+  { document: "queue/{entryId}", region: "asia-east2" },
   async (event) => {
     const before = event.data.before.data();
     const after = event.data.after.data();
@@ -257,5 +269,633 @@ exports.onQueueDispatched = onDocumentUpdated(
       }
     }
     return null;
+  }
+);
+
+
+/**
+ * PUSH NOTIFICATION para sa mga insidenteng ibinahagi sa lahat ng driver.
+ *
+ * Nagpapadala lamang kapag bagong ginawa na may sentToDriver=true, o
+ * kapag ang draft ay unang ipinadala (false -> true). Hindi nagno-notify
+ * sa draft at hindi inuulit ang push sa ordinaryong edits/resolution.
+ *
+ * Gumagamit ito ng notification payload para maipakita ng Android system
+ * ang abiso kahit nasa background o nakasara ang app.
+ */
+exports.onIncidentShared = onDocumentWritten(
+  { document: "incidents/{incidentId}", region: "asia-east2" },
+  async (event) => {
+    const before = event.data.before;
+    const afterSnapshot = event.data.after;
+
+    if (!afterSnapshot.exists) return null;
+
+    const wasAlreadyShared =
+      before.exists && before.get("sentToDriver") === true;
+    const incident = afterSnapshot.data() || {};
+
+    // Remove the legacy phone field when an incident is touched. A one-time
+    // dry-run-first migration script cleans old documents that are never edited.
+    if (Object.prototype.hasOwnProperty.call(incident, "driverPhone")) {
+      await afterSnapshot.ref.update({
+        driverPhone: FieldValue.delete(),
+      });
+    }
+
+    if (incident.sentToDriver !== true || wasAlreadyShared) {
+      return null;
+    }
+
+    // Ang form ng app ay nagsasabing ipinapadala ang shared incident
+    // sa mga driver, kaya lahat ng driver na may registered device token
+    // ay tatanggap ng push.
+    const driverSnapshot = await db
+      .collection("users")
+      .where("role", "==", "driver")
+      .get();
+
+    const recipients = driverSnapshot.docs
+      .map((doc) => ({
+        ref: doc.ref,
+        token: doc.get("fcmToken"),
+      }))
+      .filter((item) => typeof item.token === "string" && item.token.length > 0);
+
+    if (recipients.length === 0) {
+      console.log("onIncidentShared: walang driver device token na naka-register.");
+      return null;
+    }
+
+    const incidentId = String(event.params.incidentId);
+    const plate = String(incident.plateNumber || "");
+    const incidentTitle = String(incident.title || "Insidente");
+    const location = String(incident.location || "");
+    const body = [plate, incidentTitle, location]
+      .filter((part) => part.trim().length > 0)
+      .join(" • ")
+      .slice(0, 180);
+
+    const data = {
+      type: "incident",
+      incidentId,
+      driverId: String(incident.driverId || ""),
+      plateNumber: plate,
+      incidentTitle,
+      location,
+    };
+
+    let successCount = 0;
+    const invalidTokenUpdates = [];
+
+    // FCM multicast accepts at most 500 tokens per request.
+    for (let offset = 0; offset < recipients.length; offset += 500) {
+      const batch = recipients.slice(offset, offset + 500);
+      const result = await admin.messaging().sendEachForMulticast({
+        tokens: batch.map((item) => item.token),
+        notification: {
+          title: "Bagong Insidente sa Kooperatiba",
+          body: body || "May bagong insidenteng ibinahagi sa EnerJeep.",
+        },
+        data,
+        android: {
+          priority: "high",
+          notification: {
+            channel_id: "enerjeep_incident",
+            sound: "default",
+          },
+        },
+      });
+
+      result.responses.forEach((response, index) => {
+        if (response.success) {
+          successCount += 1;
+          return;
+        }
+
+        const code = response.error && response.error.code;
+        if (
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token" ||
+          code === "messaging/invalid-argument"
+        ) {
+          invalidTokenUpdates.push(
+            batch[index].ref.update({ fcmToken: FieldValue.delete() })
+          );
+        } else {
+          console.error("onIncidentShared: hindi naipadala sa isang device:", response.error);
+        }
+      });
+    }
+
+    if (invalidTokenUpdates.length > 0) {
+      await Promise.all(invalidTokenUpdates);
+    }
+
+    console.log(
+      `onIncidentShared: naipadala sa ${successCount} sa ${recipients.length} registered driver device(s).`
+    );
+    return null;
+  }
+);
+
+/**
+ * Returns a driver's phone number only when an authenticated driver requests
+ * a shared incident. Phone numbers are not stored in member-readable incident
+ * documents and the callable is protected by App Check.
+ */
+exports.getIncidentDriverPhone = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    }
+
+    const callerPhone = request.auth.token.phone_number;
+    if (typeof callerPhone !== "string" || !callerPhone) {
+      throw new HttpsError("permission-denied", "Walang verified phone number.");
+    }
+
+    const caller = await db.collection("users").doc(callerPhone).get();
+    if (!caller.exists || caller.get("role") !== "driver") {
+      throw new HttpsError("permission-denied", "Driver account lamang ang maaaring gumamit ng contact lookup.");
+    }
+
+    const incidentId = request.data && request.data.incidentId;
+    if (typeof incidentId !== "string" || !incidentId || incidentId.length > 180) {
+      throw new HttpsError("invalid-argument", "Invalid incident ID.");
+    }
+
+    const incident = await db.collection("incidents").doc(incidentId).get();
+    if (!incident.exists || incident.get("sentToDriver") !== true) {
+      throw new HttpsError("not-found", "Hindi makita ang ibinahaging insidente.");
+    }
+
+    const driverId = incident.get("driverId");
+    if (typeof driverId !== "string" || !driverId) {
+      throw new HttpsError("failed-precondition", "Walang naka-link na driver ang insidente.");
+    }
+
+    const driver = await db.collection("users")
+      .where("userId", "==", driverId)
+      .where("role", "==", "driver")
+      .limit(1)
+      .get();
+
+    if (driver.empty) {
+      throw new HttpsError("not-found", "Hindi makita ang driver account.");
+    }
+
+    const driverDoc = driver.docs[0];
+    const phoneNumber = driverDoc.get("phoneNumber") || driverDoc.id;
+    if (typeof phoneNumber !== "string" || !/^\+639[0-9]{9}$/.test(phoneNumber)) {
+      throw new HttpsError("failed-precondition", "Walang valid na numero ang driver.");
+    }
+
+    return { phoneNumber };
+  }
+);
+
+
+/**
+ * Completes the authenticated driver's own queue entry. The server verifies
+ * the Phone Auth identity and changes the entry and route positions in one
+ * Admin SDK transaction; clients cannot reorder another driver's queue row.
+ */
+exports.finishDriverTravel = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    }
+
+    const phone = request.auth.token.phone_number;
+    if (typeof phone !== "string" || !phone) {
+      throw new HttpsError("permission-denied", "Walang verified phone number.");
+    }
+
+    const userSnap = await db.collection("users").doc(phone).get();
+    if (!userSnap.exists || userSnap.get("role") !== "driver") {
+      throw new HttpsError("permission-denied", "Driver account lamang ang puwedeng magtapos ng biyahe.");
+    }
+
+    const driverId = userSnap.get("userId");
+    const entryId = request.data && request.data.queueEntryId;
+    if (typeof driverId !== "string" || !driverId ||
+        typeof entryId !== "string" || !entryId) {
+      throw new HttpsError("invalid-argument", "Invalid queue entry.");
+    }
+
+    const entryRef = db.collection("queue").doc(entryId);
+    const queueControlRef = db.collection("settings").doc("queueControl");
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const entry = await tx.get(entryRef);
+        if (!entry.exists || entry.get("driverId") !== driverId ||
+            !isQueueActive(entry.data()) || entry.get("isCancelled") === true) {
+          // An already-completed request is safe to repeat after a network timeout.
+          if (entry.exists &&
+              entry.get("driverId") === driverId &&
+              entry.get("status") === "completed") return;
+          throw new HttpsError("failed-precondition", "Wala na sa aktibong pila ang sasakyang ito.");
+        }
+
+        const route = entry.get("route");
+        if (typeof route !== "string" || !route) {
+          throw new HttpsError("failed-precondition", "Walang valid na ruta ang queue entry.");
+        }
+
+        const routeSnapshot = await tx.get(
+          db.collection("queue").where("route", "==", route)
+        );
+        const remaining = routeSnapshot.docs
+          .filter((doc) => doc.id !== entryId &&
+            !QUEUE_STATUSES_INACTIVE.includes(String(doc.get("status") || "").toLowerCase()))
+          .sort((a, b) => {
+            const cancelledA = a.get("isCancelled") === true ? 1 : 0;
+            const cancelledB = b.get("isCancelled") === true ? 1 : 0;
+            return cancelledA - cancelledB ||
+              (a.get("position") ?? Number.MAX_SAFE_INTEGER) -
+              (b.get("position") ?? Number.MAX_SAFE_INTEGER);
+          });
+
+        const control = await tx.get(queueControlRef);
+        const revision = control.get("revision") || 0;
+
+        tx.update(entryRef, {
+          status: "completed",
+          endTravelAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          position: 0,
+        });
+        remaining.forEach((doc, index) => {
+          tx.update(doc.ref, {
+            position: index + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+        tx.set(queueControlRef, {
+          revision: revision + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("finishDriverTravel failed:", error);
+      throw new HttpsError("internal", "Hindi matapos ang biyahe. Subukan muli.");
+    }
+
+    return { success: true };
+  }
+);
+
+
+/**
+ * Updates the authenticated driver's editable profile and synchronizes only
+ * that driver's active queue display fields in the same server transaction.
+ * Plate uniqueness is enforced against current user records, not by a
+ * best-effort client-side list query.
+ */
+exports.updateDriverProfile = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    }
+
+    const phone = request.auth.token.phone_number;
+    if (typeof phone !== "string" || !phone) {
+      throw new HttpsError("permission-denied", "Walang verified phone number.");
+    }
+
+    const data = request.data || {};
+    const firstName = typeof data.firstName === "string" ? data.firstName.trim() : null;
+    const lastName = typeof data.lastName === "string" ? data.lastName.trim() : null;
+    const licenseNumber = typeof data.licenseNumber === "string" ? data.licenseNumber.trim() : null;
+    const plateNumber = typeof data.plateNumber === "string" ? data.plateNumber.trim().toUpperCase() : null;
+    const emergencyContactName = typeof data.emergencyContactName === "string"
+      ? data.emergencyContactName.trim() : null;
+    const emergencyContactNumber = typeof data.emergencyContactNumber === "string"
+      ? data.emergencyContactNumber.trim() : null;
+    const emergencyContact = typeof data.emergencyContact === "string"
+      ? data.emergencyContact.trim() : null;
+
+    if ([firstName, lastName, licenseNumber, plateNumber,
+         emergencyContactName, emergencyContactNumber, emergencyContact]
+        .some((value) => value === null)) {
+      throw new HttpsError("invalid-argument", "Kulang o invalid ang profile fields.");
+    }
+
+    const normalizedPlate = plateNumber.replace(/[^A-Z0-9]/g, "");
+    if (!/^[A-Z]{2,3}[0-9]{1,4}$/.test(normalizedPlate)) {
+      throw new HttpsError("invalid-argument", "Invalid ang plate number.");
+    }
+
+    if (licenseNumber &&
+        (licenseNumber.length > 20 ||
+         !/^[A-Za-z0-9 -]+$/.test(licenseNumber) ||
+         !/[0-9]/.test(licenseNumber))) {
+      throw new HttpsError("invalid-argument", "Invalid ang driver license number.");
+    }
+
+    const nameDigits = (emergencyContactName.match(/[0-9]/g) || []).length;
+    if (!emergencyContactName ||
+        emergencyContactName.length > 50 ||
+        nameDigits > 11 ||
+        !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(emergencyContactName) ||
+        !/^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .'-]+$/.test(emergencyContactName)) {
+      throw new HttpsError("invalid-argument", "Invalid ang pangalan ng emergency contact.");
+    }
+
+    if (!/^(09[0-9]{9}|\+639[0-9]{9})$/.test(emergencyContactNumber)) {
+      throw new HttpsError("invalid-argument", "Invalid ang emergency contact number.");
+    }
+
+    const userRef = db.collection("users").doc(phone);
+    const queueControlRef = db.collection("settings").doc("queueControl");
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists || userSnap.get("role") !== "driver") {
+          throw new HttpsError("permission-denied", "Driver account lamang ang maaaring mag-edit ng profile.");
+        }
+
+        const driverId = userSnap.get("userId");
+        if (typeof driverId !== "string" || !driverId) {
+          throw new HttpsError("failed-precondition", "Walang valid na User ID ang account.");
+        }
+
+        const drivers = await tx.get(
+          db.collection("users").where("role", "==", "driver")
+        );
+        const duplicatePlate = drivers.docs.some((doc) =>
+          doc.id !== phone &&
+          String(doc.get("plateNumber") || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "") === normalizedPlate
+        );
+        if (duplicatePlate) {
+          throw new HttpsError("already-exists", "Ginagamit na ng ibang driver ang plate number na ito.");
+        }
+
+        const oldNormalizedPlate = String(userSnap.get("plateNumber") || "")
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "");
+        const claimCollection = db.collection("driverPlateClaims");
+        const newClaimRef = claimCollection.doc(normalizedPlate);
+        const oldClaimRef = oldNormalizedPlate
+          ? claimCollection.doc(oldNormalizedPlate)
+          : null;
+        const newClaim = await tx.get(newClaimRef);
+        const oldClaim = oldClaimRef && oldNormalizedPlate !== normalizedPlate
+          ? await tx.get(oldClaimRef)
+          : newClaim;
+
+        if (newClaim.exists && newClaim.get("phoneNumber") !== phone) {
+          throw new HttpsError("already-exists", "May nakareserba nang ibang account sa plate number na ito.");
+        }
+
+        const queueSnapshot = await tx.get(
+          db.collection("queue").where("driverId", "==", driverId)
+        );
+        const control = await tx.get(queueControlRef);
+        const revision = control.get("revision") || 0;
+
+        tx.update(userRef, {
+          firstName,
+          lastName,
+          licenseNumber,
+          plateNumber,
+          emergencyContact,
+          emergencyContactName,
+          emergencyContactNumber,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const driverName = [firstName, lastName]
+          .filter((value) => value)
+          .join(" ") || "Driver";
+
+        if (
+          oldNormalizedPlate &&
+          oldNormalizedPlate !== normalizedPlate &&
+          oldClaim.exists &&
+          oldClaim.get("phoneNumber") === phone
+        ) {
+          tx.delete(oldClaimRef);
+        }
+        tx.set(newClaimRef, {
+          phoneNumber: phone,
+          driverId,
+          createdAt: newClaim.exists
+            ? (newClaim.get("createdAt") || FieldValue.serverTimestamp())
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        queueSnapshot.docs.forEach((document) => {
+          const status = String(document.get("status") || "").toLowerCase();
+          if (QUEUE_STATUSES_INACTIVE.includes(status)) return;
+          tx.update(document.ref, {
+            driverName,
+            plateNumber,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+
+        tx.set(queueControlRef, {
+          revision: revision + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("updateDriverProfile failed:", error);
+      throw new HttpsError("internal", "Hindi ma-update ang profile. Subukan muli.");
+    }
+
+    return { success: true };
+  }
+);
+
+
+/**
+ * PRE-OTP LOGIN CREDENTIAL CHECK.
+ *
+ * This callable intentionally allows unauthenticated requests because it
+ * runs BEFORE Firebase Phone Auth. App Check is mandatory, credentials are
+ * checked using the Admin SDK (the Android client never receives a hash),
+ * and attempts are rate-limited per phone number.
+ *
+ * The client must request the SMS OTP only when { valid: true } is returned.
+ */
+const crypto = require("node:crypto");
+
+const LOGIN_CHECK_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_CHECK_MAX_ATTEMPTS = 8;
+const LOGIN_HASH_BITS = 256;
+const LOGIN_DUMMY_SALT = Buffer.from("enerjeep-login-dummy-salt", "utf8");
+
+function safeEqualBuffers(left, right) {
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function safeEqualText(left, right) {
+  const a = Buffer.from(String(left), "utf8");
+  const b = Buffer.from(String(right), "utf8");
+  return safeEqualBuffers(a, b);
+}
+
+function verifyStoredPassword(password, secretData) {
+  const saltHex = secretData.passwordSalt;
+  const hashHex = secretData.passwordHash;
+
+  if (
+    typeof saltHex !== "string" ||
+    !/^(?:[0-9a-f]{2}){16,64}$/i.test(saltHex) ||
+    typeof hashHex !== "string" ||
+    !/^[0-9a-f]{64}$/i.test(hashHex)
+  ) {
+    // Keep missing/legacy/malformed hash handling reasonably expensive too.
+    crypto.pbkdf2Sync(password, LOGIN_DUMMY_SALT, 12000, LOGIN_HASH_BITS / 8, "sha256");
+    return false;
+  }
+
+  const rawIterations = Number(secretData.iterations);
+  const iterations =
+    Number.isSafeInteger(rawIterations) &&
+    rawIterations >= 1000 &&
+    rawIterations <= 1000000
+      ? rawIterations
+      : 12000;
+
+  const candidate = crypto.pbkdf2Sync(
+    password,
+    Buffer.from(saltHex, "hex"),
+    iterations,
+    LOGIN_HASH_BITS / 8,
+    "sha256"
+  );
+  const stored = Buffer.from(hashHex, "hex");
+  return safeEqualBuffers(candidate, stored);
+}
+
+exports.verifyLoginCredentials = onCall(
+  { enforceAppCheck: true, maxInstances: 20, region: "us-central1" },
+  async (request) => {
+    const data = request.data || {};
+    const phone = typeof data.phoneNumber === "string"
+      ? data.phoneNumber.trim()
+      : "";
+    const password = typeof data.password === "string"
+      ? data.password
+      : "";
+
+    // Generic invalid-credential result avoids revealing whether an account exists.
+    if (
+      !/^\+639[0-9]{9}$/.test(phone) ||
+      !password ||
+      password.length > 128
+    ) {
+      return { valid: false };
+    }
+
+    // Use a one-way phone digest for the rate-limit document id.
+    // No phone number or password is stored in the limiter document.
+    const phoneKey = crypto
+      .createHash("sha256")
+      .update(phone, "utf8")
+      .digest("hex");
+    const attemptRef = db.collection("_loginPrecheckAttempts").doc(phoneKey);
+    const now = Date.now();
+    let rateLimited = false;
+
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(attemptRef);
+      const storedStart = Number(snapshot.get("windowStartedAt") || 0);
+      const storedAttempts = Number(snapshot.get("attempts") || 0);
+      const windowExpired =
+        !Number.isFinite(storedStart) ||
+        now - storedStart >= LOGIN_CHECK_WINDOW_MS ||
+        now < storedStart;
+
+      if (windowExpired) {
+        tx.set(attemptRef, {
+          attempts: 1,
+          windowStartedAt: now,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      if (storedAttempts >= LOGIN_CHECK_MAX_ATTEMPTS) {
+        rateLimited = true;
+        return;
+      }
+
+      tx.set(attemptRef, {
+        attempts: storedAttempts + 1,
+        windowStartedAt: storedStart,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    if (rateLimited) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Masyadong maraming pagsubok. Maghintay ng 15 minuto bago subukan muli."
+      );
+    }
+
+    const [userSnapshot, secretSnapshot] = await Promise.all([
+      db.collection("users").doc(phone).get(),
+      db.collection("userSecrets").doc(phone).get(),
+    ]);
+
+    const secretData = secretSnapshot.exists ? secretSnapshot.data() || {} : {};
+    let valid = false;
+
+    if (userSnapshot.exists) {
+      valid = verifyStoredPassword(password, secretData);
+
+      // Older accounts may still have a legacy plaintext password field.
+      // It is migrated and removed only after the OTP succeeds in LoginViewModel.
+      if (!valid) {
+        const legacyPassword = userSnapshot.get("password");
+        if (
+          typeof legacyPassword === "string" &&
+          legacyPassword.length > 0
+        ) {
+          // Do a small dummy derivation before the legacy comparison to reduce
+          // obvious timing differences between current and legacy accounts.
+          crypto.pbkdf2Sync(
+            password,
+            LOGIN_DUMMY_SALT,
+            12000,
+            LOGIN_HASH_BITS / 8,
+            "sha256"
+          );
+          valid = safeEqualText(password, legacyPassword);
+        }
+      }
+    } else {
+      // Do not make missing accounts substantially cheaper to probe.
+      crypto.pbkdf2Sync(
+        password,
+        LOGIN_DUMMY_SALT,
+        12000,
+        LOGIN_HASH_BITS / 8,
+        "sha256"
+      );
+    }
+
+    if (valid) {
+      // Successful credential checks reset the temporary lockout counter.
+      await attemptRef.delete();
+    }
+
+    return { valid };
   }
 );

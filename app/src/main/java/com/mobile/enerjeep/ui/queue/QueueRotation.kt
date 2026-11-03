@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 /**
  * AWTOMATIKONG RESET NG PILA (cut-off) - shared engine.
@@ -45,17 +46,21 @@ object QueueRotation {
         now: Date = Date(),
         cutoffHour: Int = QueueViewModel.CUTOFF_HOUR
     ): String {
-        val calendar = Calendar.getInstance()
+        val manila = TimeZone.getTimeZone("Asia/Manila")
+        val calendar = Calendar.getInstance(manila)
         calendar.time = now
         if (calendar.get(Calendar.HOUR_OF_DAY) >= cutoffHour) {
             calendar.add(Calendar.DAY_OF_MONTH, 1)
         }
-        return SimpleDateFormat("yyyyMMdd", Locale.US).format(calendar.time)
+        return SimpleDateFormat("yyyyMMdd", Locale.US).apply {
+            timeZone = manila
+        }.format(calendar.time)
     }
 
     /** Millis hanggang sa susunod na cut-off hour (hindi bababa sa 1 minuto). */
     fun millisUntilNextCutoff(cutoffHour: Int): Long {
-        val now = Calendar.getInstance()
+        val manila = TimeZone.getTimeZone("Asia/Manila")
+        val now = Calendar.getInstance(manila)
         val next = (now.clone() as Calendar).apply {
             set(Calendar.HOUR_OF_DAY, cutoffHour)
             set(Calendar.MINUTE, 0)
@@ -84,6 +89,11 @@ object QueueRotation {
          * transaction.get(document) - per document ang basa dahil walang
          * transaction.get(query) ang mobile SDK.
          */
+        val queueControlReference = firestore
+            .collection(FirestoreCollections.SETTINGS)
+            .document("queueControl")
+        val observedQueueRevision = queueControlReference.get().await()
+            .getLong("revision") ?: 0L
         val queueIds = queueCollection
             .get()
             .await()
@@ -91,6 +101,11 @@ object QueueRotation {
             .map { it.id }
 
         return firestore.runTransaction { transaction ->
+            val queueControl = transaction.get(queueControlReference)
+            val currentRevision = queueControl.getLong("revision") ?: 0L
+            if (currentRevision != observedQueueRevision) {
+                throw IllegalStateException("Nagbago ang pila habang nagre-reset. Ulitin ang rotation.")
+            }
             val metaReference = metaReference(firestore)
             val meta = transaction.get(metaReference)
             val lastReset = meta.getString("lastQueueDay")
@@ -149,6 +164,14 @@ object QueueRotation {
                 metaReference,
                 mapOf(
                     "lastQueueDay" to today,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            transaction.set(
+                queueControlReference,
+                mapOf(
+                    "revision" to currentRevision + 1L,
                     "updatedAt" to FieldValue.serverTimestamp()
                 ),
                 SetOptions.merge()

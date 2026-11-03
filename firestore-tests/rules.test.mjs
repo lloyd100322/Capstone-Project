@@ -28,6 +28,9 @@ import {
   collection,
   getDoc,
   getDocs,
+  query,
+  where,
+  serverTimestamp,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
@@ -91,29 +94,31 @@ beforeEach(async () => {
     await setDoc(doc(db, "activityLogs/log-1"), {
       actorName: "Admin", action: "Dispatch", detail: "x",
     });
+    await setDoc(doc(db, "incidents/shared-1"), { title: "Shared incident", sentToDriver: true, isResolved: false });
+    await setDoc(doc(db, "incidents/draft-1"), { title: "Admin draft", sentToDriver: false, isResolved: false });
+    await setDoc(doc(db, "ledger/dispatch-driver"), { driverId, amount: 450, grossAmount: 500, otherFees: 50, netAmount: 450 });
+    await setDoc(doc(db, "ledger/dispatch-other"), { driverId: "user-other-1", amount: 600, grossAmount: 650, otherFees: 50, netAmount: 600 });
   });
 });
 
 // ---------------------------------------------------------- queue / end-travel
 
-test("driver CAN finish his own travel (status completed + position 0)", async () => {
+test("driver CANNOT directly finish queue travel; the trusted callable owns completion", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-drv"), {
-      status: "completed",
-      position: 0,
-      endTravelAt: new Date(),
-      updatedAt: new Date(),
+      status: "completed", position: 0,
+      endTravelAt: serverTimestamp(), updatedAt: serverTimestamp(),
     })
   );
 });
 
-test("driver CAN sync name/plate on his own entry (profile rename)", async () => {
+test("driver CANNOT directly rewrite queue display identity fields", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-drv"), {
       driverName: "Juan Dela Cruz",
-      plateNumber: "TXA 448",
+      plateNumber: "HIJACKED 123",
       updatedAt: new Date(),
     })
   );
@@ -129,9 +134,9 @@ test("driver CANNOT move his own entry up the queue (queue-jump)", async () => {
   );
 });
 
-test("driver CAN renumber other entries (position-only end-travel reflow)", async () => {
+test("driver CANNOT renumber another driver's queue entry", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-oth"), {
       position: 2,
       updatedAt: new Date(),
@@ -164,6 +169,33 @@ test("admin CAN dispatch-style update any queue entry", async () => {
       income: 500,
     })
   );
+});
+
+// ---------------------------------------------------------- incident sharing
+
+test("drivers can read only incidents explicitly shared with drivers", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertSucceeds(getDoc(doc(db, "incidents/shared-1")));
+  await assertFails(getDoc(doc(db, "incidents/draft-1")));
+  await assertSucceeds(
+    getDocs(query(collection(db, "incidents"), where("sentToDriver", "==", true)))
+  );
+  await assertFails(getDocs(collection(db, "incidents")));
+
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  await assertSucceeds(getDoc(doc(adminDb, "incidents/draft-1")));
+});
+
+// --------------------------------------------------------------- ledger privacy
+
+test("drivers can read only ledger entries matching their stable userId", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertSucceeds(getDoc(doc(db, "ledger/dispatch-driver")));
+  await assertFails(getDoc(doc(db, "ledger/dispatch-other")));
+  await assertSucceeds(
+    getDocs(query(collection(db, "ledger"), where("driverId", "==", driverId)))
+  );
+  await assertFails(getDocs(collection(db, "ledger")));
 });
 
 // --------------------------------------------------------------- settings
@@ -208,9 +240,12 @@ test("driver CANNOT edit or create his own earnings records", async () => {
   );
 });
 
-test("admin CAN manage earnings records", async () => {
+test("admin CANNOT write to the retired kita collection", async () => {
   const db = dbAs(ADMIN_PHONE, "u-admin");
-  await assertSucceeds(updateDoc(doc(db, "kita/k-drv"), { amount: 250 }));
+  await assertFails(updateDoc(doc(db, "kita/k-drv"), { amount: 250 }));
+  await assertFails(
+    setDoc(doc(db, "kita/k-new"), { driverId, amount: 250, type: "Kita" })
+  );
 });
 
 // --------------------------------------------------------------- activityLogs
@@ -260,11 +295,10 @@ test("a user can read ONLY his own password secret", async () => {
   );
 });
 
-test("password hash is readable pre-login (credential check) but never listable", async () => {
+test("unauthenticated clients CANNOT read password secrets before OTP", async () => {
   const anon = testEnv.unauthenticatedContext().firestore();
-  await assertSucceeds(getDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(getDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`)));
   await assertFails(getDocs(collection(anon, "userSecrets")));
-  // writes stay owner-only even pre-login
   await assertFails(
     setDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`), {
       passwordHash: "x",
@@ -274,7 +308,7 @@ test("password hash is readable pre-login (credential check) but never listable"
   );
 });
 
-test("an admin cannot promote anyone - only the superadmin changes roles", async () => {
+test("an admin cannot change roles; the superadmin can", async () => {
   await assertFails(
     updateDoc(doc(dbAs(ADMIN_PHONE, "u-admin"), `users/${DRIVER_PHONE}`), {
       role: "superadmin",
@@ -282,23 +316,32 @@ test("an admin cannot promote anyone - only the superadmin changes roles", async
   );
   await assertSucceeds(
     updateDoc(doc(dbAs(SUPER_PHONE, "u-super"), `users/${DRIVER_PHONE}`), {
-      firstName: "Renamed",
+      role: "admin",
     })
   );
 });
 
-test("a user may edit ONLY his own profile fields (name/license/plate/emergency)", async () => {
+test("a user may edit only the profile fields allowed by the current rules", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
   await assertSucceeds(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
       firstName: "Renamed",
       lastName: "Driver",
-      licenseNumber: "N01-123456",
-      plateNumber: "TXA 448",
       emergencyContactName: "Inay",
       emergencyContactNumber: "+639171234502",
+      emergencyContact: "Inay - +639171234502",
       fcmToken: "device-push-token",
       updatedAt: new Date(),
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      plateNumber: "TXB 449",
+    })
+  );
+  await assertFails(
+    updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
+      licenseNumber: "N01-123456",
     })
   );
 });
@@ -342,6 +385,25 @@ test("a legacy plaintext password field can be REMOVED but never SET", async () 
   await assertSucceeds(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
       password: deleteField(),
+    })
+  );
+});
+
+test("only admins can read and manage driver plate claims", async () => {
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  await assertSucceeds(
+    setDoc(doc(adminDb, "driverPlateClaims/TXA448"), {
+      phoneNumber: DRIVER_PHONE,
+      driverId,
+    })
+  );
+  await assertFails(
+    getDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), "driverPlateClaims/TXA448"))
+  );
+  await assertFails(
+    setDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), "driverPlateClaims/ABC1234"), {
+      phoneNumber: DRIVER_PHONE,
+      driverId,
     })
   );
 });

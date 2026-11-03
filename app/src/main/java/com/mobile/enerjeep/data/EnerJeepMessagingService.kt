@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.data
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -29,12 +30,29 @@ class EnerJeepMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         /*
-         * Ang mensahe ay may notification payload: kapag naka-background
-         * o nakasara ang app, ang SYSTEM na ang nagpakita nito (hindi
-         * na tumatawag ng method na ito). Kapag foreground naman, ang
-         * in-app banner + tunog + bell na ang gumagana (may Firestore
-         * listener din) - kaya tahimik lang dito para hindi mag-doble.
+         * Kapag nasa background/nakasara ang app, Android mismo ang
+         * nagpapakita ng FCM notification payload. Kapag foreground,
+         * tawagin ang local notifier para makita rin ang incident push.
+         *
+         * Hindi ito nagpo-post ng dispatch push sa foreground dahil may
+         * sarili nang in-app dispatch alert ang Home screen.
          */
+        if (message.data["type"] != "incident") return
+
+        val title = message.notification?.title
+            ?: "Bagong Insidente sa Kooperatiba"
+        val body = message.notification?.body
+            ?: "May bagong insidenteng ipinadala sa mga driver."
+        val notificationId =
+            message.data["incidentId"]?.hashCode()
+                ?: 1002
+
+        DispatchNotifier.postIncident(
+            context = this,
+            title = title,
+            body = body,
+            notificationId = notificationId
+        )
     }
 
     private fun saveToken(token: String) {
@@ -52,6 +70,9 @@ class EnerJeepMessagingService : FirebaseMessagingService() {
                         "updatedAt" to FieldValue.serverTimestamp()
                     )
                 )
+                .addOnFailureListener { error ->
+                    Log.w("FCMToken", "Failed to save refreshed FCM token", error)
+                }
         } catch (_: Exception) {
             // Hindi dapat masira ang token refresh.
         }

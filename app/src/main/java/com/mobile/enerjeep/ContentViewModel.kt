@@ -196,6 +196,13 @@ class ContentViewModel @Inject constructor(
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
+                    .addOnFailureListener { error ->
+                        android.util.Log.w(
+                            "FCMToken",
+                            "Failed to save FCM token for signed-in user",
+                            error
+                        )
+                    }
             }
     }
 }

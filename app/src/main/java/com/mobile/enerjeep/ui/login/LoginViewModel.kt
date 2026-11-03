@@ -13,9 +13,12 @@ import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.PasswordHasher
+import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -35,6 +38,9 @@ class LoginViewModel @Inject constructor(
     private val userSession: UserSession
 ) : ViewModel() {
 
+    // verifyLoginCredentials is deployed in the default Cloud Functions region.
+    private val functions = FirebaseFunctions.getInstance("us-central1")
+
     private val _uiState =
         MutableStateFlow<LoginUiState>(LoginUiState.Idle)
 
@@ -44,7 +50,8 @@ class LoginViewModel @Inject constructor(
     private var resendingToken:
             PhoneAuthProvider.ForceResendingToken? = null
 
-    // Typed on the login form and checked AFTER the OTP is verified.
+    // These credentials are kept only during the OTP flow; the password
+    // is checked by the server before SMS and rechecked after OTP.
     private var pendingPassword: String? = null
     private var currentPhoneNumber: String? = null
     private var resendAllowedAtMillis: Long = 0L
@@ -55,13 +62,9 @@ class LoginViewModel @Inject constructor(
     }
 
     /**
-     * Step 1: send the OTP.
-     *
-     * Nothing is read from Firestore before the OTP is verified. The
-     * password is only checked after Firebase Auth has proven that the
-     * caller really owns the phone number (and the app is then allowed
-     * to read the account). A stolen password alone can no longer be
-     * used to probe the database.
+     * Step 1: verify phone + password on the trusted server.
+     * The server reads the private password hash with Admin SDK and
+     * returns only a boolean. SMS OTP is requested only after success.
      */
     fun sendVerificationCode(
         phoneNumber: String,
@@ -84,100 +87,73 @@ class LoginViewModel @Inject constructor(
             return
         }
 
+        if (password.length > 128) {
+            _uiState.value = LoginUiState.Error(
+                "Hindi valid ang password."
+            )
+            return
+        }
+
         if (_uiState.value is LoginUiState.Loading) return
 
-        pendingPassword = password
-        currentPhoneNumber = cleanPhoneNumber
-
         viewModelScope.launch {
-            /*
-             * Password check MUNA bago magpadala ng OTP: hindi dapat
-             * gumastos ng SMS kapag mali ang password. get lang ang
-             * userSecrets (walang listahan - kailangang alam ang
-             * numero). null = walang maayos na hash (legacy o offline),
-             * kaya tuloy sa OTP; ang post-OTP verify pa rin ang
-             * authoritative at buo.
-             */
             _uiState.value = LoginUiState.Loading
 
-            val preCheck = preCheckPassword(cleanPhoneNumber, password)
+            // Check the credentials on the trusted server BEFORE requesting
+            // SMS. The client never downloads or reads the password hash.
+            try {
+                val result = functions
+                    .getHttpsCallable("verifyLoginCredentials")
+                    .call(
+                        mapOf(
+                            "phoneNumber" to cleanPhoneNumber,
+                            "password" to password
+                        )
+                    )
+                    .await()
 
-            if (preCheck == false) {
+                val response = result.data as? Map<*, *>
+                val credentialsValid = response?.get("valid") == true
+
+                if (!credentialsValid) {
+                    pendingPassword = null
+                    currentPhoneNumber = null
+                    _uiState.value = LoginUiState.Error(
+                        "Maling numero o password. Hindi ipinadala ang OTP."
+                    )
+                    return@launch
+                }
+            } catch (e: FirebaseFunctionsException) {
+                Log.e("LoginPrecheck", "Server credential check failed", e)
+                pendingPassword = null
+                currentPhoneNumber = null
+                val message =
+                    if (e.code == FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED) {
+                        e.message
+                            ?: "Masyadong maraming pagsubok. Maghintay ng 15 minuto."
+                    } else {
+                        "Hindi ma-verify ang credentials. Suriin ang internet at App Check, pagkatapos ay subukan muli."
+                    }
+                _uiState.value = LoginUiState.Error(message)
+                return@launch
+            } catch (e: Exception) {
+                Log.e("LoginPrecheck", "Unable to call credential verification", e)
+                pendingPassword = null
+                currentPhoneNumber = null
                 _uiState.value = LoginUiState.Error(
-                    "Maling numero o password. Subukan muli."
+                    "Hindi ma-verify ang credentials. Pakisuri ang internet connection at subukan muli."
                 )
                 return@launch
             }
 
+            // Only a successful server check reaches Firebase Phone Auth.
+            pendingPassword = password
+            currentPhoneNumber = cleanPhoneNumber
             triggerSmsVerification(
                 phoneNumber = cleanPhoneNumber,
                 activity = activity,
                 isResend = false
             )
-        }
-    }
-
-    /**
-     * Pre-login password check laban sa userSecrets (PBKDF2). Read-
-     * only: walang anumang ina-upgrade o inililipat bago mag-OTP.
-     * true = tama; false = mali; null = walang matse-check (legacy
-     * o error) - magpapatuloy sa OTP path.
-     */
-    private suspend fun preCheckPassword(
-        phoneNumber: String,
-        typedPassword: String
-    ): Boolean? {
-        return try {
-            val secrets = firestore
-                .collection(FirestoreCollections.USER_SECRETS)
-                .document(phoneNumber)
-                .get()
-                .await()
-
-            val salt = secrets.getString("passwordSalt")
-            val hash = secrets.getString("passwordHash")
-
-            if (salt.isNullOrBlank() || hash.isNullOrBlank()) return null
-
-            val storedIterations = secrets.getLong("iterations")?.toInt()
-                ?: PasswordHasher.LEGACY_ITERATIONS
-
-            if (PasswordHasher.verify(
-                    typedPassword,
-                    salt,
-                    hash,
-                    storedIterations
-                )
-            ) {
-                return true
-            }
-
-            /*
-             * Stale-hash fallback: kung may legacy plaintext password
-             * pa sa profile at TUGMA ito, huwag i-deny dito - hayaan ang
-             * OTP path na ayusin ang hash (self-heal sa post-OTP verify).
-             * Kapag hindi mabasa ang profile (hal. denied pre-auth) o
-             * hindi tugma ang legacy, MANANATILI ang "false" - ang hash
-             * rejection ay definitive para sa pre-OTP error.
-             */
-            val legacy = try {
-                firestore
-                    .collection(FirestoreCollections.USERS)
-                    .document(phoneNumber)
-                    .get()
-                    .await()
-                    .getString("password")
-            } catch (_: Exception) {
-                null
-            }
-
-            if (legacy == typedPassword && !legacy.isNullOrBlank()) {
-                return null
-            }
-
-            false
-        } catch (_: Exception) {
-            null
         }
     }
 
@@ -340,8 +316,8 @@ class LoginViewModel @Inject constructor(
     }
 
     /**
-     * Step 2: verify the OTP with Firebase Auth, then (as an
-     * authenticated user) verify the password and load the profile.
+     * Step 2: verify the OTP with Firebase Auth, re-check the password,
+     * then load the profile and establish the app session.
      */
     private fun signInWithPhoneAuthCredential(
         credential: PhoneAuthCredential
@@ -523,14 +499,32 @@ class LoginViewModel @Inject constructor(
             )
 
             if (matched) {
+                var cachedSalt = salt
+                var cachedHash = hash
+                var cachedIterations = storedIterations
+
                 if (storedIterations < PasswordHasher.ITERATIONS) {
                     try {
-                        persistPasswordHash(phone, typedPassword, userReference)
+                        val upgraded = persistPasswordHash(
+                            phone,
+                            typedPassword,
+                            userReference
+                        )
+                        cachedSalt = upgraded.salt
+                        cachedHash = upgraded.hash
+                        cachedIterations = upgraded.iterations
                     } catch (e: Exception) {
-                        // Login still succeeds; the next login tries again.
+                        // Login still succeeds with the existing valid hash.
                         Log.w("Login", "Password upgrade failed", e)
                     }
                 }
+
+                SecureLoginCache.save(
+                    phone,
+                    cachedSalt,
+                    cachedHash,
+                    cachedIterations
+                )
                 return true
             }
 
@@ -544,9 +538,19 @@ class LoginViewModel @Inject constructor(
             val legacyMatch = data["password"] as? String
             if (!legacyMatch.isNullOrBlank() && legacyMatch == typedPassword) {
                 try {
-                    persistPasswordHash(phone, typedPassword, userReference)
+                    val upgraded = persistPasswordHash(
+                        phone,
+                        typedPassword,
+                        userReference
+                    )
+                    SecureLoginCache.save(
+                        phone,
+                        upgraded.salt,
+                        upgraded.hash,
+                        upgraded.iterations
+                    )
                 } catch (e: Exception) {
-                    // Login still succeeds; the next login tries again.
+                    // Login still succeeds; the next login retries migration.
                     Log.w("Login", "Password self-heal failed", e)
                 }
                 return true
@@ -567,7 +571,17 @@ class LoginViewModel @Inject constructor(
 
         if (matched) {
             try {
-                persistPasswordHash(phone, typedPassword, userReference)
+                val upgraded = persistPasswordHash(
+                    phone,
+                    typedPassword,
+                    userReference
+                )
+                SecureLoginCache.save(
+                    phone,
+                    upgraded.salt,
+                    upgraded.hash,
+                    upgraded.iterations
+                )
             } catch (e: Exception) {
                 // Login still succeeds; the next login tries again.
                 Log.w("Login", "Password migration failed", e)
@@ -586,7 +600,7 @@ class LoginViewModel @Inject constructor(
         phone: String,
         plainPassword: String,
         userReference: DocumentReference
-    ) {
+    ): PasswordHasher.SaltedHash {
         val salted = PasswordHasher.hash(plainPassword)
 
         val batch = firestore.batch()
@@ -610,6 +624,7 @@ class LoginViewModel @Inject constructor(
         )
 
         batch.commit().await()
+        return salted
     }
 
     fun resetState() {
@@ -637,4 +652,5 @@ sealed interface LoginUiState {
     data class OtpError(
         val message: String
     ) : LoginUiState
+
 }

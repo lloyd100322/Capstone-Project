@@ -1,16 +1,21 @@
 package com.mobile.enerjeep.ui.incident
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.safeTimestamp
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 data class DriverIncident(
@@ -27,9 +32,6 @@ data class DriverIncident(
     val sortMillis: Long = 0L,
     // Creation time of the record, used by the "Ngayon" date filter.
     val createdAtMillis: Long = 0L,
-    // Numero ng naaksidente na driver (impano sa incident record mismo -
-    // hindi mababasa ng driver ang /users list kaya dito nakaimbak).
-    val driverPhone: String = ""
 )
 
 enum class IncidentTabType {
@@ -60,6 +62,39 @@ class DriverIncidentViewModel @Inject constructor(
     val uiState: StateFlow<DriverIncidentUiState> = _uiState.asStateFlow()
     private var listener: ListenerRegistration? = null
     private var contactsListener: ListenerRegistration? = null
+    private val contactLookups = mutableSetOf<String>()
+
+    /**
+     * Gets the number only when the call action is requested. The callable
+     * checks the caller role and that the incident was shared with drivers.
+     */
+    fun lookupIncidentDriverPhone(
+        incidentId: String,
+        onResult: (String?) -> Unit
+    ) {
+        if (!contactLookups.add(incidentId)) return
+
+        viewModelScope.launch {
+            try {
+                val result = FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("getIncidentDriverPhone")
+                    .call(mapOf("incidentId" to incidentId))
+                    .await()
+                val phone = (result.data as? Map<*, *>)?.get("phoneNumber") as? String
+                if (phone.isNullOrBlank()) {
+                    throw IllegalStateException("Walang valid na numero ang driver.")
+                }
+                onResult(phone)
+            } catch (e: Exception) {
+                ToastFeedback.show(
+                    e.message ?: "Hindi makuha ang numero ng driver."
+                )
+                onResult(null)
+            } finally {
+                contactLookups.remove(incidentId)
+            }
+        }
+    }
 
     init {
         startListener()
@@ -109,6 +144,7 @@ class DriverIncidentViewModel @Inject constructor(
         listener?.remove()
 
         listener = firestore.collection(FirestoreCollections.INCIDENTS)
+            .whereEqualTo("sentToDriver", true)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     _uiState.value = _uiState.value.copy(
@@ -127,7 +163,7 @@ class DriverIncidentViewModel @Inject constructor(
                  * explicitly sent to them.
                  */
                 val incidents = snapshot.documents
-                    .filter { it.getBoolean("sentToDriver") != false }
+                    .filter { it.getBoolean("sentToDriver") == true }
                     .map { mapIncident(it) }
                     .sortedByDescending { it.sortMillis }
 
@@ -193,8 +229,7 @@ class DriverIncidentViewModel @Inject constructor(
             date = document.getString("date").orEmpty(),
             isResolved = document.getBoolean("isResolved") == true || document.getString("status")?.lowercase() == "resolved",
             multiya = (document.get("penalty") as? Number)?.toDouble() ?: 0.0,
-            isSentToDriver = document.getBoolean("sentToDriver") ?: true,
-            driverPhone = document.getString("driverPhone").orEmpty().trim(),
+            isSentToDriver = document.getBoolean("sentToDriver") ?: false,
             sortMillis = (
                     document.safeTimestamp("resolvedAt")
                         ?: document.safeTimestamp("createdAt")

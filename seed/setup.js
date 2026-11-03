@@ -207,6 +207,7 @@ async function wipeCollections() {
   const collections = [
     "users",
     "userSecrets",
+    "driverPlateClaims",
     "queue",
     "incidents",
     "ledger",
@@ -312,6 +313,18 @@ async function writeUsers() {
       doc.adminStation = u.adminStation;
     }
     await db.collection("users").doc(u.phone).set(doc);
+
+    if (isDriver) {
+      const normalizedPlate = String(u.plate || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+      await db.collection("driverPlateClaims").doc(normalizedPlate).set({
+        phoneNumber: u.phone,
+        driverId: u.userId,
+        createdAt: ts(daysAgo(30)),
+        updatedAt: ts(daysAgo(30)),
+      });
+    }
 
     await db
       .collection("userSecrets")

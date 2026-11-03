@@ -139,10 +139,19 @@ scope** — see `docs/SCOPE-AND-LIMITATIONS.md`.
 
 Two admins can act on the pila at the same time (two phones). A
 read-then-write without a transaction can double-book position #1 or
-lose a driver. Every state change that moves money or position
-(dispatch, cancel/restore, "Tapos Na Bumyahe", daily rotation) runs in
-`runTransaction`, so a conflicting write simply fails and is retried
-instead of corrupting the queue.
+lose a driver. Admin dispatch, cancel/restore, reorder, account creation
+and queue rotation use Firestore transactions plus the shared
+`settings/queueControl.revision` guard. A snapshot-based operation
+checks that revision before writing and asks the user to refresh if
+another queue mutation has committed in the meantime.
+
+Driver completion is performed by the callable Cloud Function
+`finishDriverTravel`. It verifies the Firebase Phone Auth identity
+against `users/{phone}.userId`, validates ownership of the queue entry,
+and completes the trip plus route re-numbering in one Admin SDK
+transaction. Firestore rules therefore do not permit a driver to edit
+other queue entries directly. Deploy the function and the updated
+Firestore rules before testing the driver completion button.
 
 ## 5. Why phone OTP **plus** a password?
 

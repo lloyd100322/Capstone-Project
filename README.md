@@ -134,12 +134,20 @@ dashboard totals, kita history merging, history date filters.
 These are done in the Firebase console / with the Firebase CLI — they
 are **not** in the code:
 
-1. **Deploy the Firestore security rules** (important — the file is
-   ready in the repo):
+1. **Deploy the Firestore security rules AND every Cloud Function** from
+   the project root. The scheduled queue reset, dispatch/incident push
+   notifications, and pre-OTP password check all run on the backend:
 
    ```bash
-   firebase deploy --only firestore:rules
+   cd functions
+   npm install
+   cd ..
+   firebase deploy --only firestore:rules,functions --project enerjeep-b8f3a
    ```
+
+   In Windows PowerShell, use `npm.cmd install` and
+   `firebase.cmd deploy --only firestore:rules,functions --project enerjeep-b8f3a`
+   if the script execution policy blocks `npm` or `firebase`.
 
 2. **Phone Authentication**: enable the Phone provider (Sign-in method)
    and make sure SMS quota/billing allows +63 numbers. Register the
@@ -149,23 +157,49 @@ are **not** in the code:
    re-download `google-services.json`.
 
 3. **App Check**: the app registers Play Integrity + a debug provider.
-   After testing, turn on **Enforcement** for Firestore in the console
-   (App Check → Settings). Register debug tokens for developer devices
-   (the token is printed in Logcat as "Firebase App Check debug token").
-   A 403 on a new device is normal until the token is registered.
+   Register debug tokens for developer devices (the token is printed in
+   Logcat as "AppCheckDebug TOKEN"). The `verifyLoginCredentials`
+   callable requires valid App Check, so register each debug device token
+   before testing pre-OTP login. After testing, enable the appropriate
+   App Check enforcement in the Firebase console.
 
-4. **Cloud Function — delete Auth user on account deletion** (optional
-   but recommended; requires the Blaze/pay-as-you-go plan):
+4. **Cloud Functions** (requires the Blaze/pay-as-you-go plan and the
+   Cloud Scheduler API for the scheduled reset):
 
-   ```bash
-   cd functions && npm install && cd ..
-   firebase deploy --only functions
-   ```
+   - `dailyQueueReset` — scheduled every hour in `Asia/Manila`; after
+     the configured cutoff hour, it rotates the queue even when no phone
+     has the app open.
+   - `onQueueDispatched` — sends the driver's dispatch push notification.
+   - `onIncidentShared` — sends an incident push to registered driver
+     devices when a report is shared with drivers (including a draft
+     later marked `sentToDriver=true`).
+   - `verifyLoginCredentials` — verifies phone + password on the server
+     before the app requests SMS OTP. Invalid credentials do not trigger SMS.
+   - `finishDriverTravel` — verifies the signed-in driver and completes
+     the trip/reorders the route in one server transaction.
+   - `updateDriverProfile` — validates the driver's profile and plate
+     uniqueness, reserves the normalized plate, then updates the profile
+     and active queue display fields in one transaction.
+   - `getIncidentDriverPhone` — returns the phone number for a shared
+     incident only on demand to an authenticated driver through App Check;
+     new incident documents no longer store the phone number.
+   - `deleteAuthUserOnAccountDelete` — removes the Firebase Authentication
+     account after its Firestore user document is deleted.
 
-   Without it, deleting an account in the app removes the Firestore
-   data but leaves the Firebase Auth record behind (the phone number
-   then cannot be reused). With it, `functions/index.js` deletes the
-   Auth user automatically.
+   **Legacy incident contact cleanup:** older incident documents may still
+   contain `driverPhone`. After deploying the updated Functions, from the
+   `functions` folder run
+   `node scripts/remove-incident-phone-fields.js --project enerjeep-b8f3a`
+   first as a dry run. The script requires the project ID explicitly.
+   Take a backup before an operator reruns it with `--project enerjeep-b8f3a
+   --apply`. Do not run the apply mode until the dry-run count and target
+   project have been checked.
+
+   The scheduled function uses Cloud Scheduler. Confirm the Cloud Scheduler
+   API is enabled in the Google Cloud project; scheduled functions need a
+   scheduler job when deployed.
+
+   The callable completion function enforces App Check, so register the debug token for development devices before testing it.
 
 5. **Firestore indexes**: if the app log prints a "requires an index"
    link, open it once while signed in to the Firebase console to create
@@ -184,11 +218,11 @@ app/src/main/java/com/mobile/enerjeep/
 │   ├── ledger/      # admin income/fees (Ledger)
 │   ├── report/      # Mga Ulat: income/incidents/fines/donations + charts
 │   ├── incident/    # incident reports (admin + driver)
-│   ├── profile/     # profile editing (emergency contact only), security
+│   ├── profile/     # profile editing (server-validated driver fields), security
 │   └── components/  # shared UI: PesoIcon, LabeledBarChart, date filter, ...
 ├── EnerJeepApp.kt   # App Check initialization
 └── MainActivity.kt
-functions/           # Cloud Function (delete Auth user on account delete)
+functions/           # queue reset, auth, profile, incident, and notification Cloud Functions
 firestore.rules      # Firestore security rules (deploy with the CLI)
 docs/                # architecture justification + scope/limitations
 seed/                # realistic demo data (Firestore seed script)

@@ -36,7 +36,8 @@ fun TerminalFeeFormContent(
     initialAmount: String = "50",
     initialPlate: String = "",
     onCancel: () -> Unit,
-    onSubmit: (LedgerDriverOption, Double, String) -> Unit
+    onSubmit: (LedgerDriverOption, Double, String) -> Unit,
+    isSubmitting: Boolean = false
 ) {
     var amount by remember { mutableStateOf(initialAmount) }
     var expandedDriver by remember { mutableStateOf(false) }
@@ -99,10 +100,10 @@ fun TerminalFeeFormContent(
         )
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin", color = Color.Black) }
+            OutlinedButton(onClick = onCancel, enabled = !isSubmitting, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin", color = Color.Black) }
             Spacer(Modifier.width(16.dp))
             val finalAmount = amount.toDoubleOrNull() ?: 0.0
-            Button(onClick = { selectedDriver?.let { if (finalAmount > 0.0) onSubmit(it, finalAmount, selectedFeeType) } }, enabled = selectedDriver != null && finalAmount > 0.0, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text("Ipasa") }
+            Button(onClick = { selectedDriver?.let { if (finalAmount > 0.0) onSubmit(it, finalAmount, selectedFeeType) } }, enabled = !isSubmitting && selectedDriver != null && finalAmount > 0.0, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text(if (isSubmitting) "Sine-save..." else "Ipasa") }
         }
     }
 }

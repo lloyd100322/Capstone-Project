@@ -1,6 +1,7 @@
 package com.mobile.enerjeep.data
 
 import com.google.firebase.firestore.FieldValue
+import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
 
 /**
@@ -40,16 +41,15 @@ object ActivityLogger {
                     mapOf(
                         "actorName" to actorName,
                         "actorPhone" to profile?.phoneNumber.orEmpty().trim(),
-                        // .orEmpty() (hindi `?:`) — ang `to` infix ay
-                        // mas mataas ang precedence kaysa elvis, kaya
-                        // nagiging (a to b) ?: c ang "x to y ?: z" at
-                        // nag-e-error sa mapOf.
                         "actorRole" to profile?.role?.name.orEmpty(),
                         "action" to action,
                         "detail" to detail,
                         "createdAt" to FieldValue.serverTimestamp()
                     )
                 )
+                .addOnFailureListener { error ->
+                    Log.w("ActivityLogger", "Failed to save activity log", error)
+                }
         } catch (_: Exception) {
             // Never throw here - the audit trail must never break the
             // actual action it is recording.

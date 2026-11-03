@@ -40,11 +40,14 @@ import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.TextSecondary
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import com.mobile.enerjeep.ui.components.ToastFeedback
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     val isResolvedTab = uiState.selectedTab == IncidentTabType.NAAYOS
     val visibleIncidents = if (isResolvedTab) filterHistoryRecords(
@@ -102,7 +105,26 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
                 visibleIncidents.forEach { incident ->
                     DriverIncidentCard(
                         incident = incident,
-                        fallbackPhone = uiState.officePhone
+                        onCallDriver = {
+                            viewModel.lookupIncidentDriverPhone(incident.id) { phone ->
+                                val number = phone ?: uiState.officePhone
+                                val clean = number.filter {
+                                    it.isDigit() || it == '+'
+                                }
+                                if (clean.isNotBlank()) {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_DIAL,
+                                            Uri.parse("tel:$clean")
+                                        )
+                                    )
+                                } else {
+                                    ToastFeedback.show(
+                                        "Walang numero ng driver o opisina na matatawagan."
+                                    )
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -134,15 +156,9 @@ fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boo
 @Composable
 fun DriverIncidentCard(
     incident: DriverIncident,
-    fallbackPhone: String = ""
+    onCallDriver: () -> Unit
 ) {
-    val context = LocalContext.current
-    /*
-     * Ang buong detalye ay nasa mismong card na (walang hiwalay na
-     * sheet) kaya hindi na rin ito clickable. Ang button ay CALL lang
-     * (tawag sa numero ng driver; opisina kung walang numero).
-     */
-    val callNumber = incident.driverPhone.ifBlank { fallbackPhone }
+    // Contact details are resolved only when the user taps the call action.
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(2.dp)) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
@@ -164,34 +180,20 @@ fun DriverIncidentCard(
                     Text(if (incident.isResolved) "Naayos" else "Di-naayos", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            if (callNumber.isNotBlank()) {
-                Spacer(Modifier.height(16.dp))
-                /*
-                 * Tawag: naka-DIAL (hindi auto-call) para makita muna
-                 * ang numero bago tumawag.
-                 */
-                OutlinedButton(
-                    onClick = {
-                        val clean = callNumber.filter {
-                            it.isDigit() || it == '+'
-                        }
-                        if (clean.isNotBlank()) {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_DIAL,
-                                    Uri.parse("tel:$clean")
-                                )
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
-                ) {
-                    Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Tawagan", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                }
+            Spacer(Modifier.height(16.dp))
+            /*
+             * Tawag: naka-DIAL (hindi auto-call) para makita muna
+             * ang numero bago tumawag.
+             */
+            OutlinedButton(
+                onClick = onCallDriver,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
+            ) {
+                Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Tawagan", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
     }
