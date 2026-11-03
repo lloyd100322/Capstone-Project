@@ -285,6 +285,17 @@ class CreateAccountViewModel @Inject constructor(
                 val queueId = FirestoreIds.queue(
                     generatedUserId
                 )
+                val normalizedPlate = if (effectiveRole == UserRole.Driver) {
+                    PhilippineIdentifiers.normalizePlateNumber(cleanPlateNumber)
+                } else {
+                    ""
+                }
+                val plateClaimReference = if (normalizedPlate.isNotBlank()) {
+                    firestore.collection(FirestoreCollections.DRIVER_PLATE_CLAIMS)
+                        .document(normalizedPlate)
+                } else {
+                    null
+                }
 
                 val driverName = listOf(
                     cleanFirstName,
@@ -358,6 +369,15 @@ class CreateAccountViewModel @Inject constructor(
                         ?.plus(1)
                         ?: 1
 
+                    val existingPlateClaim = plateClaimReference?.let {
+                        transaction.get(it)
+                    }
+                    if (existingPlateClaim?.exists() == true) {
+                        throw IllegalStateException(
+                            "Ginagamit na ng ibang driver ang plate number na ito"
+                        )
+                    }
+
                     transaction.set(userReference, userMap)
 
                     /*
@@ -366,6 +386,17 @@ class CreateAccountViewModel @Inject constructor(
                      * The profile document never carries a password.
                      */
                     transaction.set(userSecretsReference, userSecretsData)
+
+                    if (plateClaimReference != null) {
+                        transaction.set(
+                            plateClaimReference,
+                            mapOf(
+                                "phoneNumber" to cleanPhoneNumber,
+                                "driverId" to generatedUserId,
+                                "createdAt" to FieldValue.serverTimestamp()
+                            )
+                        )
+                    }
 
                     if (effectiveRole == UserRole.Driver) {
                         val queueData = mapOf<String, Any>(
