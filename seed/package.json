@@ -1,12 +1,12 @@
 {
-  "name": "enerjeep-data-setup",
-  "version": "1.0.0",
+  "name": "enerjeep-operational-data-refresh",
+  "version": "2.0.0",
   "private": true,
-  "description": "Initial Firestore data for EnerJeep (maintainer tool - not part of the app)",
+  "description": "Account-preserving Firestore operational dataset refresh utility",
   "main": "setup.js",
   "scripts": {
-    "setup": "node setup.js",
-    "setup:wipe": "node setup.js --wipe"
+    "preview": "node setup.js",
+    "apply": "node setup.js --apply"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0"
