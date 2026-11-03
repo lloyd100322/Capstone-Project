@@ -144,7 +144,7 @@ class ContentViewModel @Inject constructor(
                      * watch din habang naka-bukas ang app kaya nagre-reset
                      * ito kahit nasa Home lang ang user.
                      */
-                    if (matchedRole != UserRole.Driver) {
+                    if (matchedRole == UserRole.Superadmin) {
                         startQueueRotation()
                     }
 

@@ -4,6 +4,7 @@ import java.util.UUID
 
 object FirestoreCollections {
     const val USERS = "users"
+    const val NOTIFICATIONS = "notifications"
 
     /**
      * Salted password hashes. Readable only by their owner (see

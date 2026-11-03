@@ -12,6 +12,7 @@ import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.PhilippineIdentifiers
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
+import com.mobile.enerjeep.ui.queue.QueueViewModel
 import com.mobile.enerjeep.navigation.AppNavigator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -285,6 +286,15 @@ class CreateAccountViewModel @Inject constructor(
                 val queueId = FirestoreIds.queue(
                     generatedUserId
                 )
+                // A newly created driver joins the creating admin's own terminal.
+                val initialQueueRoute = if (
+                    userSession.userProfile?.adminStation
+                        ?.equals(UserRole.STATION_MONUMENTO, ignoreCase = true) == true
+                ) {
+                    QueueViewModel.ROUTE_MA
+                } else {
+                    QueueViewModel.ROUTE_AM
+                }
                 val normalizedPlate = if (effectiveRole == UserRole.Driver) {
                     PhilippineIdentifiers.normalizePlateNumber(cleanPlateNumber)
                 } else {
@@ -360,6 +370,12 @@ class CreateAccountViewModel @Inject constructor(
                                 it.getString("status")
                             )
                         }
+                        .filter {
+                            QueueViewModel.sameRoute(
+                                it.getString("route"),
+                                initialQueueRoute
+                            )
+                        }
                         .mapNotNull {
                             it.getLong("position")?.toInt()
                         }
@@ -404,7 +420,7 @@ class CreateAccountViewModel @Inject constructor(
                             "driverId" to generatedUserId,
                             "plateNumber" to cleanPlateNumber,
                             "driverName" to driverName,
-                            "route" to DEFAULT_ROUTE,
+                            "route" to initialQueueRoute,
                             "position" to nextPosition,
                             "status" to "Nakapila",
                             "time" to SimpleDateFormat(

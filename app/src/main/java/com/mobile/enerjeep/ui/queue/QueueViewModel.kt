@@ -12,6 +12,7 @@ import com.mobile.enerjeep.data.ActivityLogger
 import com.mobile.enerjeep.data.DispatchNotifier
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.FirestoreIds
+import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.data.safeTimestamp
 import com.mobile.enerjeep.ui.components.ToastFeedback
@@ -204,7 +205,8 @@ class QueueViewModel @Inject constructor(
      * entry na gawa ng dispatch.
      */
     private fun normalizeQueueRoutes() {
-        if (!userSession.isAdmin()) return
+        // Only superadmin can run one-time maintenance across both terminals.
+        if (!userSession.isSuperadmin()) return
 
         viewModelScope.launch {
             try {
@@ -219,37 +221,46 @@ class QueueViewModel @Inject constructor(
                     .get()
                     .await()
 
-                val open = queueSnapshot.documents.filter {
+                // Preserve every valid terminal assignment. Only legacy entries
+                // without a route are placed at the end of the Marilao queue.
+                val active = queueSnapshot.documents.filter {
                     isActiveStatus(it.getString("status"))
                 }
+                val missingRoute = active
+                    .filter { it.getString("route").isNullOrBlank() }
+                    .sortedWith(
+                        compareBy<DocumentSnapshot> {
+                            if (it.getBoolean("isCancelled") == true) 1 else 0
+                        }.thenBy {
+                            it.getLong("position") ?: Long.MAX_VALUE
+                        }.thenBy {
+                            it.safeTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
+                        }
+                    )
+                val nextMarilaoPosition = active
+                    .filter { sameRoute(it.getString("route"), ROUTE_AM) }
+                    .mapNotNull { it.getLong("position")?.toInt() }
+                    .maxOrNull() ?: 0
 
                 val batch = firestore.batch()
-
-                val allSorted = open.sortedWith(
-                    compareBy<DocumentSnapshot> {
-                        if (it.getBoolean("isCancelled") == true) 1 else 0
-                    }.thenBy {
-                        it.getLong("position") ?: Long.MAX_VALUE
-                    }
-                )
-
-                allSorted.forEachIndexed { index, document ->
+                missingRoute.forEachIndexed { index, document ->
                     batch.update(
                         document.reference,
                         mapOf(
                             "route" to ROUTE_AM,
-                            "position" to index + 1,
+                            "position" to nextMarilaoPosition + index + 1,
                             "updatedAt" to FieldValue.serverTimestamp()
                         )
                     )
                 }
 
-                batch.update(
+                batch.set(
                     metaReference,
                     mapOf(
                         "routesNormalized" to true,
                         "updatedAt" to FieldValue.serverTimestamp()
-                    )
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
                 )
                 batch.set(
                     queueControlReference(),
@@ -261,13 +272,14 @@ class QueueViewModel @Inject constructor(
                 )
                 batch.commit().await()
             } catch (_: Exception) {
-                // Best effort - hindi nasisira ang pila kung hindi ito tumakbo.
+                // Best effort - valid route assignments remain untouched.
             }
         }
     }
 
     private fun startRotationWatch() {
-        if (!userSession.isAdmin()) return
+        // The daily rotation affects both terminals.
+        if (!userSession.isSuperadmin()) return
         rotationWatch?.cancel()
         rotationWatch = viewModelScope.launch {
             while (isActive) {
@@ -306,7 +318,16 @@ class QueueViewModel @Inject constructor(
      * only for admins (drivers may not write to the queue).
      */
     private fun healActiveRoster() {
-        if (!userSession.isAdmin()) return
+        val canManageAllStations = userSession.isSuperadmin()
+        val assignedStation = userSession.userProfile?.adminStation
+            ?.trim()
+            ?.lowercase(Locale.ROOT)
+        if (!canManageAllStations &&
+            assignedStation !in listOf(
+                UserRole.STATION_MARILAO,
+                UserRole.STATION_MONUMENTO
+            )
+        ) return
 
         viewModelScope.launch {
             try {
@@ -341,39 +362,80 @@ class QueueViewModel @Inject constructor(
                     .mapNotNull { it.getString("driverId") }
                     .toSet()
 
-                val stranded = usersSnapshot.documents.filter { user ->
-                    val userId = user
-                        .getString("userId")
+                // Remember each driver's most recent known route from their history.
+                val historicalRouteByDriver = queueSnapshot.documents
+                    .filter {
+                        !it.getString("driverId").isNullOrBlank() &&
+                            !it.getString("route").isNullOrBlank()
+                    }
+                    .groupBy { it.getString("driverId").orEmpty() }
+                    .mapValues { (_, entries) ->
+                        entries.maxByOrNull {
+                            it.safeTimestamp("updatedAt")?.seconds
+                                ?: it.safeTimestamp("createdAt")?.seconds
+                                ?: 0L
+                        }?.getString("route")
+                    }
+
+                val stranded = usersSnapshot.documents.mapNotNull { user ->
+                    val userId = user.getString("userId")
                         .orEmpty()
                         .ifBlank { user.id }
 
-                    user.getBoolean("isVehicleActive") != false &&
+                    val lastKnownRoute = historicalRouteByDriver[userId]
+                        ?.takeIf { it.isNotBlank() }
+                    val recoveryRoute = lastKnownRoute
+                        ?: if (canManageAllStations) DEFAULT_ROUTE else null
+
+                    val routeBelongsToAdmin = canManageAllStations ||
+                        (recoveryRoute != null && when (assignedStation) {
+                            UserRole.STATION_MARILAO ->
+                                recoveryRoute.startsWith("Marilao", ignoreCase = true)
+                            UserRole.STATION_MONUMENTO ->
+                                recoveryRoute.startsWith("Monumento", ignoreCase = true)
+                            else -> false
+                        })
+
+                    val needsRecovery =
+                        user.getBoolean("isVehicleActive") != false &&
                             !user.getString("status").orEmpty()
                                 .equals("inactive", ignoreCase = true) &&
                             userId !in openDriverIds &&
-                            userId !in completedTodayDriverIds
+                            userId !in completedTodayDriverIds &&
+                            recoveryRoute != null &&
+                            routeBelongsToAdmin
+
+                    if (needsRecovery) user to recoveryRoute!! else null
                 }
 
                 if (stranded.isEmpty()) {
                     return@launch
                 }
 
-                var nextPosition = openEntries
-                    .filter {
-                        sameRoute(it.getString("route"), DEFAULT_ROUTE)
+                val nextPositionByStation = mutableMapOf<String, Int>()
+                openEntries.forEach { entry ->
+                    val stationKey = if (sameRoute(entry.getString("route"), ROUTE_AM)) {
+                        UserRole.STATION_MARILAO
+                    } else {
+                        UserRole.STATION_MONUMENTO
                     }
-                    .mapNotNull { it.getLong("position")?.toInt() }
-                    .maxOrNull()
-                    ?: openEntries
-                        .mapNotNull { it.getLong("position")?.toInt() }
-                        .maxOrNull()
-                    ?: 0
+                    val position = entry.getLong("position")?.toInt() ?: 0
+                    nextPositionByStation[stationKey] = maxOf(
+                        nextPositionByStation[stationKey] ?: 0,
+                        position
+                    )
+                }
 
-                stranded.forEach { user ->
-                    val userId = user
-                        .getString("userId")
+                stranded.forEach { (user, recoveryRoute) ->
+                    val userId = user.getString("userId")
                         .orEmpty()
                         .ifBlank { user.id }
+
+                    val routeStation = if (
+                        recoveryRoute.startsWith("Marilao", ignoreCase = true)
+                    ) UserRole.STATION_MARILAO else UserRole.STATION_MONUMENTO
+                    val nextPosition = (nextPositionByStation[routeStation] ?: 0) + 1
+                    nextPositionByStation[routeStation] = nextPosition
 
                     val driverName = listOf(
                         user.getString("firstName"),
@@ -382,9 +444,9 @@ class QueueViewModel @Inject constructor(
                         .joinToString(" ")
                         .ifBlank { "Driver" }
 
-                    // Stable per operating day: concurrent queue screens upsert
-                    // the same recovery document instead of creating duplicates.
-                    val queueId = "queue_${userId}_recovery_${QueueRotation.queueDayId()}"
+                    // Stable per operating day: retries update one recovery entry.
+                    val queueId = "queue_" + userId +
+                        "_recovery_" + QueueRotation.queueDayId()
 
                     val recoveryBatch = firestore.batch()
                     recoveryBatch.set(
@@ -395,8 +457,8 @@ class QueueViewModel @Inject constructor(
                             "driverId" to userId,
                             "plateNumber" to user.getString("plateNumber").orEmpty(),
                             "driverName" to driverName,
-                            "route" to DEFAULT_ROUTE,
-                            "position" to ++nextPosition,
+                            "route" to recoveryRoute,
+                            "position" to nextPosition,
                             "status" to "Nakapila",
                             "time" to SimpleDateFormat(
                                 "hh:mm a",
@@ -417,12 +479,12 @@ class QueueViewModel @Inject constructor(
                 }
 
                 ToastFeedback.show(
-                    "Bumalik sa dulo ng pila ang " +
-                            stranded.size +
-                            " aktibong driver na wala sa pila."
+                    "Naibalik sa kani-kanilang terminal ang " +
+                        stranded.size +
+                        " aktibong driver na wala sa pila."
                 )
             } catch (_: Exception) {
-                // Best effort: the queue keeps working without the repair.
+                // Best effort: recovery never changes a different terminal's queue.
             }
         }
     }
@@ -618,378 +680,78 @@ class QueueViewModel @Inject constructor(
         return tierFor(seater, tiersSnapshot.data)
     }
 
+    fun canManageRoute(route: String?): Boolean {
+        if (userSession.isSuperadmin()) return true
+        val profile = userSession.userProfile ?: return false
+        if (profile.role != UserRole.Admin) return false
+        val routeStation = when {
+            route.orEmpty().trim().startsWith("Marilao", ignoreCase = true) ->
+                UserRole.STATION_MARILAO
+            route.orEmpty().trim().startsWith("Monumento", ignoreCase = true) ->
+                UserRole.STATION_MONUMENTO
+            else -> null
+        }
+        return routeStation != null &&
+            profile.adminStation?.trim()?.equals(routeStation, ignoreCase = true) == true
+    }
+
+    private fun canManageQueueEntryOrNotify(vehicleId: String): Boolean {
+        val state = _uiState.value as? QueueUiState.Success
+        val vehicle = state?.activeQueue?.firstOrNull { it.id == vehicleId }
+        if (vehicle == null || !canManageRoute(vehicle.route)) {
+            ToastFeedback.show("Wala kang pahintulot na baguhin ang entry na ito.")
+            return false
+        }
+        return true
+    }
+
+    /**
+     * Dispatch now runs through a trusted callable because dispatching also
+     * updates the returning terminal's positions and writes the ledger entry.
+     */
     fun dispatchVehicle(
         vehicleId: String,
         income: Double,
         otherFees: Double
     ) {
         if (income < 0.0) {
-            ToastFeedback.show(
-                "Hindi maaaring negatibo ang kita"
-            )
+            ToastFeedback.show("Hindi maaaring negatibo ang kita")
             return
         }
-
         if (otherFees < 0.0) {
-            ToastFeedback.show(
-                "Hindi maaaring negatibo ang ibang bayad"
-            )
+            ToastFeedback.show("Hindi maaaring negatibo ang ibang bayad")
             return
         }
-
         if (otherFees > income) {
-            ToastFeedback.show(
-                "Hindi maaaring mas mataas ang ibang bayad kaysa sa kita"
-            )
+            ToastFeedback.show("Hindi maaaring mas mataas ang ibang bayad kaysa sa kita")
             return
         }
+        if (!canManageQueueEntryOrNotify(vehicleId)) return
+        if (!dispatchingIds.add(vehicleId)) return
+
+        val vehicle = (_uiState.value as? QueueUiState.Success)
+            ?.activeQueue
+            ?.firstOrNull { it.id == vehicleId }
+            ?: run {
+                dispatchingIds.remove(vehicleId)
+                ToastFeedback.show("Hindi makita ang sasakyan sa pila.")
+                return
+            }
 
         viewModelScope.launch {
-            // Ignore a second tap/retry while this dispatch is still running.
-            if (!dispatchingIds.add(vehicleId)) return@launch
-
             try {
-                val queueControlRef = queueControlReference()
-                val observedQueueRevision = queueControlRef.get().await()
-                    .getLong("revision") ?: 0L
-                val queueSnapshot = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .get()
+                FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("dispatchQueueVehicle")
+                    .call(
+                        mapOf(
+                            "queueEntryId" to vehicleId,
+                            "income" to income,
+                            "otherFees" to otherFees
+                        )
+                    )
                     .await()
 
-                val currentDocument = queueSnapshot.documents
-                    .firstOrNull { it.id == vehicleId }
-                    ?: throw IllegalStateException(
-                        "Hindi makita ang sasakyan sa pila."
-                    )
-
-                if (
-                    !isActiveStatus(
-                        currentDocument.getString("status")
-                    )
-                ) {
-                    throw IllegalStateException(
-                        "Ang sasakyang ito ay wala na sa aktibong pila."
-                    )
-                }
-
-                val driverId = currentDocument
-                    .getString("driverId")
-                    .orEmpty()
-                    .trim()
-
-                val driverName = currentDocument
-                    .getString("driverName")
-                    .orEmpty()
-
-                val plateNumber = currentDocument
-                    .getString("plateNumber")
-                    .orEmpty()
-                    .trim()
-                    .uppercase(Locale.ROOT)
-
-                if (driverId.isBlank()) {
-                    throw IllegalStateException(
-                        "Walang User ID ang driver na ito."
-                    )
-                }
-
-                /*
-                 * Bawal ang dispatch kapag TAPOS NA BUMYAHE na ang driver
-                 * NGAYONG ARAW ("Tapos Na Bumyahe") - kahit bumalik pa
-                 * siya sa pila (hal. roster heal o rotation), isang
-                 * biyahe lang siya bawat araw.
-                 */
-                val doneForToday = queueSnapshot.documents.any { doc ->
-                    doc.getString("driverId") == driverId &&
-                            doc.getString("status")
-                                .equals("completed", ignoreCase = true) &&
-                            sameDayMillis(
-                                doc.safeTimestamp("endTravelAt")
-                                    ?.toDate()?.time ?: 0L,
-                                System.currentTimeMillis()
-                            )
-                }
-                if (doneForToday) {
-                    throw IllegalStateException(
-                        "Tapos na bumyahe ang driver na ito ngayong araw. " +
-                                "Hindi na siya pwedeng i-dispatch."
-                    )
-                }
-
-                /*
-                 * Check the latest driver settings before deciding whether
-                 * this vehicle should be requeued after dispatch.
-                 */
-                val driverSnapshot = firestore
-                    .collection(FirestoreCollections.USERS)
-                    .whereEqualTo("userId", driverId)
-                    .whereEqualTo("role", "driver")
-                    .limit(1)
-                    .get()
-                    .await()
-
-                val driverAccount =
-                    driverSnapshot.documents.firstOrNull()
-
-                if (driverAccount == null) {
-                    throw IllegalStateException(
-                        "Hindi makita ang driver account."
-                    )
-                }
-
-                if (driverAccount.getBoolean("isVehicleActive") == false) {
-                    throw IllegalStateException(
-                        "Hindi aktibo ang jeepney na ito."
-                    )
-                }
-
-                if (
-                    driverAccount.getString("status")
-                        .orEmpty()
-                        .equals("inactive", ignoreCase = true)
-                ) {
-                    throw IllegalStateException(
-                        "Hindi aktibo ang account na ito."
-                    )
-                }
-
-                val netAmount = income - otherFees
-
-                /*
-                 * Record how the automatic deduction was computed: the
-                 * number of seats of the jeep and its fixed tier amount.
-                 */
-                val seater = driverAccount
-                    .getLong("seater")
-                    ?.toInt()
-                    ?: 0
-
-                val tierDeduction = tierFor(
-                    seater,
-                    firestore
-                        .collection(FirestoreCollections.SETTINGS)
-                        .document("deductionTiers")
-                        .get()
-                        .await()
-                        .data
-                )
-
-                val queueReference = currentDocument.reference
-
-                /*
-                 * Lahat ng reference ng queue doc - ang FRESH na listahan
-                 * ay binabasa SA LOOB ng transaction sa ibaba (pareho ng
-                 * QueueRotation), kaya kahit sabay ang dalawang admin ay
-                 * hindi nagkakamali ang renumbering mula sa lumang listahan.
-                 */
-                val queueReferencesById =
-                    queueSnapshot.documents.associate { it.id to it.reference }
-
-                /*
-                 * A Firestore transaction is used so the dispatch is only
-                 * written when this queue entry was not changed by another
-                 * admin in the meantime. If it changed, the transaction
-                 * fails instead of corrupting the queue.
-                 */
-                firestore.runTransaction { transaction ->
-                    val queueControl = transaction.get(queueControlRef)
-                    val currentRevision = queueControl.getLong("revision") ?: 0L
-                    if (currentRevision != observedQueueRevision) {
-                        throw IllegalStateException(
-                            "Nagbago ang pila habang nagdi-dispatch. I-refresh at subukan muli."
-                        )
-                    }
-                    val freshEntry = transaction.get(queueReference)
-
-                    if (!freshEntry.exists() ||
-                        !isActiveStatus(freshEntry.getString("status"))
-                    ) {
-                        throw IllegalStateException(
-                            "Ang sasakyang ito ay wala na sa aktibong pila."
-                        )
-                    }
-
-                    /*
-                     * FRESH read of the whole pila inside the transaction
-                     * (per-doc get - walang transaction.get(Query) sa
-                     * mobile SDK).
-                     */
-                    val remainingActive = queueReferencesById
-                        .filterKeys { it != vehicleId }
-                        .values
-                        .map { transaction.get(it) }
-                        .filter {
-                            it.exists() &&
-                                    isActiveStatus(it.getString("status"))
-                        }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                if (it.getBoolean("isCancelled") == true) 1 else 0
-                            }.thenBy {
-                                it.getLong("position") ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.safeTimestamp("createdAt")?.seconds
-                                    ?: Long.MAX_VALUE
-                            }
-                        )
-
-                    // Avoid creating another active entry if one already exists.
-                    val alreadyQueuedAfterDispatch =
-                        remainingActive.any {
-                            it.getString("driverId") == driverId
-                        }
-
-                    val shouldRequeue =
-                        driverAccount.getBoolean("isVehicleActive") != false &&
-                                !alreadyQueuedAfterDispatch
-
-                    // Mark the dispatched queue entry as historical.
-                    transaction.update(
-                        queueReference,
-                        mapOf(
-                            "status" to "dispatched",
-                            "dispatchedAt" to FieldValue.serverTimestamp(),
-                            "updatedAt" to FieldValue.serverTimestamp(),
-                            "position" to 0
-                        )
-                    )
-
-                /*
-                 * Positions are per route. The dispatched entry left its
-                 * route, so the drivers behind it in the SAME route move
-                 * up one spot.
-                 */
-                val currentRoute = freshEntry.getString("route")
-
-                val sameRouteRemaining = remainingActive.filter {
-                    sameRoute(it.getString("route"), currentRoute)
-                }
-
-                val oppositeRouteRemaining = remainingActive.filter {
-                    !sameRoute(it.getString("route"), currentRoute)
-                }
-
-                sameRouteRemaining.forEachIndexed { index, document ->
-                    transaction.update(
-                        document.reference,
-                        mapOf(
-                            "position" to index + 1,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    )
-                }
-
-                /*
-                 * The dispatched driver travels to the other terminal and
-                 * enters the OPPOSITE route at position #1. The drivers
-                 * already in that pila move one spot behind him.
-                 */
-                oppositeRouteRemaining.forEachIndexed { index, document ->
-                    transaction.update(
-                        document.reference,
-                        mapOf(
-                            "position" to index + 2,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    )
-                }
-
-                /*
-                 * Return the driver to the bottom of the queue only if the
-                 * jeepney remains active. The dispatched entry above remains
-                 * in history and is not reused.
-                 */
-                if (shouldRequeue) {
-                    // Deterministic id: a retried dispatch rewrites the same
-                    // re-queue entry instead of creating another one.
-                    val requeueId = "queue_${driverId}_after_${vehicleId}"
-
-                    val requeueReference = firestore
-                        .collection(FirestoreCollections.QUEUE)
-                        .document(requeueId)
-
-                    /*
-                     * He enters the OPPOSITE route (the one going back)
-                     * at the FRONT: "when the first driver of one route
-                     * is dispatched he becomes #1 of the other route".
-                     */
-                    val route = oppositeRoute(
-                        freshEntry.getString("route")
-                    )
-
-                    val requeueData = mapOf<String, Any>(
-                        "id" to requeueId,
-                        "driverId" to driverId,
-                        "driverName" to driverName,
-                        "plateNumber" to plateNumber,
-                        "route" to route,
-                        "position" to 1,
-                        "status" to "Nakapila",
-                        "time" to SimpleDateFormat(
-                            "hh:mm a",
-                            Locale.getDefault()
-                        ).format(Date()),
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
-
-                    transaction.set(requeueReference, requeueData)
-                }
-
-                /*
-                 * Create exactly one ledger record for this dispatch.
-                 * Driver earnings continue to use the net amount.
-                 */
-                // One ledger (earning) document per dispatched queue entry.
-                // The id is derived from the queue entry, not the clock, so
-                // a retry or double tap rewrites the same document.
-                val ledgerId = "${vehicleId}_dispatch"
-
-                val ledgerReference = firestore
-                    .collection(FirestoreCollections.LEDGER)
-                    .document(ledgerId)
-
-                transaction.set(
-                    ledgerReference,
-                    mapOf<String, Any>(
-                        "id" to ledgerId,
-                        "driverId" to driverId,
-                        "driverName" to driverName,
-                        "plateNumber" to plateNumber,
-                        "queueId" to vehicleId,
-                        // Stored date text: Locale.US para pareho sa
-                        // bawat device at madaling ma-parse pabalik.
-                        "date" to SimpleDateFormat(
-                            "MMM dd, yyyy",
-                            Locale.US
-                        ).format(Date()),
-                        "amount" to netAmount,
-                        "grossAmount" to income,
-                        "otherFees" to otherFees,
-                        "netAmount" to netAmount,
-                        "seater" to seater,
-                        "seaterDeduction" to tierDeduction,
-                        "deductionCustomized" to
-                                (otherFees != tierDeduction),
-                        "feeType" to "Dispatch",
-                        "status" to "Bayad",
-                        "source" to "queue_dispatch",
-                        "createdAt" to FieldValue.serverTimestamp()
-                    )
-                )
-
-                    transaction.set(
-                        queueControlRef,
-                        mapOf(
-                            "revision" to currentRevision + 1L,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                    true
-                }.await()
-
-                val dispatchedLabel = listOf(plateNumber, driverName)
+                val dispatchedLabel = listOf(vehicle.plateNumber, vehicle.driverName)
                     .filter { it.isNotBlank() }
                     .joinToString(" — ")
 
@@ -997,36 +759,20 @@ class QueueViewModel @Inject constructor(
                     firestore,
                     userSession,
                     "Dispatch",
-                    "$plateNumber — $driverName • " +
-                            oppositeRoute(currentDocument.getString("route"))
+                    "${vehicle.plateNumber} — ${vehicle.driverName} • ${oppositeRoute(vehicle.route)}"
                 )
-
-                ToastFeedback.show(
-                    "Na-dispatch na ang driver: $dispatchedLabel"
-                )
-
-                /*
-                 * System notification din sa notification tray ng
-                 * admin/superadmin - pareho mismo ng impormasyon sa
-                 * abiso ng driver (plate • ruta • oras).
-                 */
+                ToastFeedback.show("Na-dispatch na ang driver: $dispatchedLabel")
                 DispatchNotifier.post(
                     EnerJeepApp.instance,
                     "May na-dispatch",
                     listOf(
-                        plateNumber,
-                        currentDocument.getString("route") ?: "N/A",
-                        SimpleDateFormat(
-                            "hh:mm a",
-                            Locale.getDefault()
-                        ).format(Date())
+                        vehicle.plateNumber,
+                        vehicle.route,
+                        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
                     ).joinToString(" • ")
                 )
-
             } catch (e: Exception) {
-                ToastFeedback.show(
-                    e.message ?: "Hindi ma-dispatch ang sasakyan"
-                )
+                ToastFeedback.show(e.message ?: "Hindi ma-dispatch ang sasakyan")
             } finally {
                 dispatchingIds.remove(vehicleId)
             }
@@ -1041,6 +787,7 @@ class QueueViewModel @Inject constructor(
      * does not go to the Kasaysayan tab.
      */
     fun cancelQueueEntry(vehicleId: String) {
+        if (!canManageQueueEntryOrNotify(vehicleId)) return
         viewModelScope.launch {
             try {
                 val queueControlRef = queueControlReference()
@@ -1176,6 +923,7 @@ class QueueViewModel @Inject constructor(
      * ones) and the whole queue is renumbered.
      */
     fun restoreQueueEntry(vehicleId: String) {
+        if (!canManageQueueEntryOrNotify(vehicleId)) return
         viewModelScope.launch {
             try {
                 val queueControlRef = queueControlReference()
@@ -1304,6 +1052,7 @@ class QueueViewModel @Inject constructor(
         vehicleId: String,
         newPosition: Int
     ) {
+        if (!canManageQueueEntryOrNotify(vehicleId)) return
         val currentState = _uiState.value as? QueueUiState.Success ?: return
         val targetVehicle = currentState.activeQueue.firstOrNull { it.id == vehicleId } ?: return
 
@@ -1399,7 +1148,7 @@ class QueueViewModel @Inject constructor(
 
     /** Automatic check - runs whenever the queue opens (catch-up). */
     private fun maybeRotateQueue() {
-        if (!userSession.isAdmin()) return
+        if (!userSession.isSuperadmin()) return
         viewModelScope.launch {
             try {
                 val result = QueueRotation.rotateOnce(firestore)

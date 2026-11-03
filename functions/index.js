@@ -76,6 +76,81 @@ const { FieldValue } = require("firebase-admin/firestore");
 
 const QUEUE_STATUSES_INACTIVE = ["dispatched", "cancelled", "completed", "resolved"];
 
+/** Resolve the signed-in administrator and enforce active account status. */
+async function getAdminContext(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+  }
+  const phone = request.auth.token.phone_number;
+  if (typeof phone !== "string" || !phone) {
+    throw new HttpsError("permission-denied", "Walang verified phone number.");
+  }
+  const user = await db.collection("users").doc(phone).get();
+  const role = user.get("role");
+  if (!user.exists ||
+      !["admin", "superadmin"].includes(role) ||
+      String(user.get("status") || "active").toLowerCase() !== "active") {
+    throw new HttpsError("permission-denied", "Aktibong administrator account lamang ang maaaring gumawa nito.");
+  }
+  return {
+    phone,
+    role,
+    station: String(user.get("adminStation") || "").trim().toLowerCase(),
+  };
+}
+
+function queueRouteStation(route) {
+  const value = typeof route === "string" ? route.trim().toLowerCase() : "";
+  if (value.startsWith("marilao")) return "marilao";
+  if (value.startsWith("monumento")) return "monumento";
+  return null;
+}
+
+function canManageQueueRoute(adminContext, route) {
+  if (adminContext.role === "superadmin") return true;
+  const station = queueRouteStation(route);
+  return adminContext.role === "admin" &&
+    station !== null &&
+    adminContext.station === station;
+}
+
+function queueStatusIsActive(data) {
+  return !QUEUE_STATUSES_INACTIVE.includes(
+    String(data.status || "").toLowerCase()
+  );
+}
+
+function queueTimestampMillis(value) {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function compareQueueEntries(left, right) {
+  const cancelledLeft = left.get("isCancelled") === true ? 1 : 0;
+  const cancelledRight = right.get("isCancelled") === true ? 1 : 0;
+  return cancelledLeft - cancelledRight ||
+    (left.get("position") ?? Number.MAX_SAFE_INTEGER) -
+      (right.get("position") ?? Number.MAX_SAFE_INTEGER) ||
+    queueTimestampMillis(left.get("createdAt")) -
+      queueTimestampMillis(right.get("createdAt"));
+}
+
+function manilaDateKey(value) {
+  if (!value) return "";
+  const date = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return byType.year + byType.month + byType.day;
+}
+
+
 function isQueueActive(data) {
   const status = (data.status || "").toLowerCase();
   return !QUEUE_STATUSES_INACTIVE.includes(status) && data.isCancelled !== true;
@@ -201,201 +276,594 @@ exports.dailyQueueReset = onSchedule(
  * app. Ang in-app banner/bell naman ang gumagana kapag bukas ang app
  * (tahimik ang push doon para hindi mag-doble).
  */
+/**
+ * Every notification is stored under the recipient's own user document.
+ * The deterministic document ID makes Firestore trigger retries idempotent.
+ */
+async function createUserNotification(userRef, notificationId, payload) {
+  const notificationRef = userRef.collection("notifications").doc(notificationId);
+  try {
+    await notificationRef.create({
+      ...payload,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    if (error && (error.code === 6 || error.code === "already-exists")) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function isActiveEnerJeepMember(userDocument) {
+  const role = String(userDocument.get("role") || "").toLowerCase();
+  return ["admin", "superadmin", "driver"].includes(role) &&
+    String(userDocument.get("status") || "active").toLowerCase() === "active";
+}
+
+async function sendUserNotificationPush(userDocument, title, body, data, channelId) {
+  const token = userDocument.get("fcmToken");
+  if (typeof token !== "string" || token.length === 0) return;
+
+  try {
+    await admin.messaging().send({
+      token,
+      notification: { title, body },
+      data,
+      android: {
+        priority: "high",
+        notification: {
+          channel_id: channelId,
+          sound: "default",
+        },
+      },
+    });
+  } catch (error) {
+    const code = error && error.code;
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token" ||
+      code === "messaging/invalid-argument"
+    ) {
+      await userDocument.ref.update({ fcmToken: FieldValue.delete() });
+      console.log("Inalis ang expired FCM token:", userDocument.id);
+    } else {
+      console.error("Hindi naipadala ang notification push sa", userDocument.id, error);
+    }
+  }
+}
+
+/**
+ * Kapag may bagong dispatch, nagse-save ng notification para sa lahat ng
+ * active account roles. Ang mismong driver ay makakakita ng "Na-dispatch ka!";
+ * makikita naman ng admin at superadmin kung sinong driver ang na-dispatch.
+ */
 exports.onQueueDispatched = onDocumentUpdated(
   { document: "queue/{entryId}", region: "asia-east2" },
   async (event) => {
-    const before = event.data.before.data();
-    const after = event.data.after.data();
+    const before = event.data.before.data() || {};
+    const after = event.data.after.data() || {};
 
-    // Tanging ang PAGPASOK sa "dispatched" lang - hindi bawat update.
-    if ((after.status || "") !== "dispatched") return null;
-    if ((before.status || "") === "dispatched") return null;
+    if (String(after.status || "").toLowerCase() !== "dispatched") return null;
+    if (String(before.status || "").toLowerCase() === "dispatched") return null;
 
-    const driverId = after.driverId;
+    const driverId = String(after.driverId || "");
     if (!driverId) return null;
 
-    // Hanapin ang user doc ng driver (driverId -> users.userId) para
-    // makuha ang fcmToken ng device.
-    const users = await db
-      .collection("users")
-      .where("userId", "==", driverId)
-      .limit(1)
-      .get();
-    if (users.empty) return null;
+    const memberSnapshot = await db.collection("users").get();
+    const activeMembers = memberSnapshot.docs.filter(isActiveEnerJeepMember);
+    if (activeMembers.length === 0) return null;
 
-    const userRef = users.docs[0].ref;
-    const token = users.docs[0].get("fcmToken");
-    if (!token || typeof token !== "string") return null;
+    const entryId = String(event.params.entryId);
+    const driverName = String(after.driverName || "Driver");
+    const plate = String(after.plateNumber || "");
+    const route = String(after.route || "");
+    const details = [driverName, plate, route]
+      .filter((part) => part.trim().length > 0)
+      .join(" • ")
+      .slice(0, 180);
 
-    const plate = after.plateNumber || "";
-    const route = after.route || "";
-    const body = [plate, route].filter((x) => x && String(x).trim() !== "").join(" • ");
-
-    try {
-      await admin.messaging().send({
-        token,
-        // Notification payload: ipinapakita ito ng system kahit
-        // nakasara ang app.
-        notification: {
-          title: "Na-dispatch ka!",
-          body: body || "Tingnan ang Pila para sa detalye.",
-        },
-        data: {
-          type: "dispatch",
-          entryId: event.params.entryId,
-          plateNumber: plate,
-          route,
-        },
-        android: {
-          notification: {
-            channel_id: "enerjeep_dispatch",
-            sound: "default",
-          },
-        },
+    const createdRecipients = [];
+    for (const userDocument of activeMembers) {
+      const isDispatchedDriver =
+        String(userDocument.get("userId") || "") === driverId &&
+        String(userDocument.get("role") || "").toLowerCase() === "driver";
+      const title = isDispatchedDriver
+        ? "Na-dispatch ka!"
+        : "May Na-dispatch na Driver";
+      const body = details || "May bagong driver na na-dispatch sa pila.";
+      const notificationId = "dispatch_" + entryId;
+      const created = await createUserNotification(userDocument.ref, notificationId, {
+        type: "dispatch",
+        title,
+        body,
+        entityId: entryId,
+        driverId,
+        driverName,
+        plateNumber: plate,
+        route,
       });
-      console.log(`onQueueDispatched: naipadala ang push sa ${users.docs[0].id}`);
-    } catch (error) {
-      const code = error && error.code;
-      if (
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
-        code === "messaging/invalid-argument"
-      ) {
-        // Lipas na ang token ng device - alisin para hindi na subukan.
-        await userRef.update({ fcmToken: FieldValue.delete() });
-        console.log(`onQueueDispatched: inalis ang lipas na token (${code})`);
-      } else {
-        console.error("onQueueDispatched: hindi naipadala:", error);
+      if (created) {
+        createdRecipients.push({
+          userDocument,
+          title,
+          body,
+          data: {
+            type: "dispatch",
+            entryId,
+            driverId,
+            driverName,
+            plateNumber: plate,
+            route,
+          },
+        });
       }
     }
+
+    await Promise.all(createdRecipients.map((recipient) =>
+      sendUserNotificationPush(
+        recipient.userDocument,
+        recipient.title,
+        recipient.body,
+        recipient.data,
+        "enerjeep_dispatch"
+      )
+    ));
+
+    console.log(
+      "onQueueDispatched: na-save ang abiso sa " +
+      createdRecipients.length + " active account(s)."
+    );
     return null;
   }
 );
 
-
 /**
- * PUSH NOTIFICATION para sa mga insidenteng ibinahagi sa lahat ng driver.
- *
- * Nagpapadala lamang kapag bagong ginawa na may sentToDriver=true, o
- * kapag ang draft ay unang ipinadala (false -> true). Hindi nagno-notify
- * sa draft at hindi inuulit ang push sa ordinaryong edits/resolution.
- *
- * Gumagamit ito ng notification payload para maipakita ng Android system
- * ang abiso kahit nasa background o nakasara ang app.
+ * Bawat bagong incident report ay ipinapaalam sa lahat ng active roles,
+ * kahit sentToDriver=false at kahit resolved na ang initial status.
+ * Kapag nag-transition mula unresolved tungo sa resolved, nagpapadala rin
+ * ng isang hiwalay na status update; ordinaryong edits ay hindi duplicate.
  */
 exports.onIncidentShared = onDocumentWritten(
   { document: "incidents/{incidentId}", region: "asia-east2" },
   async (event) => {
-    const before = event.data.before;
+    const beforeSnapshot = event.data.before;
     const afterSnapshot = event.data.after;
-
     if (!afterSnapshot.exists) return null;
 
-    const wasAlreadyShared =
-      before.exists && before.get("sentToDriver") === true;
+    const before = beforeSnapshot.exists ? (beforeSnapshot.data() || {}) : {};
     const incident = afterSnapshot.data() || {};
 
-    // Remove the legacy phone field when an incident is touched. A one-time
-    // dry-run-first migration script cleans old documents that are never edited.
+    // Remove the legacy phone field when an incident is touched.
     if (Object.prototype.hasOwnProperty.call(incident, "driverPhone")) {
       await afterSnapshot.ref.update({
         driverPhone: FieldValue.delete(),
       });
     }
 
-    if (incident.sentToDriver !== true || wasAlreadyShared) {
-      return null;
-    }
+    const isResolved = incident.isResolved === true ||
+      String(incident.status || "").toLowerCase() === "resolved";
+    const wasResolved = before.isResolved === true ||
+      String(before.status || "").toLowerCase() === "resolved";
+    const isNewIncident = !beforeSnapshot.exists;
+    const becameResolved = beforeSnapshot.exists && !wasResolved && isResolved;
 
-    // Ang form ng app ay nagsasabing ipinapadala ang shared incident
-    // sa mga driver, kaya lahat ng driver na may registered device token
-    // ay tatanggap ng push.
-    const driverSnapshot = await db
-      .collection("users")
-      .where("role", "==", "driver")
-      .get();
-
-    const recipients = driverSnapshot.docs
-      .map((doc) => ({
-        ref: doc.ref,
-        token: doc.get("fcmToken"),
-      }))
-      .filter((item) => typeof item.token === "string" && item.token.length > 0);
-
-    if (recipients.length === 0) {
-      console.log("onIncidentShared: walang driver device token na naka-register.");
-      return null;
-    }
+    if (!isNewIncident && !becameResolved) return null;
 
     const incidentId = String(event.params.incidentId);
+    const notificationId = isNewIncident
+      ? "incident_" + incidentId
+      : "incident_" + incidentId + "_resolved";
+    const statusLabel = isResolved ? "Naayos" : "Hindi pa naayos";
+    const title = isNewIncident
+      ? (isResolved ? "Bagong Insidente • Naayos" : "Bagong Insidente sa Kooperatiba")
+      : "Naayos na ang Insidente";
     const plate = String(incident.plateNumber || "");
     const incidentTitle = String(incident.title || "Insidente");
     const location = String(incident.location || "");
-    const body = [plate, incidentTitle, location]
+    const body = [plate, incidentTitle, location, statusLabel]
       .filter((part) => part.trim().length > 0)
       .join(" • ")
       .slice(0, 180);
 
+    const memberSnapshot = await db.collection("users").get();
+    const activeMembers = memberSnapshot.docs.filter(isActiveEnerJeepMember);
+    const createdRecipients = [];
+
+    for (const userDocument of activeMembers) {
+      const created = await createUserNotification(userDocument.ref, notificationId, {
+        type: "incident",
+        title,
+        body,
+        entityId: incidentId,
+        incidentId,
+        driverId: String(incident.driverId || ""),
+        plateNumber: plate,
+        incidentTitle,
+        location,
+        status: isResolved ? "resolved" : "open",
+        statusLabel,
+      });
+      if (created) {
+        createdRecipients.push(userDocument);
+      }
+    }
+
     const data = {
       type: "incident",
       incidentId,
-      driverId: String(incident.driverId || ""),
+      status: isResolved ? "resolved" : "open",
+      statusLabel,
       plateNumber: plate,
       incidentTitle,
       location,
     };
 
-    let successCount = 0;
-    const invalidTokenUpdates = [];
-
-    // FCM multicast accepts at most 500 tokens per request.
-    for (let offset = 0; offset < recipients.length; offset += 500) {
-      const batch = recipients.slice(offset, offset + 500);
-      const result = await admin.messaging().sendEachForMulticast({
-        tokens: batch.map((item) => item.token),
-        notification: {
-          title: "Bagong Insidente sa Kooperatiba",
-          body: body || "May bagong insidenteng ibinahagi sa EnerJeep.",
-        },
+    await Promise.all(createdRecipients.map((userDocument) =>
+      sendUserNotificationPush(
+        userDocument,
+        title,
+        body || "May bagong ulat ng insidente sa EnerJeep.",
         data,
-        android: {
-          priority: "high",
-          notification: {
-            channel_id: "enerjeep_incident",
-            sound: "default",
-          },
-        },
-      });
-
-      result.responses.forEach((response, index) => {
-        if (response.success) {
-          successCount += 1;
-          return;
-        }
-
-        const code = response.error && response.error.code;
-        if (
-          code === "messaging/registration-token-not-registered" ||
-          code === "messaging/invalid-registration-token" ||
-          code === "messaging/invalid-argument"
-        ) {
-          invalidTokenUpdates.push(
-            batch[index].ref.update({ fcmToken: FieldValue.delete() })
-          );
-        } else {
-          console.error("onIncidentShared: hindi naipadala sa isang device:", response.error);
-        }
-      });
-    }
-
-    if (invalidTokenUpdates.length > 0) {
-      await Promise.all(invalidTokenUpdates);
-    }
+        "enerjeep_incident"
+      )
+    ));
 
     console.log(
-      `onIncidentShared: naipadala sa ${successCount} sa ${recipients.length} registered driver device(s).`
+      "onIncidentShared: na-save ang abiso sa " +
+      createdRecipients.length + " active account(s)."
     );
     return null;
+  }
+);
+
+/**
+ * Deletes an account and its active queue entries through the trusted Admin SDK.
+ * The server can clean up both routes while client queue writes stay station-restricted.
+ */
+exports.deleteAccount = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    const caller = await getAdminContext(request);
+    const targetPhone = request.data && request.data.phoneNumber;
+    if (typeof targetPhone !== "string" ||
+        !/^\+639[0-9]{9}$/.test(targetPhone) ||
+        targetPhone === caller.phone) {
+      throw new HttpsError("invalid-argument", "Invalid na account na buburahin.");
+    }
+
+    const callerRef = db.collection("users").doc(caller.phone);
+    const userRef = db.collection("users").doc(targetPhone);
+    const secretRef = db.collection("userSecrets").doc(targetPhone);
+    const queueControlRef = db.collection("settings").doc("queueControl");
+    const queueCollection = db.collection("queue");
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const [callerSnapshot, target, control, queueSnapshot] = await Promise.all([
+          tx.get(callerRef),
+          tx.get(userRef),
+          tx.get(queueControlRef),
+          tx.get(queueCollection),
+        ]);
+
+        const currentCallerRole = String(callerSnapshot.get("role") || "").toLowerCase();
+        if (!callerSnapshot.exists ||
+            !["admin", "superadmin"].includes(currentCallerRole) ||
+            String(callerSnapshot.get("status") || "active").toLowerCase() !== "active") {
+          throw new HttpsError("permission-denied", "Wala nang aktibong pahintulot ang account na ito.");
+        }
+
+        if (!target.exists) {
+          throw new HttpsError("not-found", "Hindi na makita ang account.");
+        }
+
+        const targetRole = String(target.get("role") || "").toLowerCase();
+        if (targetRole === "superadmin" ||
+            (targetRole === "admin" && currentCallerRole !== "superadmin") ||
+            !["driver", "admin"].includes(targetRole)) {
+          throw new HttpsError("permission-denied", "Walang pahintulot na burahin ang account na ito.");
+        }
+
+        // A station admin must not remove an active driver from the other
+        // terminal as a side effect of account deletion.
+        if (targetRole === "driver" && currentCallerRole === "admin") {
+          const targetDriverId = String(target.get("userId") || targetPhone);
+          const hasForeignActiveQueueEntry = queueSnapshot.docs.some((document) =>
+            document.get("driverId") === targetDriverId &&
+            queueStatusIsActive(document.data()) &&
+            queueRouteStation(document.get("route")) !== caller.station
+          );
+          if (hasForeignActiveQueueEntry) {
+            throw new HttpsError(
+              "permission-denied",
+              "Ang driver na ito ay kasalukuyang nasa pila ng kabilang terminal."
+            );
+          }
+        }
+
+        let plateClaimRef = null;
+        let plateClaim = null;
+        if (targetRole === "driver") {
+          const normalizedPlate = String(target.get("plateNumber") || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+          if (normalizedPlate) {
+            plateClaimRef = db.collection("driverPlateClaims").doc(normalizedPlate);
+            plateClaim = await tx.get(plateClaimRef);
+          }
+        }
+
+        const queueDocs = queueSnapshot.docs;
+        if (targetRole === "driver") {
+          const driverId = String(target.get("userId") || targetPhone);
+          const entriesToDelete = queueDocs.filter((document) =>
+            document.get("driverId") === driverId &&
+            queueStatusIsActive(document.data())
+          );
+          const deletedIds = new Set(entriesToDelete.map((document) => document.id));
+          entriesToDelete.forEach((document) => tx.delete(document.ref));
+
+          const remainingByRoute = queueDocs
+            .filter((document) =>
+              !deletedIds.has(document.id) &&
+              queueStatusIsActive(document.data())
+            )
+            .reduce((groups, document) => {
+              const route = String(document.get("route") || "");
+              if (!groups.has(route)) groups.set(route, []);
+              groups.get(route).push(document);
+              return groups;
+            }, new Map());
+
+          remainingByRoute.forEach((routeEntries) => {
+            routeEntries.sort(compareQueueEntries).forEach((document, index) => {
+              tx.update(document.ref, {
+                position: index + 1,
+                updatedAt: FieldValue.serverTimestamp(),
+              });
+            });
+          });
+        }
+
+        tx.delete(userRef);
+        tx.delete(secretRef);
+        if (plateClaimRef && plateClaim &&
+            plateClaim.get("phoneNumber") === targetPhone) {
+          tx.delete(plateClaimRef);
+        }
+        tx.set(queueControlRef, {
+          revision: (control.get("revision") || 0) + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("deleteAccount failed:", error);
+      throw new HttpsError("internal", "Hindi mabura ang account. Subukan muli.");
+    }
+
+    return { success: true };
+  }
+);
+
+/**
+ * Dispatches from the administrator's assigned terminal. The trusted
+ * transaction updates both route positions and the dispatch ledger together.
+ */
+exports.dispatchQueueVehicle = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    const caller = await getAdminContext(request);
+    const data = request.data || {};
+    const entryId = data.queueEntryId;
+    const income = data.income;
+    const otherFees = data.otherFees;
+
+    if (typeof entryId !== "string" || !entryId || entryId.length > 180 ||
+        typeof income !== "number" || !Number.isFinite(income) ||
+        typeof otherFees !== "number" || !Number.isFinite(otherFees) ||
+        income < 0 || otherFees < 0 || otherFees > income) {
+      throw new HttpsError("invalid-argument", "Invalid ang detalye ng dispatch.");
+    }
+
+    const queueCollection = db.collection("queue");
+    const queueControlRef = db.collection("settings").doc("queueControl");
+    const tiersRef = db.collection("settings").doc("deductionTiers");
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const callerRef = db.collection("users").doc(caller.phone);
+        const [callerSnapshot, control, queueSnapshot] = await Promise.all([
+          tx.get(callerRef),
+          tx.get(queueControlRef),
+          tx.get(queueCollection),
+        ]);
+        const currentCallerRole = String(callerSnapshot.get("role") || "").toLowerCase();
+        const transactionCaller = {
+          role: currentCallerRole,
+          station: String(callerSnapshot.get("adminStation") || "").trim().toLowerCase(),
+        };
+        if (!callerSnapshot.exists ||
+            !["admin", "superadmin"].includes(currentCallerRole) ||
+            String(callerSnapshot.get("status") || "active").toLowerCase() !== "active") {
+          throw new HttpsError("permission-denied", "Wala nang aktibong pahintulot ang account na ito.");
+        }
+        const target = queueSnapshot.docs.find((document) => document.id === entryId);
+
+        if (!target || !queueStatusIsActive(target.data()) ||
+            target.get("isCancelled") === true) {
+          throw new HttpsError("failed-precondition", "Wala na sa aktibong pila ang sasakyang ito.");
+        }
+
+        const currentRoute = String(target.get("route") || "");
+        const currentStation = queueRouteStation(currentRoute);
+        if (!currentStation || !canManageQueueRoute(transactionCaller, currentRoute)) {
+          throw new HttpsError("permission-denied", "Sa terminal na nakatalaga lamang maaaring mag-dispatch.");
+        }
+
+        const stationQueue = queueSnapshot.docs
+          .filter((document) =>
+            queueStatusIsActive(document.data()) &&
+            (queueRouteStation(document.get("route")) || "monumento") === currentStation
+          )
+          .sort(compareQueueEntries);
+        const frontOfLine = stationQueue.find((document) =>
+          document.get("isCancelled") !== true
+        );
+        if (frontOfLine && frontOfLine.id !== entryId) {
+          throw new HttpsError("failed-precondition", "Ang nasa unahan lamang ng pila ang maaaring i-dispatch.");
+        }
+
+        const driverId = String(target.get("driverId") || "").trim();
+        if (!driverId) {
+          throw new HttpsError("failed-precondition", "Walang User ID ang driver na ito.");
+        }
+
+        const driverQuery = db.collection("users")
+          .where("userId", "==", driverId)
+          .where("role", "==", "driver")
+          .limit(1);
+        const [driverSnapshot, tiersSnapshot] = await Promise.all([
+          tx.get(driverQuery),
+          tx.get(tiersRef),
+        ]);
+        if (driverSnapshot.empty) {
+          throw new HttpsError("not-found", "Hindi makita ang driver account.");
+        }
+
+        const driver = driverSnapshot.docs[0];
+        if (driver.get("isVehicleActive") === false ||
+            String(driver.get("status") || "active").toLowerCase() === "inactive") {
+          throw new HttpsError("failed-precondition", "Hindi aktibo ang driver o jeepney na ito.");
+        }
+
+        const todayKey = manilaDateKey(new Date());
+        const doneForToday = queueSnapshot.docs.some((document) =>
+          document.get("driverId") === driverId &&
+          String(document.get("status") || "").toLowerCase() === "completed" &&
+          manilaDateKey(document.get("endTravelAt")) === todayKey
+        );
+        if (doneForToday) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Tapos na bumyahe ang driver na ito ngayong araw. Hindi na siya pwedeng i-dispatch."
+          );
+        }
+
+        const driverName = String(target.get("driverName") || "");
+        const plateNumber = String(target.get("plateNumber") || "").trim().toUpperCase();
+        const netAmount = income - otherFees;
+        const seater = Math.max(0, Math.trunc(Number(driver.get("seater") || 0)));
+        const tiers = tiersSnapshot.data() || {};
+        const configuredTier = seater > 0 ? Number(tiers[String(seater)]) : Number.NaN;
+        const tierDeduction = seater <= 0
+          ? 0
+          : Number.isFinite(configuredTier) && configuredTier >= 0
+            ? configuredTier
+            : seater * 2;
+
+        // The cancelled entries remain visible at the end of their terminal's list.
+        const remainingActive = queueSnapshot.docs.filter((document) =>
+          document.id !== entryId && queueStatusIsActive(document.data())
+        );
+        const sameRouteRemaining = remainingActive
+          .filter((document) =>
+            (queueRouteStation(document.get("route")) || "monumento") === currentStation
+          )
+          .sort(compareQueueEntries);
+        const oppositeRouteRemaining = remainingActive
+          .filter((document) =>
+            (queueRouteStation(document.get("route")) || "monumento") !== currentStation
+          )
+          .sort(compareQueueEntries);
+        const alreadyQueuedAfterDispatch = remainingActive.some((document) =>
+          document.get("driverId") === driverId
+        );
+        const shouldRequeue = driver.get("isVehicleActive") !== false &&
+          !alreadyQueuedAfterDispatch;
+
+        tx.update(target.ref, {
+          status: "dispatched",
+          dispatchedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          position: 0,
+        });
+        sameRouteRemaining.forEach((document, index) => {
+          tx.update(document.ref, {
+            position: index + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+        oppositeRouteRemaining.forEach((document, index) => {
+          tx.update(document.ref, {
+            position: index + 2,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+
+        if (shouldRequeue) {
+          const oppositeRoute = currentStation === "marilao"
+            ? "Monumento – Marilao"
+            : "Marilao – Monumento";
+          const requeueId = "queue_" + driverId + "_after_" + entryId;
+          tx.set(queueCollection.doc(requeueId), {
+            id: requeueId,
+            driverId,
+            driverName,
+            plateNumber,
+            route: oppositeRoute,
+            position: 1,
+            status: "Nakapila",
+            time: new Intl.DateTimeFormat("en-US", {
+              timeZone: "Asia/Manila",
+              hour: "2-digit",
+              minute: "2-digit",
+            }).format(new Date()),
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        const ledgerId = entryId + "_dispatch";
+        tx.set(db.collection("ledger").doc(ledgerId), {
+          id: ledgerId,
+          driverId,
+          driverName,
+          plateNumber,
+          queueId: entryId,
+          date: new Intl.DateTimeFormat("en-US", {
+            timeZone: "Asia/Manila",
+            month: "short",
+            day: "2-digit",
+            year: "numeric",
+          }).format(new Date()),
+          amount: netAmount,
+          grossAmount: income,
+          otherFees,
+          netAmount,
+          seater,
+          seaterDeduction: tierDeduction,
+          deductionCustomized: otherFees !== tierDeduction,
+          feeType: "Dispatch",
+          status: "Bayad",
+          source: "queue_dispatch",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        tx.set(queueControlRef, {
+          revision: (control.get("revision") || 0) + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("dispatchQueueVehicle failed:", error);
+      throw new HttpsError("internal", "Hindi ma-dispatch ang sasakyan. Subukan muli.");
+    }
+
+    return { success: true };
   }
 );
 

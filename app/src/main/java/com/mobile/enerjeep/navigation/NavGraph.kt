@@ -2,6 +2,7 @@ package com.mobile.enerjeep.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,7 +18,8 @@ fun NavGraph(
     navController: NavHostController,
     appNavigator: AppNavigator,
     activity: MainActivity,
-    startDestination: Screen
+    startDestination: Screen,
+    modifier: Modifier = Modifier
 ) {
     LaunchedEffect(Unit) {
         appNavigator.navigationEvents.collect { event ->
@@ -44,7 +46,8 @@ fun NavGraph(
 
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = startDestination,
+        modifier = modifier.fillMaxSize()
     ) {
         composable<Screen.Login> {
             LoginScreen(
