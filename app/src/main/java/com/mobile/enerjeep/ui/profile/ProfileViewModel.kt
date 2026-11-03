@@ -12,8 +12,6 @@ import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
-import com.mobile.enerjeep.navigation.AppNavigator
-import com.mobile.enerjeep.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,7 +58,6 @@ class ProfileViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val userSession: UserSession,
     private val auth: FirebaseAuth,
-    private val appNavigator: AppNavigator
 ) : ViewModel() {
 
     private val _uiState =
@@ -445,22 +442,14 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun signOut() {
-
         viewModelScope.launch {
-
             try {
+                // Firebase signOut is synchronous and clears its persisted session.
                 auth.signOut()
             } finally {
-
+                // The root ContentViewModel observes this and replaces the
+                // entire navigation controller with a fresh Login back stack.
                 userSession.clear()
-
-                appNavigator.navigateTo(
-                    Screen.Login
-                ) {
-                    popUpTo(Screen.Home) {
-                        inclusive = true
-                    }
-                }
             }
         }
     }
