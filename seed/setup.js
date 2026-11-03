@@ -1107,7 +1107,7 @@ async function main() {
   console.log("");
   console.log("Records to create or replace:");
   console.log("  Current queue entries: " + dataset.counts.activeQueue);
-  console.log("  Dispatch history (six-month range): " + dataset.counts.historyQueue);
+  console.log("  Dispatch history (twelve-month range): " + dataset.counts.historyQueue);
   console.log("  Incident reports: " + dataset.counts.incidents);
   console.log("  Dispatch earnings: " + dataset.counts.dispatchLedger);
   console.log("  Paid fines: " + dataset.counts.fineLedger);
