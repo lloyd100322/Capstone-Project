@@ -209,9 +209,12 @@ test("driver CANNOT edit or create his own earnings records", async () => {
   );
 });
 
-test("admin CAN manage earnings records", async () => {
+test("admin CANNOT write to the retired kita collection", async () => {
   const db = dbAs(ADMIN_PHONE, "u-admin");
-  await assertSucceeds(updateDoc(doc(db, "kita/k-drv"), { amount: 250 }));
+  await assertFails(updateDoc(doc(db, "kita/k-drv"), { amount: 250 }));
+  await assertFails(
+    setDoc(doc(db, "kita/k-new"), { driverId, amount: 250, type: "Kita" })
+  );
 });
 
 // --------------------------------------------------------------- activityLogs
