@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -152,7 +153,7 @@ class NotificationCenterViewModel @Inject constructor(
 fun NotificationCenterBell(
     viewModel: NotificationCenterViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSheet by remember { mutableStateOf(false) }
 
     // Bell only: the existing dashboard header supplies the app title.
@@ -160,7 +161,6 @@ fun NotificationCenterBell(
         IconButton(
             onClick = {
                 showSheet = true
-                viewModel.markAllRead()
             }
         ) {
             Icon(
@@ -212,6 +212,11 @@ fun NotificationCenterBell(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
+                if (state.unreadCount > 0) {
+                    TextButton(onClick = viewModel::markAllRead) {
+                        Text("Markahang nabasa lahat", maxLines = 1)
+                    }
+                }
                 IconButton(onClick = { showSheet = false }) {
                     Icon(Icons.Default.Close, contentDescription = "Isara")
                 }

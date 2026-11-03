@@ -2,6 +2,8 @@ package com.mobile.enerjeep.ui.kita
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -158,11 +160,14 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
             }
         } else {
             /*
-             * Buong page ang scrollable (hindi lang ang listahan) kaya
-             * hindi nacucut ang mga record sa ilalim ng navigation bar.
+             * Bounded lazy list: long earnings histories are composed
+             * only as they approach the visible area.
              */
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                finalRecords.forEach { record ->
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(finalRecords, key = { it.id }) { record ->
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(1.dp)) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {

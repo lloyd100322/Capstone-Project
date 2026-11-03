@@ -489,7 +489,14 @@ class QueueViewModel @Inject constructor(
         }
     }
 
+    fun retryLoading() {
+        _uiState.value = QueueUiState.Loading
+        startQueueListener()
+    }
+
     private fun startQueueListener() {
+        queueListener?.remove()
+        queueListener = null
         queueListener = firestore
             .collection(FirestoreCollections.QUEUE)
             .addSnapshotListener { snapshot, error ->
@@ -804,9 +811,11 @@ class QueueViewModel @Inject constructor(
                         "Hindi makita ang sasakyan sa pila."
                     )
 
-                if (!isActiveStatus(target.getString("status"))) {
+                if (!isActiveStatus(target.getString("status")) ||
+                    target.getBoolean("isCancelled") == true
+                ) {
                     throw IllegalStateException(
-                        "Ang sasakyang ito ay wala na sa aktibong pila."
+                        "Ang entry na ito ay wala na sa aktibong pila o nakansela na."
                     )
                 }
 
@@ -832,10 +841,11 @@ class QueueViewModel @Inject constructor(
                     val freshEntry = transaction.get(target.reference)
 
                     if (!freshEntry.exists() ||
-                        !isActiveStatus(freshEntry.getString("status"))
+                        !isActiveStatus(freshEntry.getString("status")) ||
+                        freshEntry.getBoolean("isCancelled") == true
                     ) {
                         throw IllegalStateException(
-                            "Ang sasakyang ito ay wala na sa aktibong pila."
+                            "Ang entry na ito ay wala na sa aktibong pila o nakansela na."
                         )
                     }
 
@@ -940,9 +950,11 @@ class QueueViewModel @Inject constructor(
                         "Hindi makita ang sasakyan sa pila."
                     )
 
-                if (!isActiveStatus(target.getString("status"))) {
+                if (!isActiveStatus(target.getString("status")) ||
+                    target.getBoolean("isCancelled") != true
+                ) {
                     throw IllegalStateException(
-                        "Ang sasakyang ito ay wala na sa aktibong pila."
+                        "Hindi nakansela o wala na sa aktibong pila ang entry."
                     )
                 }
 
@@ -964,10 +976,11 @@ class QueueViewModel @Inject constructor(
                     val freshEntry = transaction.get(target.reference)
 
                     if (!freshEntry.exists() ||
-                        !isActiveStatus(freshEntry.getString("status"))
+                        !isActiveStatus(freshEntry.getString("status")) ||
+                        freshEntry.getBoolean("isCancelled") != true
                     ) {
                         throw IllegalStateException(
-                            "Ang sasakyang ito ay wala na sa aktibong pila."
+                            "Hindi na nakansela o wala na sa aktibong pila ang entry."
                         )
                     }
 
@@ -1013,6 +1026,7 @@ class QueueViewModel @Inject constructor(
 
                         if (document.id == vehicleId) {
                             update["isCancelled"] = false
+                            update["cancelledAt"] = FieldValue.delete()
                         }
 
                         transaction.update(document.reference, update)

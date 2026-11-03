@@ -56,6 +56,38 @@ class DashboardSummaryTest {
     }
 
     @Test
+    fun cancelledDriversAreExcludedAndDuplicateQueueRowsDoNotInflateCount() {
+        val entries = listOf(
+            DashboardQueueEntry("driver-1", "Nakapila", false),
+            DashboardQueueEntry("driver-2", "Nakapila", true),
+            DashboardQueueEntry("driver-3", "Nakapila", false),
+            DashboardQueueEntry("driver-1", "Nakapila", false)
+        )
+
+        assertEquals(2, DashboardSummary.activeDriverCount(entries))
+    }
+
+    @Test
+    fun restoredDriverCountsAgainAfterCancellationFlagIsCleared() {
+        val entries = listOf(
+            DashboardQueueEntry("driver-1", "Nakapila", false),
+            DashboardQueueEntry("driver-2", "Nakapila", false)
+        )
+
+        assertEquals(2, DashboardSummary.activeDriverCount(entries))
+    }
+
+    @Test
+    fun dispatchedDriversAreNotIncludedInActiveCount() {
+        val entries = listOf(
+            DashboardQueueEntry("driver-1", "Dispatched", false),
+            DashboardQueueEntry("driver-2", "Nakapila", false)
+        )
+
+        assertEquals(1, DashboardSummary.activeDriverCount(entries))
+    }
+
+    @Test
     fun anEmptyIncidentListGivesZeroOpenIncidents() {
         assertEquals(0, DashboardSummary.openIncidentCount(emptyList()))
     }

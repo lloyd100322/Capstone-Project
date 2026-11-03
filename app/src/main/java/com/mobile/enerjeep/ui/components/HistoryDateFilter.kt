@@ -32,11 +32,15 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.time.temporal.WeekFields
 import java.util.Locale
 
 /** Shared date filters used by every history/kasaysayan list. */
+private fun formatSelectedHistoryDate(date: LocalDate): String =
+    date.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("fil", "PH")))
+
 enum class HistoryPeriod(val label: String) {
     ALL("Lahat ng petsa"),
     TODAY("Ngayon"),
@@ -153,7 +157,7 @@ fun HistoryDateFilterBar(
 
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
         Text(
-            text = if (state.period == HistoryPeriod.SPECIFIC_DATE) state.selectedDate?.toString() ?: "Pumili ng petsa" else state.period.label
+            text = if (state.period == HistoryPeriod.SPECIFIC_DATE) state.selectedDate?.let(::formatSelectedHistoryDate) ?: "Pumili ng petsa" else state.period.label
         )
         Box {
             IconButton(onClick = { filterMenu = true }) {
@@ -207,7 +211,7 @@ fun HistoryDateFilterBar(
                     if (millis != null) {
                         val selected = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
                         onStateChange(state.copy(period = HistoryPeriod.SPECIFIC_DATE, selectedDate = selected))
-                        message("Na-filter ang kasaysayan para sa $selected.")
+                        message("Na-filter ang kasaysayan para sa ${formatSelectedHistoryDate(selected)}.")
                     }
                     datePicker = false
                 }) { Text("Piliin") }

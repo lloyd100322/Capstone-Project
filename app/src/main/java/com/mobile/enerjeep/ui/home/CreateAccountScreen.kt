@@ -116,38 +116,38 @@ fun CreateAccountScreen(
                 Column(
                     modifier = Modifier.padding(20.dp)
                 ) {
-                    // Name Fields
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Pangalan",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            CustomInputField(
-                                value = firstName,
-                                onValueChange = { firstName = it }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Apelyido",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            CustomInputField(
-                                value = lastName,
-                                onValueChange = { lastName = it }
-                            )
+                    // Stack name inputs on compact phones; keep two columns on wider screens.
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val useStackedFields = maxWidth < 380.dp
+                        if (useStackedFields) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text("Pangalan", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(8.dp))
+                                    CustomInputField(value = firstName, onValueChange = { firstName = it })
+                                }
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text("Apelyido", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(8.dp))
+                                    CustomInputField(value = lastName, onValueChange = { lastName = it })
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Pangalan", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(8.dp))
+                                    CustomInputField(value = firstName, onValueChange = { firstName = it })
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("Apelyido", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(8.dp))
+                                    CustomInputField(value = lastName, onValueChange = { lastName = it })
+                                }
+                            }
                         }
                     }
 

@@ -2,6 +2,8 @@ package com.mobile.enerjeep.ui.incident
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -87,8 +89,16 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         if (isResolvedTab) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
         if (uiState.errorMessage != null) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(uiState.errorMessage ?: "", color = ErrorRedText, fontSize = 14.sp)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = viewModel::retryLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                ) { Text("Subukang muli") }
             }
         } else if (uiState.isLoading) {
             Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
@@ -98,11 +108,14 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = TextSecondary, fontSize = 14.sp) }
         } else {
             /*
-             * Buong page ang scrollable (hindi lang ang listahan) kaya
-             * hindi nacucut ang mga card sa ilalim ng navigation bar.
+             * Bounded lazy list: older incident cards are composed only
+             * as they approach the visible area.
              */
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                visibleIncidents.forEach { incident ->
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(visibleIncidents, key = { it.id }) { incident ->
                     DriverIncidentCard(
                         incident = incident,
                         onCallDriver = {

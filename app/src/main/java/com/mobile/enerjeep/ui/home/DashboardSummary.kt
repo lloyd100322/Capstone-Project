@@ -28,6 +28,13 @@ data class DashboardLedgerEntry(
     val otherFees: Double? = null
 )
 
+/** Queue row used by the dashboard's active-driver counter. */
+data class DashboardQueueEntry(
+    val driverId: String,
+    val status: String,
+    val isCancelled: Boolean
+)
+
 /** A row of the "incidents" collection, the way the dashboard needs it. */
 data class DashboardIncidentEntry(
     val isResolved: Boolean = false,
@@ -35,6 +42,22 @@ data class DashboardIncidentEntry(
 )
 
 object DashboardSummary {
+
+    /**
+     * Count distinct drivers who remain active in the queue.
+     * Cancelled entries remain stored at the bottom so they can be restored,
+     * but are paused until the cancellation flag is cleared.
+     */
+    fun activeDriverCount(entries: List<DashboardQueueEntry>): Int {
+        val inactiveStatuses = setOf("dispatched", "cancelled", "completed", "resolved")
+        return entries.asSequence()
+            .filter { it.driverId.isNotBlank() }
+            .filter { !it.isCancelled }
+            .filter { it.status.trim().lowercase(Locale.ROOT) !in inactiveStatuses }
+            .map { it.driverId }
+            .distinct()
+            .count()
+    }
 
     /**
      * "Kabuuang Kita": ang kita ng KOOPERATIBA/Terminal = ang bawas

@@ -23,6 +23,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -178,8 +180,16 @@ fun QueueScreen(
                     }
                 }
                 is QueueUiState.Error -> {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text(text = state.message, color = ErrorRed)
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = viewModel::retryLoading,
+                            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                        ) { Text("Subukang muli") }
                     }
                 }
                 is QueueUiState.Success -> {
@@ -700,10 +710,11 @@ fun QueueItem(
             /*
              * The ONLY position control: two BIG up/down arrows. The old
              * "Posisyon" button + number field + Set/Bawi are gone.
-             * Hidden in compact mode, while searching and for cancelled
+             * Kept visible at every zoom level as an accessible alternative
+             * to long-press dragging. Hidden while searching and for cancelled
              * rows (they wait at the end anyway).
              */
-            if (canReorder && !compact && !vehicle.isCancelled) {
+            if (canReorder && !vehicle.isCancelled) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -714,7 +725,13 @@ fun QueueItem(
                                 onPositionUpdate(displayPosition - 1)
                             }
                         },
-                        modifier = Modifier.weight(1f).height(56.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(if (compact) 48.dp else 56.dp)
+                            .semantics {
+                                contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
+                            },
+                        enabled = displayPosition > 1,
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)
@@ -728,7 +745,12 @@ fun QueueItem(
                         onClick = {
                             onPositionUpdate(displayPosition + 1)
                         },
-                        modifier = Modifier.weight(1f).height(56.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(if (compact) 48.dp else 56.dp)
+                            .semantics {
+                                contentDescription = "Ibaba si ${vehicle.plateNumber} sa pila"
+                            },
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)

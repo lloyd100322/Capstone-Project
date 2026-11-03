@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -55,6 +56,14 @@ import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 
 fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
 
+private object ReportSectionListIndex {
+    const val OVERVIEW = 0
+    const val INCOME = 1
+    const val INCIDENTS = 2
+    const val PENALTIES = 3
+    const val DONATIONS = 4
+}
+
 @Composable
 fun ReportScreen(
     viewModel: ReportViewModel = hiltViewModel(),
@@ -69,7 +78,18 @@ fun ReportScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     when (val state = uiState) {
         is ReportUiState.Loading -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = EnerjeepBlue) }
-        is ReportUiState.Error -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { Text(state.message, color = ErrorRed) }
+        is ReportUiState.Error -> Column(
+            modifier = Modifier.fillMaxSize().background(LightGrayBackground).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(state.message, color = ErrorRed)
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = viewModel::retryLoading,
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) { Text("Subukang muli") }
+        }
         is ReportUiState.Success -> {
             val listState = rememberLazyListState()
             val sectionScope = rememberCoroutineScope()
@@ -78,7 +98,7 @@ fun ReportScreen(
                 modifier = Modifier.fillMaxSize().background(LightGrayBackground),
                 contentPadding = PaddingValues(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 48.dp)
             ) {
-                item {
+                item(key = "report-overview") {
                     HeaderRow()
                     Spacer(Modifier.height(28.dp))
                     Text("Mga Ulat", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
@@ -91,21 +111,21 @@ fun ReportScreen(
                      */
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SectionChip("Kita") {
-                            sectionScope.launch { listState.scrollToItem(1) }
+                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.INCOME) }
                         }
                         SectionChip("Insidente") {
-                            sectionScope.launch { listState.scrollToItem(2) }
+                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.INCIDENTS) }
                         }
                         SectionChip("Multa") {
-                            sectionScope.launch { listState.scrollToItem(3) }
+                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.PENALTIES) }
                         }
                         SectionChip("Donasyon") {
-                            sectionScope.launch { listState.scrollToItem(4) }
+                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.DONATIONS) }
                         }
                     }
                     Spacer(Modifier.height(20.dp))
                 }
-                item {
+                item(key = "report-income") {
                     ReportSectionHeader(Icons.Default.AccountBalanceWallet, EnerjeepBlue, EnerjeepBlueLight, "Ulat ng Kita")
                     Spacer(Modifier.height(16.dp))
                     UlatNgKitaContent(state.monthlyData, state.yearlyData, state.historyData)
@@ -113,7 +133,7 @@ fun ReportScreen(
                     HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
                     Spacer(Modifier.height(20.dp))
                 }
-                item {
+                item(key = "report-incidents") {
                     ReportSectionHeader(Icons.Default.Warning, WarningOrange, WarningOrangeLight, "Ulat ng Insidente")
                     Spacer(Modifier.height(16.dp))
                     UlatNgInsidenteContent(state.currentIncidents, state.allIncidents, state.totalIncidentPenalty)
@@ -121,7 +141,7 @@ fun ReportScreen(
                     HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
                     Spacer(Modifier.height(20.dp))
                 }
-                item {
+                item(key = "report-penalties") {
                     ReportSectionHeader(Icons.Default.PrivacyTip, ErrorRed, ErrorRedLight, "Ulat ng Multa")
                     Spacer(Modifier.height(16.dp))
                     UlatNgMultiyaContent(state.currentMultiya, state.allMultiya, state.multiyaNgayon, state.kabuuangMultiya)
@@ -129,7 +149,7 @@ fun ReportScreen(
                     HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
                     Spacer(Modifier.height(20.dp))
                 }
-                item {
+                item(key = "report-donations") {
                     ReportSectionHeader(Icons.Default.FavoriteBorder, HeartPink, HeartPinkLight, "Donasyon ng Koop")
                     Spacer(Modifier.height(16.dp))
                     DonasyonContent(
@@ -144,7 +164,7 @@ fun ReportScreen(
             }
             LaunchedEffect(initialSection) {
                 if (initialSection == "donasyon") {
-                    listState.scrollToItem(4)
+                    listState.scrollToItem(ReportSectionListIndex.DONATIONS)
                 }
             }
         }
@@ -154,7 +174,7 @@ fun ReportScreen(
 @Composable
 private fun SectionChip(label: String, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         color = Color.White,
         border = BorderStroke(1.dp, FieldBorderColor)
@@ -210,6 +230,11 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     Column(Modifier.fillMaxWidth()) {
         Text("Kasaysayan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(
+            "Kita ng kooperatiba: kabuuang otherFees (bawas) mula sa bawat dispatch.",
+            fontSize = 12.sp,
+            color = TextSecondary
+        )
         Spacer(Modifier.height(12.dp))
         SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka o driver")
         Spacer(Modifier.height(8.dp))

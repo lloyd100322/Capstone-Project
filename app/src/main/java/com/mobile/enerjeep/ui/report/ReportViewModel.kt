@@ -147,6 +147,16 @@ class ReportViewModel @Inject constructor(
         attachListeners()
     }
 
+    fun retryLoading() {
+        listeners.forEach { it.remove() }
+        listeners.clear()
+        ledgerDocs = emptyList()
+        incidentDocs = emptyList()
+        donationDocs = emptyList()
+        _uiState.value = ReportUiState.Loading
+        attachListeners()
+    }
+
     private fun attachListeners() {
 
         listeners +=
@@ -221,10 +231,9 @@ class ReportViewModel @Inject constructor(
          */
 
         /*
-         * Ang "income" ay DISPATCH RECORDS lang (feeType "Dispatch" /
-         * source "queue_dispatch"). Ang mga bayad ng multa (Talaan) at
-         * iba pang fee rows ay HINDI kita - nasa "Ulat ng Multa" ang mga
-         * iyon - kaya hindi sila binibilang bilang biyahe o kita dito.
+         * Ang kita rito ay ang bahagi ng KOOPERATIBA: otherFees (bawas)
+         * sa bawat dispatch record. Hindi ito netAmount ng driver.
+         * Hindi kasama ang multa at iba pang collection rows.
          */
         val dispatchLedgerDocs = ledgerDocs.filter { isDispatchLedger(it) }
 
@@ -951,16 +960,9 @@ class ReportViewModel @Inject constructor(
     private fun amountForLedger(
         document: DocumentSnapshot
     ): Double {
-
-        return document
-            .getDouble(
-                "netAmount"
-            )
-            ?: document
-                .getDouble(
-                    "amount"
-                )
-            ?: 0.0
+        // Cooperative income is only the deduction collected on each dispatch.
+        // Do not fall back to netAmount/amount, which may be the driver's share.
+        return (document.get("otherFees") as? Number)?.toDouble() ?: 0.0
     }
 
     private fun timestampSeconds(

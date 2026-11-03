@@ -13,15 +13,24 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -651,14 +660,14 @@ fun DriverSecurityContent(
             verticalAlignment =
                 Alignment.CenterVertically,
             modifier =
-                Modifier.clickable {
+                Modifier.clickable(role = Role.Button) {
                     onCancel()
                 }
         ) {
             Icon(
                 imageVector =
                     Icons.Default.ArrowBack,
-                contentDescription = null,
+                contentDescription = "Bumalik sa profile",
                 tint = Color.Black
             )
 
@@ -712,23 +721,9 @@ fun DriverSecurityContent(
                     modifier = Modifier.height(4.dp)
                 )
 
-                OutlinedTextField(
+                DriverPasswordInputField(
                     value = uiState.oldPassword,
-                    onValueChange = {
-                        viewModel.updateOldPassword(
-                            it
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            tint = TextSecondary
-                        )
-                    }
+                    onValueChange = viewModel::updateOldPassword
                 )
 
                 Spacer(
@@ -745,23 +740,9 @@ fun DriverSecurityContent(
                     modifier = Modifier.height(4.dp)
                 )
 
-                OutlinedTextField(
+                DriverPasswordInputField(
                     value = uiState.newPassword,
-                    onValueChange = {
-                        viewModel.updateNewPassword(
-                            it
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            tint = TextSecondary
-                        )
-                    }
+                    onValueChange = viewModel::updateNewPassword
                 )
 
                 Spacer(
@@ -778,23 +759,9 @@ fun DriverSecurityContent(
                     modifier = Modifier.height(4.dp)
                 )
 
-                OutlinedTextField(
+                DriverPasswordInputField(
                     value = uiState.confirmPassword,
-                    onValueChange = {
-                        viewModel.updateConfirmPassword(
-                            it
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    trailingIcon = {
-                        Icon(
-                            Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            tint = TextSecondary
-                        )
-                    }
+                    onValueChange = viewModel::updateConfirmPassword
                 )
 
                 Spacer(
@@ -847,4 +814,35 @@ fun DriverSecurityContent(
             }
         }
     }
+}
+
+@Composable
+private fun DriverPasswordInputField(
+    value: String,
+    onValueChange: (String) -> Unit
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        visualTransformation = if (passwordVisible) {
+            VisualTransformation.None
+        } else {
+            PasswordVisualTransformation()
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        trailingIcon = {
+            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    contentDescription = if (passwordVisible) "Itago ang password" else "Ipakita ang password",
+                    tint = TextSecondary
+                )
+            }
+        }
+    )
 }

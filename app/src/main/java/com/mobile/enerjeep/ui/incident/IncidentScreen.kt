@@ -2,6 +2,8 @@ package com.mobile.enerjeep.ui.incident
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,7 +85,19 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
             Spacer(Modifier.height(24.dp))
             when (val state = uiState) {
                 IncidentUiState.Loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = EnerjeepBlue) }
-                is IncidentUiState.Error -> Text(state.message, color = Color.Red, modifier = Modifier.padding(16.dp))
+                is IncidentUiState.Error -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(state.message, color = ErrorRed)
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = viewModel::retryLoading,
+                            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                        ) { Text("Subukang muli") }
+                    }
+                }
                 is IncidentUiState.Success -> {
                     Row(Modifier.fillMaxWidth()) {
                         IncidentStatCard(Modifier.weight(1f), "Di-naayos", state.openCount.toString()) { Icon(Icons.Default.Warning, null, tint = WarningOrange) }
@@ -102,9 +116,17 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                     if (selectedTab == 0) {
                         val incidents = state.activeIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
                         if (incidents.isEmpty()) Text("Walang insidenteng hindi pa naayos.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(48.dp))
-                        else incidents.forEach { incident ->
-                            IncidentItemCard(incident, onViewClick = { selectedIncident = incident }, onMarkResolvedClick = { viewModel.resolveIncident(incident.id) })
-                            Spacer(Modifier.height(12.dp))
+                        else LazyColumn(
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(incidents, key = { it.id }) { incident ->
+                                IncidentItemCard(
+                                    incident,
+                                    onViewClick = { selectedIncident = incident },
+                                    onMarkResolvedClick = { viewModel.resolveIncident(incident.id) }
+                                )
+                            }
                         }
                     } else {
                         /*
@@ -120,8 +142,22 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                             historyFilter,
                             { it.createdAtMillis.takeIf { millis -> millis > 0 } }
                         )
-                        if (incidents.isEmpty()) Text("Walang naayos na insidente sa napiling filter.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(48.dp))
-                        else incidents.forEach { incident -> HistoryIncidentItemCard(incident) { selectedIncident = incident }; Spacer(Modifier.height(12.dp)) }
+                        if (incidents.isEmpty()) {
+                            Text(
+                                "Walang naayos na insidente sa napiling filter.",
+                                color = TextSecondary,
+                                modifier = Modifier.fillMaxWidth().padding(48.dp)
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(incidents, key = { it.id }) { incident ->
+                                    HistoryIncidentItemCard(incident) { selectedIncident = incident }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -2,7 +2,6 @@ package com.mobile.enerjeep.ui.theme
 
 import android.app.Activity
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -43,7 +42,9 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun EnerjeepTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // Many legacy screens still use fixed light surfaces. Keep one consistent
+    // light appearance until all screens use MaterialTheme color tokens.
+    darkTheme: Boolean = false,
     /*
      * Hindi ginagamit ang dynamic color (Material You): ang app ay may
      * sariling brand color at hindi dapat sumusunod sa wallpaper ng

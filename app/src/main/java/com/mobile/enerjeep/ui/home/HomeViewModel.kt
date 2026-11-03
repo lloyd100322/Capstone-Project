@@ -153,32 +153,18 @@ class HomeViewModel @Inject constructor(
                     return@addSnapshotListener
                 }
 
-                val activeDriverIds =
-                    snapshot
-                        .documents
-                        .filter {
-                            isActiveQueueStatus(
-                                it.getString(
-                                    "status"
-                                )
-                            )
-                        }
-                        .map {
-                            it.getString(
-                                "driverId"
-                            ).orEmpty()
-                        }
-                        .filter {
-                            it.isNotBlank()
-                        }
-                        .toSet()
+                val queueEntries = snapshot.documents.map { document ->
+                    DashboardQueueEntry(
+                        driverId = document.getString("driverId").orEmpty(),
+                        status = document.getString("status").orEmpty(),
+                        isCancelled = document.getBoolean("isCancelled") == true
+                    )
+                }
 
-                /*
-                 * Distinct driver IDs prevent old duplicate
-                 * queue documents from inflating the count.
-                 */
+                // Cancelled records remain in the queue for restoration,
+                // but are paused and excluded from the active-driver total.
                 _activeJeepsCount.value =
-                    activeDriverIds.size
+                    DashboardSummary.activeDriverCount(queueEntries)
             }
 
         /*

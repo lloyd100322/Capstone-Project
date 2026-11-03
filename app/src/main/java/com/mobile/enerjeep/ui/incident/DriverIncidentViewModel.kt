@@ -140,6 +140,14 @@ class DriverIncidentViewModel @Inject constructor(
      * driver. Only the fields the app already stores are shown, so no
      * personal data of the other drivers is exposed.
      */
+    fun retryLoading() {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+        startListener()
+    }
+
     private fun startListener() {
         listener?.remove()
 

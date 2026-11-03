@@ -1,6 +1,8 @@
 package com.mobile.enerjeep.ui.home
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -198,7 +200,11 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         if (contacts.isEmpty()) {
             Text("Walang laman ang listahan.", color = TextSecondary)
         } else {
-            contacts.forEach { contact ->
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(contacts) { contact ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -240,6 +246,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -368,7 +375,11 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                 color = TextSecondary
             )
         } else {
-            visible.forEach { log ->
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(visible) { log ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -416,6 +427,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

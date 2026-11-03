@@ -111,7 +111,15 @@ class IncidentViewModel @Inject constructor(
         startDriverListener()
     }
 
+    fun retryLoading() {
+        _uiState.value = IncidentUiState.Loading
+        startIncidentListener()
+        startDriverListener()
+    }
+
     private fun startIncidentListener() {
+        incidentListener?.remove()
+        incidentListener = null
 
         incidentListener =
             firestore
@@ -195,7 +203,7 @@ class IncidentViewModel @Inject constructor(
     }
 
     private fun startDriverListener() {
-
+        driverListener?.remove()
         driverListener =
             firestore
                 .collection(FirestoreCollections.USERS)

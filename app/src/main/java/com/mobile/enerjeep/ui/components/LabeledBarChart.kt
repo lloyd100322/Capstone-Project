@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +51,7 @@ fun LabeledBarChart(
         Spacer(Modifier.height(12.dp))
         Card(
             Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(Modifier.padding(16.dp)) {
@@ -62,8 +64,8 @@ fun LabeledBarChart(
                                 text = label,
                                 fontSize = 12.sp,
                                 color = TextSecondary,
-                                modifier = Modifier.width(88.dp),
-                                maxLines = 1
+                                modifier = Modifier.weight(0.28f),
+                                maxLines = 2
                             )
                             Spacer(Modifier.width(8.dp))
                             Box(
@@ -109,7 +111,7 @@ fun LabeledBarChart(
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(72.dp),
+                                modifier = Modifier.widthIn(min = 60.dp, max = 76.dp),
                                 maxLines = 1
                             )
                         }
