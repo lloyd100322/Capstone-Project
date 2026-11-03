@@ -10,6 +10,7 @@ object FirestoreCollections {
      * firestore.rules). Never put anything here that a screen needs.
      */
     const val USER_SECRETS = "userSecrets"
+    const val DRIVER_PLATE_CLAIMS = "driverPlateClaims"
 
     const val QUEUE = "queue"
     const val INCIDENTS = "incidents"
