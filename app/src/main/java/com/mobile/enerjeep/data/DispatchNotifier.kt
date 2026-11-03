@@ -104,6 +104,7 @@ object DispatchNotifier {
         } catch (_: Exception) {
             // Hindi dapat masira ang aktwal na aksyon dahil sa abiso.
         }
+    }
 
     /**
      * Foreground display for incident pushes. When the app is in the
