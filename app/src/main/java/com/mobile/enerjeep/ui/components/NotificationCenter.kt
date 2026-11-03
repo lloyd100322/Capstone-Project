@@ -25,7 +25,6 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.Timestamp
 import com.mobile.enerjeep.data.FirestoreCollections
 import com.mobile.enerjeep.data.UserSession
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
