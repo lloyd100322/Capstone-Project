@@ -28,6 +28,13 @@ data class DashboardLedgerEntry(
     val otherFees: Double? = null
 )
 
+/** Registered driver account row used by the dashboard's denominator. */
+data class DashboardDriverAccount(
+    val driverId: String,
+    val isVehicleActive: Boolean = true,
+    val status: String = "active"
+)
+
 /** Queue row used by the dashboard's active-driver counter. */
 data class DashboardQueueEntry(
     val driverId: String,
@@ -48,13 +55,57 @@ object DashboardSummary {
      * Cancelled entries remain stored at the bottom so they can be restored,
      * but are paused until the cancellation flag is cleared.
      */
-    fun activeDriverCount(entries: List<DashboardQueueEntry>): Int {
-        val inactiveStatuses = setOf("dispatched", "cancelled", "completed", "resolved")
-        return entries.asSequence()
+    private val inactiveQueueStatuses =
+        setOf("dispatched", "cancelled", "completed", "resolved")
+
+    private fun DashboardQueueEntry.isActiveAndNotCancelled(): Boolean =
+        driverId.isNotBlank() &&
+                !isCancelled &&
+                status.trim().lowercase(Locale.ROOT) !in inactiveQueueStatuses
+
+    /**
+     * Numerator: distinct drivers with a current, non-cancelled queue entry.
+     */
+    fun activeDriverCount(entries: List<DashboardQueueEntry>): Int =
+        entries.asSequence()
+            .filter { it.isActiveAndNotCancelled() }
+            .map { it.driverId.trim() }
+            .distinct()
+            .count()
+
+    /**
+     * Denominator: distinct registered driver accounts that are enabled,
+     * excluding drivers whose queue participation is currently paused by
+     * cancellation. A driver with another valid active queue entry remains
+     * counted, which protects against legacy duplicate queue documents.
+     */
+    fun totalActiveDriverCount(
+        drivers: List<DashboardDriverAccount>,
+        queueEntries: List<DashboardQueueEntry>
+    ): Int {
+        val cancelledDriverIds = queueEntries.asSequence()
             .filter { it.driverId.isNotBlank() }
-            .filter { !it.isCancelled }
-            .filter { it.status.trim().lowercase(Locale.ROOT) !in inactiveStatuses }
-            .map { it.driverId }
+            .filter {
+                it.isCancelled ||
+                        it.status.trim().equals("cancelled", ignoreCase = true)
+            }
+            .map { it.driverId.trim() }
+            .toSet()
+
+        val activeQueueDriverIds = queueEntries.asSequence()
+            .filter { it.isActiveAndNotCancelled() }
+            .map { it.driverId.trim() }
+            .toSet()
+
+        return drivers.asSequence()
+            .filter { it.driverId.isNotBlank() }
+            .filter { it.isVehicleActive }
+            .filter { !it.status.trim().equals("inactive", ignoreCase = true) }
+            .map { it.driverId.trim() }
+            .filter { driverId ->
+                driverId !in cancelledDriverIds ||
+                        driverId in activeQueueDriverIds
+            }
             .distinct()
             .count()
     }
