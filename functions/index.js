@@ -86,15 +86,21 @@ async function getVerifiedUserContext(request) {
     throw new HttpsError("permission-denied", "Walang verified phone number.");
   }
 
+  const authTime = Number(request.auth.token.auth_time);
+  if (!Number.isSafeInteger(authTime) || authTime <= 0) {
+    throw new HttpsError("permission-denied", "Hindi valid ang authentication session.");
+  }
+  const secureSessionId = request.auth.uid + "_" + authTime;
   const [user, secureSession] = await Promise.all([
     db.collection("users").doc(phone).get(),
-    db.collection("secureSessions").doc(request.auth.uid).get(),
+    db.collection("secureSessions").doc(secureSessionId).get(),
   ]);
   const expiresAt = secureSession.get("expiresAt");
   const role = String(user.get("role") || "").toLowerCase();
   if (!user.exists ||
       !secureSession.exists ||
       secureSession.get("phoneNumber") !== phone ||
+      secureSession.get("authTime") !== authTime ||
       !expiresAt ||
       typeof expiresAt.toMillis !== "function" ||
       expiresAt.toMillis() <= Date.now() ||
@@ -1556,7 +1562,13 @@ exports.completeSecureLogin = onCall(
 
     const userRef = db.collection("users").doc(phone);
     const secretRef = db.collection("userSecrets").doc(phone);
-    const sessionRef = db.collection("secureSessions").doc(request.auth.uid);
+    const authTime = Number(request.auth.token.auth_time);
+    if (!Number.isSafeInteger(authTime) || authTime <= 0) {
+      return { success: false };
+    }
+    const sessionRef = db.collection("secureSessions").doc(
+      request.auth.uid + "_" + authTime
+    );
 
     const success = await db.runTransaction(async (tx) => {
       const [userSnapshot, secretSnapshot] = await Promise.all([
@@ -1612,6 +1624,7 @@ exports.completeSecureLogin = onCall(
 
       tx.set(sessionRef, {
         phoneNumber: phone,
+        authTime,
         createdAt: FieldValue.serverTimestamp(),
         expiresAt: admin.firestore.Timestamp.fromMillis(
           Date.now() + SECURE_SESSION_TTL_MS
