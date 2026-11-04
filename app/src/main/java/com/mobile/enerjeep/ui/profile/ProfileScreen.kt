@@ -716,6 +716,7 @@ fun EditProfileContent(
                 .verticalScroll(
                     rememberScrollState()
                 )
+                .imePadding()
     ) {
 
         TopAppBar(
@@ -928,6 +929,7 @@ fun SecurityContent(
                 .verticalScroll(
                     rememberScrollState()
                 )
+                .imePadding()
     ) {
 
         TopAppBar(
@@ -1159,7 +1161,7 @@ fun PasswordTextField(
                         Icons.Default.Visibility
                     else
                         Icons.Default.VisibilityOff,
-                    contentDescription = null
+                    contentDescription = if (passwordVisible) "Itago ang password" else "Ipakita ang password"
                 )
             }
         }
