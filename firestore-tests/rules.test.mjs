@@ -564,6 +564,13 @@ test("a user can read ONLY his own password secret", async () => {
   );
 });
 
+test("clients cannot directly delete password secrets", async () => {
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  const superDb = dbAs(SUPER_PHONE, "u-super");
+  await assertFails(deleteDoc(doc(adminDb, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(deleteDoc(doc(superDb, `userSecrets/${DRIVER_PHONE}`)));
+});
+
 test("unauthenticated clients CANNOT read password secrets before OTP", async () => {
   const anon = testEnv.unauthenticatedContext().firestore();
   await assertFails(getDoc(doc(anon, `userSecrets/${DRIVER_PHONE}`)));
