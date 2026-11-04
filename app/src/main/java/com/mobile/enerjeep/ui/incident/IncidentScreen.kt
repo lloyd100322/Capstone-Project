@@ -472,7 +472,7 @@ fun IncidentFormTextField(label: String, value: String, onValueChange: (String) 
 
 @Composable
 fun IncidentTabButton(modifier: Modifier, text: String, selected: Boolean, onClick: () -> Unit) {
-    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (selected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) } }
+    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (selected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) } }
 }
 
 @Composable
