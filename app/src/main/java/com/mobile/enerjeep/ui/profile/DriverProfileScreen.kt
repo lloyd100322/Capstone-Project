@@ -167,9 +167,7 @@ fun DriverProfileMainContent(
                 containerColor = Color.White
             ),
             shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -256,9 +254,7 @@ fun DriverProfileMainContent(
                 containerColor = Color.White
             ),
             shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 1.dp
-            )
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -326,9 +322,7 @@ fun DriverProfileMainContent(
                 containerColor = Color.White
             ),
             shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 1.dp
-            )
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -487,9 +481,7 @@ fun DriverEditProfileContent(
                 containerColor = Color.White
             ),
             shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
                 modifier = Modifier.padding(20.dp)
@@ -693,9 +685,7 @@ fun DriverSecurityContent(
                 containerColor = Color.White
             ),
             shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
                 modifier = Modifier.padding(20.dp)

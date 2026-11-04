@@ -429,7 +429,8 @@ fun ProfileMainContent(
                         Color.White
                 ),
             shape =
-                RoundedCornerShape(16.dp)
+                RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
 
             Row(
@@ -541,7 +542,8 @@ fun ProfileMainContent(
                         Color.White
                 ),
             shape =
-                RoundedCornerShape(16.dp)
+                RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
 
             Column {
@@ -747,7 +749,8 @@ fun EditProfileContent(
                         Color.White
                 ),
             shape =
-                RoundedCornerShape(24.dp)
+                RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
 
             Column(
@@ -958,7 +961,8 @@ fun SecurityContent(
                         Color.White
                 ),
             shape =
-                RoundedCornerShape(24.dp)
+                RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
 
             Column(
