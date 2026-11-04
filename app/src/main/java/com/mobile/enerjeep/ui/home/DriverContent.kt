@@ -492,7 +492,7 @@ fun DriverDashboardContent(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
@@ -585,7 +585,7 @@ fun DriverDashboardContent(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Row(
@@ -764,7 +764,7 @@ fun DriverDashboardContent(
                         containerColor = Color.White
                     ),
                     shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(
                         modifier = Modifier
