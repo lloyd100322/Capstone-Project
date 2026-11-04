@@ -118,6 +118,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         if (incidents.isEmpty()) Text("Walang insidenteng hindi pa naayos.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(48.dp))
                         else LazyColumn(
                             modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(incidents, key = { it.id }) { incident ->
@@ -151,6 +152,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         } else {
                             LazyColumn(
                                 modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                                contentPadding = PaddingValues(bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(incidents, key = { it.id }) { incident ->
