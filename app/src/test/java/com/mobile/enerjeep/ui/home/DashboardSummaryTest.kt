@@ -78,6 +78,77 @@ class DashboardSummaryTest {
     }
 
     @Test
+    fun cancellingADriverReducesBothDashboardNumbers() {
+        val drivers = listOf(
+            DashboardDriverAccount("driver-1"),
+            DashboardDriverAccount("driver-2"),
+            DashboardDriverAccount("driver-3")
+        )
+        val queue = listOf(
+            DashboardQueueEntry("driver-1", "Nakapila", false),
+            DashboardQueueEntry("driver-2", "Nakapila", true),
+            DashboardQueueEntry("driver-3", "Nakapila", false)
+        )
+
+        assertEquals(2, DashboardSummary.activeDriverCount(queue))
+        assertEquals(2, DashboardSummary.totalActiveDriverCount(drivers, queue))
+    }
+
+    @Test
+    fun restoringADriverAddsItBackToBothDashboardNumbers() {
+        val drivers = listOf(
+            DashboardDriverAccount("driver-1"),
+            DashboardDriverAccount("driver-2"),
+            DashboardDriverAccount("driver-3")
+        )
+        val restoredQueue = listOf(
+            DashboardQueueEntry("driver-1", "Nakapila", false),
+            DashboardQueueEntry("driver-2", "Nakapila", false),
+            DashboardQueueEntry("driver-3", "Nakapila", false)
+        )
+
+        assertEquals(3, DashboardSummary.activeDriverCount(restoredQueue))
+        assertEquals(3, DashboardSummary.totalActiveDriverCount(drivers, restoredQueue))
+    }
+
+    @Test
+    fun cancelledDriverIsNotCountedEvenWhenAnOlderHistoryRowExists() {
+        val drivers = listOf(
+            DashboardDriverAccount("driver-1"),
+            DashboardDriverAccount("driver-2")
+        )
+        val queue = listOf(
+            DashboardQueueEntry("driver-1", "Na-Dispatch", false),
+            DashboardQueueEntry("driver-1", "Nakapila", true),
+            DashboardQueueEntry("driver-2", "Nakapila", false)
+        )
+
+        assertEquals(1, DashboardSummary.totalActiveDriverCount(drivers, queue))
+    }
+
+    @Test
+    fun activeQueueRecordWinsOverAnOlderCancelledDuplicate() {
+        val drivers = listOf(DashboardDriverAccount("driver-1"))
+        val queue = listOf(
+            DashboardQueueEntry("driver-1", "Nakapila", true),
+            DashboardQueueEntry("driver-1", "Nakapila", false)
+        )
+
+        assertEquals(1, DashboardSummary.totalActiveDriverCount(drivers, queue))
+    }
+
+    @Test
+    fun inactiveDriverAccountsAreExcludedFromTheTotal() {
+        val drivers = listOf(
+            DashboardDriverAccount("driver-1"),
+            DashboardDriverAccount("driver-2", isVehicleActive = false),
+            DashboardDriverAccount("driver-3", status = "inactive")
+        )
+
+        assertEquals(1, DashboardSummary.totalActiveDriverCount(drivers, emptyList()))
+    }
+
+    @Test
     fun dispatchedDriversAreNotIncludedInActiveCount() {
         val entries = listOf(
             DashboardQueueEntry("driver-1", "Dispatched", false),
