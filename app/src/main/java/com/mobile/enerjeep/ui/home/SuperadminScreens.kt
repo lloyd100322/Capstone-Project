@@ -62,7 +62,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
 
         Spacer(Modifier.height(16.dp))
 
-        // Idagdag mula sa mga admin account
+        // Card 1: idagdag ang existing admin account sa emergency list.
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -73,9 +73,15 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                 Text(
                     "Magdagdag ng Admin",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    fontSize = 15.sp
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Pumili ng existing admin account na isasama sa emergency list.",
+                    fontSize = 12.sp,
+                    color = TextSecondary
+                )
+                Spacer(Modifier.height(12.dp))
 
                 if (adminAccountsError != null) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -133,7 +139,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         }
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     Button(
                         onClick = {
@@ -146,22 +152,40 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EnerjeepBlue
                         ),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Idagdag", maxLines = 1)
+                        Text("Idagdag ang Admin", maxLines = 1)
                     }
                 }
+            }
+        }
 
-                Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
 
+        // Card 2: magdagdag ng emergency contact na hindi admin account.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "O maglagay ng ibang numero:",
+                    "Magdagdag ng Ibang Numero",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Ilagay ang pangalan at numero ng emergency contact na hindi kabilang sa admin accounts.",
                     fontSize = 12.sp,
                     color = TextSecondary
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(12.dp))
+
                 OutlinedTextField(
                     value = manualName,
                     onValueChange = { manualName = it },
@@ -170,7 +194,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = manualNumber,
                     onValueChange = { manualNumber = it },
@@ -182,8 +206,8 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
+                Spacer(Modifier.height(10.dp))
+                Button(
                     onClick = {
                         viewModel.addEmergencyContact(
                             manualName, manualNumber
@@ -191,8 +215,16 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         manualName = ""
                         manualNumber = ""
                     },
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("Idagdag") }
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = EnerjeepBlue
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Idagdag ang Numero", maxLines = 1)
+                }
             }
         }
 
