@@ -90,10 +90,9 @@ async function getVerifiedUserContext(request) {
   if (!Number.isSafeInteger(authTime) || authTime <= 0) {
     throw new HttpsError("permission-denied", "Hindi valid ang authentication session.");
   }
-  const secureSessionId = request.auth.uid + "_" + authTime;
   const [user, secureSession] = await Promise.all([
     db.collection("users").doc(phone).get(),
-    db.collection("secureSessions").doc(secureSessionId).get(),
+    db.collection("secureSessions").doc(request.auth.uid).get(),
   ]);
   const expiresAt = secureSession.get("expiresAt");
   const role = String(user.get("role") || "").toLowerCase();
@@ -1566,9 +1565,7 @@ exports.completeSecureLogin = onCall(
     if (!Number.isSafeInteger(authTime) || authTime <= 0) {
       return { success: false };
     }
-    const sessionRef = db.collection("secureSessions").doc(
-      request.auth.uid + "_" + authTime
-    );
+    const sessionRef = db.collection("secureSessions").doc(request.auth.uid);
 
     const success = await db.runTransaction(async (tx) => {
       const [userSnapshot, secretSnapshot] = await Promise.all([
