@@ -467,14 +467,22 @@ fun SuperadminTabButton(
             .heightIn(min = 48.dp)
             .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = if (selected) Color(0xFFEDE9FE) else Color.Transparent
+        color = if (selected) Color(0xFF1B49B5) else Color(0xFFEAF1FF),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.5.dp,
+            color = Color(0xFF1B49B5)
+        ),
+        shadowElevation = 1.dp
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
             Text(
                 text = text,
-                fontSize = 12.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (selected) Color(0xFF6D28D9) else TextSecondary
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (selected) Color.White else Color(0xFF1B49B5)
             )
         }
     }
