@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -200,7 +201,7 @@ fun PhoneInputContent(
         verticalAlignment =
             Alignment.CenterVertically,
         modifier =
-            Modifier.clickable {
+            Modifier.clickable(role = Role.Button) {
                 onBack()
             }
     ) {
@@ -338,7 +339,7 @@ fun OtpInputContent(
         verticalAlignment =
             Alignment.CenterVertically,
         modifier =
-            Modifier.clickable {
+            Modifier.clickable(role = Role.Button) {
                 viewModel.navigateBack()
             }
     ) {
@@ -493,7 +494,7 @@ fun NewPasswordContent(
         verticalAlignment =
             Alignment.CenterVertically,
         modifier =
-            Modifier.clickable {
+            Modifier.clickable(role = Role.Button) {
                 viewModel.navigateBack()
             }
     ) {
