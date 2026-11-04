@@ -1,6 +1,5 @@
 package com.mobile.enerjeep.ui.report
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
