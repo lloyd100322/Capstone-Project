@@ -3,8 +3,8 @@ package com.mobile.enerjeep.ui.home
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -118,6 +118,7 @@ fun AccountManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .imePadding()
                 .padding(horizontal = 16.dp)
         ) {
@@ -235,14 +236,11 @@ fun AccountManagementScreen(
                 )
             }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(
-                    items = uiState.filteredAccounts,
-                    key = { it.id }
-                ) { account ->
+                uiState.filteredAccounts.forEach { account ->
                     AccountCard(
                         account = account,
                         onDelete = {

@@ -2,8 +2,6 @@ package com.mobile.enerjeep.ui.kita
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -193,15 +191,14 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
             }
             else -> {
                 /*
-                 * Bounded lazy list: long earnings histories are composed
-                 * only as they approach the visible area.
+                 * Earnings records are part of the same page scroll as
+                 * the summary, plate filter, and date filter.
                  */
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp),
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(finalRecords, key = { it.id }) { record ->
+                    finalRecords.forEach { record ->
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
                             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {

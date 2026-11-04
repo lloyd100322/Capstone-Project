@@ -2,8 +2,6 @@ package com.mobile.enerjeep.ui.incident
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,12 +114,11 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                     if (selectedTab == 0) {
                         val incidents = state.activeIncidents.filter { it.title.contains(searchQuery, true) || it.plateNumber.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
                         if (incidents.isEmpty()) Text("Walang insidenteng hindi pa naayos.", color = TextSecondary, modifier = Modifier.fillMaxWidth().padding(48.dp))
-                        else LazyColumn(
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                            contentPadding = PaddingValues(bottom = 16.dp),
+                        else Column(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(incidents, key = { it.id }) { incident ->
+                            incidents.forEach { incident ->
                                 IncidentItemCard(
                                     incident,
                                     onViewClick = { selectedIncident = incident },
@@ -150,12 +147,11 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                                 modifier = Modifier.fillMaxWidth().padding(48.dp)
                             )
                         } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                                contentPadding = PaddingValues(bottom = 16.dp),
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(incidents, key = { it.id }) { incident ->
+                                incidents.forEach { incident ->
                                     HistoryIncidentItemCard(incident) { selectedIncident = incident }
                                 }
                             }

@@ -2,8 +2,6 @@ package com.mobile.enerjeep.ui.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -852,6 +850,8 @@ fun DispatchAlertsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp)
                 .padding(bottom = 32.dp)
         ) {
@@ -877,15 +877,11 @@ fun DispatchAlertsSheet(
                     fontSize = 14.sp
                 )
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 420.dp)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    itemsIndexed(
-                        alerts,
-                        key = { index, alert -> "${alert.plateNumber}_${alert.route}_${alert.time}_$index" }
-                    ) { _, alert ->
+                    alerts.forEach { alert ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()

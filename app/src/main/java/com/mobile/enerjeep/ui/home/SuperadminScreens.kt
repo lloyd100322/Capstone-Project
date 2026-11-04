@@ -1,8 +1,6 @@
 package com.mobile.enerjeep.ui.home
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -49,8 +47,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fillMaxWidth()
             .imePadding()
             .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
@@ -259,12 +256,11 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         } else if (contacts.isEmpty()) {
             Text("Walang laman ang listahan.", color = TextSecondary)
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(contacts) { contact ->
+                contacts.forEach { contact ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -450,12 +446,11 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                 color = TextSecondary
             )
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(visible) { log ->
+                visible.forEach { log ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

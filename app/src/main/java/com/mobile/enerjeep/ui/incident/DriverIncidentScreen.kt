@@ -2,8 +2,6 @@ package com.mobile.enerjeep.ui.incident
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -109,15 +107,14 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) { Text(if (isResolvedTab) "Walang naayos na insidente sa napiling filter." else "Walang insidenteng hindi pa naayos.", color = TextSecondary, fontSize = 14.sp) }
         } else {
             /*
-             * Bounded lazy list: older incident cards are composed only
-             * as they approach the visible area.
+             * The incident cards are part of the same page scroll as
+             * the header, search field, tabs, and date filter.
              */
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(visibleIncidents, key = { it.id }) { incident ->
+                visibleIncidents.forEach { incident ->
                     DriverIncidentCard(
                         incident = incident,
                         onCallDriver = {

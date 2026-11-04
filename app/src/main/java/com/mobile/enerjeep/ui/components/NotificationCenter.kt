@@ -1,8 +1,8 @@
 package com.mobile.enerjeep.ui.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -216,6 +216,13 @@ fun NotificationCenterBell(
             onDismissRequest = { showSheet = false },
             containerColor = Color.White
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 640.dp)
+                    .verticalScroll(rememberScrollState())
+                    .navigationBarsPadding()
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -286,20 +293,13 @@ fun NotificationCenterBell(
                     }
                 }
                 else -> {
-                    LazyColumn(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 520.dp)
-                            .navigationBarsPadding(),
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 4.dp,
-                            bottom = 28.dp
-                        ),
+                            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(state.notifications, key = { it.id }) { item ->
+                        state.notifications.forEach { item ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(14.dp),
@@ -354,6 +354,7 @@ fun NotificationCenterBell(
                         }
                     }
                 }
+            }
             }
         }
     }

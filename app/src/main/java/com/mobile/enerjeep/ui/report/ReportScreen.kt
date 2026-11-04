@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -241,17 +240,11 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
         if (history.isEmpty()) {
             EmptyHistory()
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(
-                    history,
-                    key = { index, item -> "${item.plateNumber}_${item.date}_$index" }
-                ) { _, item ->
+                history.forEach { item ->
                     IncomeHistoryCard(item)
                 }
             }
@@ -314,15 +307,11 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
             if (selectedTab == 1) EmptyHistory()
             else Text("Walang naitalang insidente.", color = TextSecondary)
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(
-                    list,
-                    key = { index, item -> "${item.plateNumber}_${item.title}_${item.date}_$index" }
-                ) { _, item ->
+                list.forEach { item ->
                     ReportIncidentCard(item)
                 }
             }
@@ -369,15 +358,11 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
             if (selectedTab == 1) EmptyHistory()
             else Text("Walang multa ngayon.", color = TextSecondary)
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(
-                    list,
-                    key = { index, item -> item.id.ifBlank { "${item.plateNumber}_${item.date}_$index" } }
-                ) { _, item ->
+                list.forEach { item ->
                     ReportMultiyaCard(item)
                 }
             }
@@ -445,15 +430,11 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
             if (selectedTab == 1) EmptyHistory()
             else Text("Walang donasyon.", color = TextSecondary)
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(
-                    list,
-                    key = { index, item -> "${item.donor}_${item.source}_${item.date}_$index" }
-                ) { _, item ->
+                list.forEach { item ->
                     DonasyonCardItem(item)
                 }
             }
