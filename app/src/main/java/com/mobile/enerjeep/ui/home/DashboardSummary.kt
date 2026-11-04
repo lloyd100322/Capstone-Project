@@ -56,7 +56,7 @@ object DashboardSummary {
      * but are paused until the cancellation flag is cleared.
      */
     private val inactiveQueueStatuses =
-        setOf("dispatched", "cancelled", "completed", "resolved")
+        setOf("dispatched", "na-dispatch", "cancelled", "completed", "resolved")
 
     private fun DashboardQueueEntry.isActiveAndNotCancelled(): Boolean =
         driverId.isNotBlank() &&
