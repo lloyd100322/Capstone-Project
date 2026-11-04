@@ -1,7 +1,7 @@
 package com.mobile.enerjeep.ui.home
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -117,6 +118,7 @@ fun AccountManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
                 .padding(horizontal = 16.dp)
         ) {
             /*
@@ -448,19 +450,20 @@ fun SuperadminTabButton(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(
-            1.dp,
-            if (selected) Color(0xFF6D28D9) else TextSecondary
-        )
+    Surface(
+        modifier = modifier
+            .height(40.dp)
+            .clickable(role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) Color(0xFFEDE9FE) else Color.Transparent
     ) {
-        Text(
-            text = text,
-            fontSize = 11.sp,
-            color = if (selected) Color(0xFF6D28D9) else Color.Black
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (selected) Color(0xFF6D28D9) else TextSecondary
+            )
+        }
     }
 }
