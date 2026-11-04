@@ -255,7 +255,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
     var savedSentToDriver by remember { mutableStateOf(true) }
     var showSendPrompt by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }; Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
         Spacer(Modifier.height(24.dp)); Text("Plaka", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
         ExposedDropdownMenuBox(expanded = expandedDriver, onExpandedChange = { if (!submitted && driverOptions.isNotEmpty()) expandedDriver = !expandedDriver }) {
