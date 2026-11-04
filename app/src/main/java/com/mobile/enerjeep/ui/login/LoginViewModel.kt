@@ -352,6 +352,22 @@ class LoginViewModel @Inject constructor(
                     return@launch
                 }
 
+                val typedPassword = pendingPassword.orEmpty()
+                val secureLoginResult = functions
+                    .getHttpsCallable("completeSecureLogin")
+                    .call(mapOf("password" to typedPassword))
+                    .await()
+                val secureLoginResponse = secureLoginResult.data as? Map<*, *>
+                if (secureLoginResponse?.get("success") != true) {
+                    auth.signOut()
+                    pendingPassword = null
+                    _uiState.value = LoginUiState.Error(
+                        "Hindi ma-verify ang account. Tiyaking tama ang password at aktibo ang account."
+                    )
+                    return@launch
+                }
+                pendingPassword = null
+
                 val userDocument = firestore
                     .collection(FirestoreCollections.USERS)
                     .document(phone)
@@ -372,8 +388,6 @@ class LoginViewModel @Inject constructor(
                     )
                     return@launch
                 }
-
-                val typedPassword = pendingPassword.orEmpty()
 
                 if (!verifyPassword(phone, typedPassword, userDocument.reference, data)) {
                     Log.e(
