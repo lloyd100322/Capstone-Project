@@ -342,8 +342,44 @@ service cloud.firestore {
     // ------------------------------------------------------------------
     match /activityLogs/{logId} {
       allow read: if isSuperadmin();
+
+      // Bind every client-created audit entry to the signed-in account's
+      // actual profile name and role. The client cannot impersonate another
+      // member by changing actorName or actorRole.
+      function matchesOwnActorProfile() {
+        let profile = get(/databases/$(database)/documents/users/$(authPhone())).data;
+        let firstName = profile.get('firstName', '');
+        let lastName = profile.get('lastName', '');
+        let expectedName = firstName + ' ' + lastName;
+        let expectedRole = ownRole() == 'superadmin' ? 'Superadmin'
+          : ownRole() == 'admin' ? 'Admin' : 'Driver';
+        return request.resource.data.actorName ==
+            (expectedName == ' ' ? 'Hindi kilala' : expectedName)
+          && request.resource.data.actorRole == expectedRole;
+      }
+
       allow create: if isMember()
-        && request.resource.data.actorPhone == authPhone();
+        && request.resource.data.keys().hasOnly([
+             'actorName', 'actorPhone', 'actorRole',
+             'action', 'detail', 'createdAt'
+           ])
+        && request.resource.data.keys().hasAll([
+             'actorName', 'actorPhone', 'actorRole',
+             'action', 'detail', 'createdAt'
+           ])
+        && request.resource.data.actorPhone == authPhone()
+        && request.resource.data.actorName is string
+        && request.resource.data.actorName.size() > 0
+        && request.resource.data.actorName.size() <= 120
+        && request.resource.data.actorRole is string
+        && matchesOwnActorProfile()
+        && request.resource.data.action is string
+        && request.resource.data.action.size() > 0
+        && request.resource.data.action.size() <= 80
+        && request.resource.data.detail is string
+        && request.resource.data.detail.size() <= 300
+        && request.resource.data.createdAt == request.time;
+
       allow update, delete: if false;
     }
 

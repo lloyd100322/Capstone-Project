@@ -276,7 +276,7 @@ class SuperadminViewModel @Inject constructor(
                 ActivityLogger.log(
                     firestore, userSession,
                     "Emergency List",
-                    "Idinagdag si $cleanName ($cleanNumber)"
+                    "Idinagdag si $cleanName"
                 )
 
                 _message.value = "Naidagdag si $cleanName sa listahan."

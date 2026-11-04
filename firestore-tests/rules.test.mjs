@@ -549,8 +549,9 @@ test("driver CAN write his own audit entry (Tapos Na Bumyahe)", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
   await assertSucceeds(
     setDoc(doc(db, "activityLogs/log-2"), {
-      actorName: "Juan", actorPhone: DRIVER_PHONE, actorRole: "Driver",
+      actorName: "Hindi kilala", actorPhone: DRIVER_PHONE, actorRole: "Driver",
       action: "Tapos Na Bumyahe", detail: "TXA 448",
+      createdAt: serverTimestamp(),
     })
   );
 });
@@ -561,12 +562,32 @@ test("an audit entry must carry the WRITER'S OWN phone (no spoofing)", async () 
     setDoc(doc(db, "activityLogs/log-spoof"), {
       actorName: "Maria", actorPhone: ADMIN_PHONE, actorRole: "Admin",
       action: "Nag-dispatch", detail: "pinanggap si admin",
+      createdAt: serverTimestamp(),
     })
   );
   await assertFails(
     setDoc(doc(db, "activityLogs/log-orph"), {
       actorName: "Juan", actorRole: "Driver",
       action: "Tapos Na Bumyahe", detail: "walang actorPhone",
+      createdAt: serverTimestamp(),
+    })
+  );
+});
+
+test("an audit entry cannot spoof actorName or actorRole with the correct phone", async () => {
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+  await assertFails(
+    setDoc(doc(db, "activityLogs/log-name-spoof"), {
+      actorName: "Maria", actorPhone: DRIVER_PHONE, actorRole: "Driver",
+      action: "Tapos Na Bumyahe", detail: "pekeng pangalan",
+      createdAt: serverTimestamp(),
+    })
+  );
+  await assertFails(
+    setDoc(doc(db, "activityLogs/log-role-spoof"), {
+      actorName: "Hindi kilala", actorPhone: DRIVER_PHONE, actorRole: "Superadmin",
+      action: "Settings", detail: "pekeng role",
+      createdAt: serverTimestamp(),
     })
   );
 });
