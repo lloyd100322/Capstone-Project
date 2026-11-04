@@ -1072,10 +1072,10 @@ fun MenuRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .padding(20.dp)
                 .clickable(role = Role.Button) {
                     onClick()
-                }
-                .padding(20.dp),
+                },
         verticalAlignment =
             Alignment.CenterVertically
     ) {
