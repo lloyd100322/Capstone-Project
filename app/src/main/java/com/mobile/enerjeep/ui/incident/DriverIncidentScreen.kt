@@ -161,7 +161,7 @@ fun IncidentSummaryCard(modifier: Modifier = Modifier, count: Int, label: String
 
 @Composable
 fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(modifier.height(40.dp).clickable(onClick = onClick), shape = RoundedCornerShape(20.dp), color = if (isSelected) Color.White else Color.Transparent, border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor)) {
+    Surface(modifier.height(40.dp).clickable(onClick = onClick), shape = RoundedCornerShape(20.dp), color = if (isSelected) Color.White else Color.Transparent) {
         Box(contentAlignment = Alignment.Center) { Text(text, color = if (isSelected) Color.Black else TextSecondary, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp) }
     }
 }
