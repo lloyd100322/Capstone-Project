@@ -239,6 +239,7 @@ service cloud.firestore {
         (isSuperadmin() && ownAccountIsActive())
         || (
           ownRole() == 'admin'
+          && isMember()
           && ownAccountIsActive()
           && queueRouteStation(route) != null
           && ownAdminStation() == queueRouteStation(route)
