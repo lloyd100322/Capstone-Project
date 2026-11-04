@@ -347,12 +347,6 @@ fun DriverDashboardContent(
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )
-        Text(
-            text = "Narito ang iyong pila at status ngayon.",
-            fontSize = 16.sp,
-            color = TextSecondary
-        )
-
         Spacer(modifier = Modifier.height(24.dp))
 
         /*
