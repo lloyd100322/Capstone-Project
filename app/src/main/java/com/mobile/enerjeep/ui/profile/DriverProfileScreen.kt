@@ -290,12 +290,6 @@ fun DriverProfileMainContent(
                             color = Color.Black
                         )
 
-                        Text(
-                            text =
-                                "I-update ang iyong impormasyon",
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
                     }
                 }
 
@@ -692,13 +686,6 @@ fun DriverSecurityContent(
             Column(
                 modifier = Modifier.padding(20.dp)
             ) {
-                Text(
-                    text =
-                        "Palitan ang iyong password para sa account security.",
-                    fontSize = 14.sp,
-                    color = TextSecondary
-                )
-
                 Spacer(
                     modifier = Modifier.height(20.dp)
                 )
