@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -112,7 +113,8 @@ fun QuickActionButton(
     icon: @Composable () -> Unit,
     backgroundColor: Color,
     contentColor: Color,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    borderColor: Color? = null
 ) {
     Row(
         modifier = modifier
@@ -121,6 +123,13 @@ fun QuickActionButton(
             .shadow(4.dp, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(backgroundColor)
+            .then(
+                if (borderColor != null) {
+                    Modifier.border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                } else {
+                    Modifier
+                }
+            )
             .clickable(role = Role.Button) { onClick() }
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
