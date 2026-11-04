@@ -188,12 +188,26 @@ fun AccountManagementScreen(
             )
 
             uiState.errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = Color.Red,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = message,
+                        color = Color.Red,
+                        fontSize = 13.sp
+                    )
+                    Button(
+                        onClick = viewModel::retryLoading,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1B49B5)
+                        )
+                    ) {
+                        Text("I-refresh ang listahan", maxLines = 1)
+                    }
+                }
             }
 
             if (uiState.isLoading) {
