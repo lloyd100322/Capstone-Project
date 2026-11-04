@@ -260,7 +260,8 @@ service cloud.firestore {
         && request.resource.data.position > 0;
       // Direct client writes are limited to reordering and cancellation.
       // Dispatch and travel completion must use atomic trusted transactions.
-      allow update: if canManageQueueRoute(resource.data.route)
+      allow update: if (
+        canManageQueueRoute(resource.data.route)
         && queueRouteStation(request.resource.data.route)
              == queueRouteStation(resource.data.route)
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -272,7 +273,23 @@ service cloud.firestore {
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isCancelled'])
           || request.resource.data.isCancelled is bool
-        );
+        )
+      ) || (
+        // One-time legacy cleanup only: Superadmin may assign a route to
+        // an entry whose route is missing/blank, without changing its identity or status.
+        isSuperadmin()
+        && (
+          resource.data.get('route', '') == ''
+          || resource.data.get('route', '') == null
+        )
+        && request.resource.data.route is string
+        && queueRouteStation(request.resource.data.route) != null
+        && request.resource.data.position is int
+        && request.resource.data.position > 0
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['route', 'position', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny(['route'])
+      );
       // Deletions are handled by the account/queue cleanup Cloud Functions.
       allow delete: if false;
     }
