@@ -204,7 +204,8 @@ service cloud.firestore {
 
       allow create: if validSecret() && (isOwner(phone) || isAdmin());
       allow update: if validSecret() && isOwner(phone);
-      allow delete: if isAdmin();
+      // Password-secret deletion is part of the trusted account deletion workflow.
+      allow delete: if false;
     }
 
     // ------------------------------------------------------------------
