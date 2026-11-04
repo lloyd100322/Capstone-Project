@@ -507,7 +507,8 @@ fun EmergencyDialog(
             colors = CardDefaults.cardColors(
                 containerColor = Color.White
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(
                 modifier = Modifier
