@@ -78,14 +78,11 @@ service cloud.firestore {
       return !request.resource.data.keys().hasAny(['password']);
     }
 
-    // UPDATE: documents that still carry a LEGACY plaintext password
-    // field must remain editable (deactivate, profile edits), and the
-    // one-time migration that DELETES that field must always pass.
-    // Only writes that add or change a password value are rejected.
+    // UPDATE: no Android client may set, change, or remove a password
+    // field. Legacy-password migration is performed by trusted Functions.
     function doesNotSetPassword() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-                 .hasAny(['password'])
-             || !request.resource.data.keys().hasAny(['password']);
+                 .hasAny(['password']);
     }
 
     // ------------------------------------------------------------------
