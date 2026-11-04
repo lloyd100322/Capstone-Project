@@ -54,9 +54,11 @@ fun ResetPasswordScreen(
             .background(
                 LightGrayBackground
             )
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(
                 rememberScrollState()
             )
+            .imePadding()
             .padding(24.dp),
         horizontalAlignment =
             Alignment.CenterHorizontally
@@ -560,7 +562,7 @@ fun NewPasswordContent(
                             Icons.Default.Visibility
                         else
                             Icons.Default.VisibilityOff,
-                    contentDescription = null,
+                    contentDescription = if (newPassVisible) "Itago ang password" else "Ipakita ang password",
                     tint = TextSecondary
                 )
             }
@@ -616,7 +618,7 @@ fun NewPasswordContent(
                             Icons.Default.Visibility
                         else
                             Icons.Default.VisibilityOff,
-                    contentDescription = null,
+                    contentDescription = if (confirmPassVisible) "Itago ang kumpirmasyon ng password" else "Ipakita ang kumpirmasyon ng password",
                     tint = TextSecondary
                 )
             }
