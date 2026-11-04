@@ -145,7 +145,14 @@ fun DriverContent(
                     selected = selectedTab == DriverTab.Insidente,
                     onClick = { selectedTab = DriverTab.Insidente },
                     icon = { WarningIcon(modifier = Modifier.size(24.dp)) },
-                    label = { Text("Insidente", fontSize = 12.sp) }
+                    label = { Text("Insidente", fontSize = 12.sp) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = EnerjeepBlue,
+                        selectedTextColor = EnerjeepBlue,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = Color.Transparent
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Kita,
@@ -154,7 +161,14 @@ fun DriverContent(
                         showIncidentForm = false
                     },
                     icon = { SalesIcon(size = 24.dp, color = if (selectedTab == DriverTab.Kita) EnerjeepBlue else TextSecondary) },
-                    label = { Text("Kita", fontSize = 12.sp) }
+                    label = { Text("Kita", fontSize = 12.sp) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = EnerjeepBlue,
+                        selectedTextColor = EnerjeepBlue,
+                        unselectedIconColor = TextSecondary,
+                        unselectedTextColor = TextSecondary,
+                        indicatorColor = Color.Transparent
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == DriverTab.Profile,
