@@ -64,6 +64,15 @@ class SuperadminViewModel @Inject constructor(
         MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val adminAccounts = _adminAccounts.asStateFlow()
 
+    private val _emergencyContactsError = MutableStateFlow<String?>(null)
+    val emergencyContactsError = _emergencyContactsError.asStateFlow()
+
+    private val _activityLogsError = MutableStateFlow<String?>(null)
+    val activityLogsError = _activityLogsError.asStateFlow()
+
+    private val _adminAccountsError = MutableStateFlow<String?>(null)
+    val adminAccountsError = _adminAccountsError.asStateFlow()
+
     private val _tiers = MutableStateFlow(
         listOf(
             DeductionTier("16", "32"),
@@ -88,10 +97,29 @@ class SuperadminViewModel @Inject constructor(
         startListeners()
     }
 
+    fun retryListeners() {
+        listeners.forEach { it.remove() }
+        listeners.clear()
+        _emergencyContactsError.value = null
+        _activityLogsError.value = null
+        _adminAccountsError.value = null
+        startListeners()
+    }
+
     private fun startListeners() {
+        listeners.forEach { it.remove() }
+        listeners.clear()
+
         listeners += firestore
             .collection(FirestoreCollections.EMERGENCY_CONTACTS)
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _emergencyContactsError.value =
+                        "Hindi ma-load ang emergency contacts. Suriin ang internet at subukang muli."
+                    return@addSnapshotListener
+                }
+                _emergencyContactsError.value = null
+                if (snapshot == null) return@addSnapshotListener
                 _emergencyContacts.value = snapshot
                     ?.documents
                     ?.map { document ->
@@ -111,9 +139,16 @@ class SuperadminViewModel @Inject constructor(
             .orderBy("createdAt",
                 com.google.firebase.firestore.Query.Direction.DESCENDING)
             .limit(200)
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _activityLogsError.value =
+                        "Hindi ma-load ang talaan ng aktibidad. Suriin ang internet at subukang muli."
+                    return@addSnapshotListener
+                }
+                _activityLogsError.value = null
+                if (snapshot == null) return@addSnapshotListener
                 _activityLogs.value = snapshot
-                    ?.documents
+                    .documents
                     ?.map { document ->
                         val timestamp = document.getTimestamp("createdAt")
                         ActivityLogItem(
@@ -143,9 +178,16 @@ class SuperadminViewModel @Inject constructor(
         listeners += firestore
             .collection(FirestoreCollections.USERS)
             .whereIn("role", listOf("admin", "superadmin"))
-            .addSnapshotListener { snapshot, _ ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    _adminAccountsError.value =
+                        "Hindi ma-load ang admin accounts. Suriin ang internet at subukang muli."
+                    return@addSnapshotListener
+                }
+                _adminAccountsError.value = null
+                if (snapshot == null) return@addSnapshotListener
                 _adminAccounts.value = snapshot
-                    ?.documents
+                    .documents
                     ?.map { document ->
                         val name = listOf(
                             document.getString("firstName"),
