@@ -112,7 +112,7 @@ class KitaViewModel @Inject constructor(
         listeningUserId = userId
 
         if (userId.isBlank()) {
-            _uiState.value = KitaUiState()
+            _uiState.value = KitaUiState(isLoading = false)
             return
         }
 
