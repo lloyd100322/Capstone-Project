@@ -73,11 +73,11 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21 for Firebase Emulator
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Check Cloud Functions JavaScript syntax
         run: node --check functions/index.js
