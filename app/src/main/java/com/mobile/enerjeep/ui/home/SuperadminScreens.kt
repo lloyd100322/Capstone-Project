@@ -70,6 +70,8 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(16.dp)
+        ,
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -213,6 +215,8 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         containerColor = Color.White
                     ),
                     shape = RoundedCornerShape(12.dp)
+                ,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -388,6 +392,8 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                         containerColor = Color.White
                     ),
                     shape = RoundedCornerShape(12.dp)
+                ,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(
@@ -456,6 +462,8 @@ fun SettingsView(viewModel: SuperadminViewModel) {
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(16.dp)
+        ,
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Reset ng Pila", fontWeight = FontWeight.Bold)
@@ -527,6 +535,8 @@ fun SettingsView(viewModel: SuperadminViewModel) {
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(16.dp)
+        ,
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
