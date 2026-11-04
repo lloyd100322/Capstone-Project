@@ -171,9 +171,7 @@ fun LoginScreen(
                     containerColor = Color.White
                 ),
                 shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 2.dp
-                )
+                elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(24.dp)
