@@ -59,7 +59,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         { it.createdAtMillis.takeIf { millis -> millis > 0 } }
     ) else uiState.filteredIncidents
 
-    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
+    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).imePadding().padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep App Logo", modifier = Modifier.size(60.dp))
