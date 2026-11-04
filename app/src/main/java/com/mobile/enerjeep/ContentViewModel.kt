@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.messaging.FirebaseMessaging
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
@@ -110,6 +111,20 @@ class ContentViewModel @Inject constructor(
                 // Phone number in Firebase Auth is usually +63...
                 val phoneNumber = currentUser.phoneNumber ?: run {
                     auth.signOut()
+                    _authState.value = AppAuthState.Unauthenticated
+                    return@launch
+                }
+
+                val sessionResult = FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("validateSecureSession")
+                    .call()
+                    .await()
+                val sessionValid =
+                    (sessionResult.data as? Map<*, *>)?.get("valid") == true
+
+                if (!sessionValid) {
+                    auth.signOut()
+                    userSession.clear()
                     _authState.value = AppAuthState.Unauthenticated
                     return@launch
                 }
