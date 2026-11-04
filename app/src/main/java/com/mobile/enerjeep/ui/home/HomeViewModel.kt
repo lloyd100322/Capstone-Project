@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.ui.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -90,6 +91,13 @@ class HomeViewModel @Inject constructor(
     private val listeners =
         mutableListOf<ListenerRegistration>()
 
+    /*
+     * Keep the latest snapshots together so both dashboard counts are
+     * recalculated whenever either the driver accounts or queue changes.
+     */
+    private var latestDriverAccounts: List<DashboardDriverAccount>? = null
+    private var latestQueueEntries: List<DashboardQueueEntry>? = null
+
     init {
         startListeners()
     }
@@ -116,55 +124,63 @@ class HomeViewModel @Inject constructor(
         if (!userSession.isAdmin()) return
 
         /*
-         * Total registered drivers.
+         * Registered driver accounts. The account document ID is the
+         * phone number, so use the stable userId field to match queue rows.
+         * Legacy accounts without userId fall back to their document ID,
+         * matching the queue-recovery logic.
          */
         listeners += firestore
-            .collection(
-                FirestoreCollections.USERS
-            )
-            .whereEqualTo(
-                "role",
-                "driver"
-            )
-            .addSnapshotListener {
-                    snapshot,
-                    _ ->
-
-                if (snapshot != null) {
-                    _totalJeepsCount.value =
-                        snapshot.size()
+            .collection(FirestoreCollections.USERS)
+            .whereEqualTo("role", "driver")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("HomeViewModel", "Unable to listen for driver accounts", error)
+                    return@addSnapshotListener
                 }
-            }
-
-        /*
-         * Active jeep count is based on the actual
-         * dispatch queue, not simply the number of
-         * registered driver accounts.
-         */
-        listeners += firestore
-            .collection(
-                FirestoreCollections.QUEUE
-            )
-            .addSnapshotListener {
-                    snapshot,
-                    _ ->
 
                 if (snapshot == null) {
                     return@addSnapshotListener
                 }
 
-                val queueEntries = snapshot.documents.map { document ->
+                latestDriverAccounts = snapshot.documents.map { document ->
+                    DashboardDriverAccount(
+                        driverId = document.getString("userId")
+                            .orEmpty()
+                            .ifBlank { document.id },
+                        isVehicleActive = document.getBoolean("isVehicleActive") != false,
+                        status = document.getString("status").orEmpty()
+                    )
+                }
+                updateDashboardDriverCounts()
+            }
+
+        /*
+         * Queue rows are the source of truth for cancellation/pause.
+         * A cancelled row remains stored so it can be restored, but it
+         * must be excluded from BOTH dashboard numbers until restored.
+         */
+        listeners += firestore
+            .collection(FirestoreCollections.QUEUE)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("HomeViewModel", "Unable to listen for queue changes", error)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot == null) {
+                    return@addSnapshotListener
+                }
+
+                latestQueueEntries = snapshot.documents.map { document ->
                     DashboardQueueEntry(
-                        driverId = document.getString("driverId").orEmpty(),
+                        driverId = document.getString("driverId")
+                            .orEmpty()
+                            .ifBlank { document.getString("userId").orEmpty() },
                         status = document.getString("status").orEmpty(),
                         isCancelled = document.getBoolean("isCancelled") == true
                     )
                 }
-
-                // Cancelled records remain in the queue for restoration,
-                // but are paused and excluded from the active-driver total.
-                _activeJeepsCount.value =
-                    DashboardSummary.activeDriverCount(queueEntries)
+                updateDashboardDriverCounts()
             }
 
         /*
@@ -299,21 +315,24 @@ class HomeViewModel @Inject constructor(
             }
     }
 
-    private fun isActiveQueueStatus(
-        status: String?
-    ): Boolean {
+    /**
+     * Recalculate the numerator and denominator together. This prevents
+     * the denominator from continuing to count a driver whose queue entry
+     * is currently cancelled/paused. Restoring that same queue entry
+     * (isCancelled=false) automatically adds the driver back.
+     */
+    private fun updateDashboardDriverCounts() {
+        val driverAccounts = latestDriverAccounts ?: return
+        val queueEntries = latestQueueEntries ?: return
 
-        return when (
-            status?.lowercase()
-        ) {
+        _activeJeepsCount.value =
+            DashboardSummary.activeDriverCount(queueEntries)
 
-            "dispatched",
-            "cancelled",
-            "completed",
-            "resolved" -> false
-
-            else -> true
-        }
+        _totalJeepsCount.value =
+            DashboardSummary.totalActiveDriverCount(
+                driverAccounts,
+                queueEntries
+            )
     }
 
     fun isAdmin(): Boolean =
