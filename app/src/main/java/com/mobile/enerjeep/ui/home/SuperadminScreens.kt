@@ -49,6 +49,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text(
@@ -292,6 +293,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text(
@@ -444,6 +446,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .imePadding()
             .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold)
