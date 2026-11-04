@@ -36,7 +36,9 @@ data class KitaRecord(
 )
 
 data class KitaUiState(
-    val records: List<KitaRecord> = emptyList()
+    val records: List<KitaRecord> = emptyList(),
+    val isLoading: Boolean = true,
+    val errorMessage: String? = null
 )
 
 @HiltViewModel
@@ -81,16 +83,29 @@ class KitaViewModel @Inject constructor(
     }
 
     private fun reportListenerError(error: Exception?) {
-        if (error == null || listenerErrorShown) return
+        if (error == null) return
+        _uiState.value = _uiState.value.copy(
+            isLoading = false,
+            errorMessage = "Hindi ma-load ang kita. Suriin ang internet at subukang muli."
+        )
+        if (listenerErrorShown) return
         listenerErrorShown = true
         ToastFeedback.show(
             "Hindi ma-load ang kita: ${error.message ?: "may problema sa Firestore"}"
         )
     }
 
+    fun retryLoading() {
+        startListeners()
+    }
+
     private fun startListeners() {
         stopListeners()
         listenerErrorShown = false
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
 
         val profile = userSession.userProfile
         val userId = profile?.userId?.trim().orEmpty()
@@ -144,7 +159,9 @@ class KitaViewModel @Inject constructor(
         _uiState.value = KitaUiState(
             records = KitaHistory.merge(
                 dispatchLedgerDocuments.map { mapDispatchLedger(it) }
-            )
+            ),
+            isLoading = false,
+            errorMessage = null
         )
     }
 
