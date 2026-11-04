@@ -722,6 +722,14 @@ test("a user can NEVER rewrite his own identity or account-state fields", async 
 });
 
 test("clients cannot set or remove the legacy plaintext password field", async () => {
+  // Simulate a legacy account that still has a plaintext password. Without
+  // this seed, deleteField() is a no-op and Firestore correctly permits it.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), `users/${DRIVER_PHONE}`), {
+      password: "legacy-test-only",
+    });
+  });
+
   const db = dbAs(DRIVER_PHONE, "u-driver");
   await assertFails(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
