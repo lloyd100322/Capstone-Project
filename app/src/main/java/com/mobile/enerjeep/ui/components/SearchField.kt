@@ -37,5 +37,5 @@ import com.mobile.enerjeep.ui.theme.TextSecondary
  */
 @Composable
 fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
-    OutlinedTextField(value, onValueChange, modifier = Modifier.fillMaxWidth(), placeholder = { Text(placeholder, color = TextSecondary) }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary) }, shape = RoundedCornerShape(12.dp), singleLine = true, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue, unfocusedContainerColor = Color.White, focusedContainerColor = Color.White))
+    OutlinedTextField(value, onValueChange, modifier = Modifier.fillMaxWidth(), placeholder = { Text(placeholder, color = TextSecondary) }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Hanapin", tint = TextSecondary) }, shape = RoundedCornerShape(12.dp), singleLine = true, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue, unfocusedContainerColor = Color.White, focusedContainerColor = Color.White))
 }
