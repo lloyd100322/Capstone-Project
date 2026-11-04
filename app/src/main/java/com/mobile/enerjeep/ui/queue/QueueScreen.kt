@@ -126,7 +126,6 @@ fun QueueScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            Text(text = "Rotational na dispatch • 2 Ruta • Auto-reset $cutoffHourLabel", fontSize = 14.sp, color = TextSecondary)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -902,12 +901,6 @@ fun DispatchCollectionContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(text = "Bawas (Awtomatiko batay sa Upuan)", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Awtomatiko itong kinakalkula mula sa bilang ng upuan ng jeep. Maaari itong baguhin dito.",
-            fontSize = 11.sp,
-            color = TextSecondary
-        )
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = otherFees,
