@@ -181,6 +181,8 @@ fun DriverContent(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
+                // Keep scrollable driver content clear of the bottom navigation.
+                .padding(bottom = 20.dp)
         ) {
             when (selectedTab) {
                 DriverTab.Home -> {
