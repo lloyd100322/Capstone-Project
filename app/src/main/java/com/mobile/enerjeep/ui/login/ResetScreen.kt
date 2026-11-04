@@ -150,7 +150,7 @@ fun ResetPasswordScreen(
                     containerColor = Color.White
                 ),
                 shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
 
                 Column(
