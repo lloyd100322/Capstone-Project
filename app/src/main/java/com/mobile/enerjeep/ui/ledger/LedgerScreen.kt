@@ -2,6 +2,8 @@ package com.mobile.enerjeep.ui.ledger
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,7 +58,7 @@ fun TerminalFeeFormContent(
     val feeTypes = listOf("Multa")
     var selectedFeeType by remember { mutableStateOf(feeTypes.first()) }
 
-    Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 32.dp)) {
+    Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp).padding(bottom = 32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onCancel) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
             Text("I-record ang Bayad ng Multa", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -93,8 +96,8 @@ fun TerminalFeeFormContent(
             leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp) },
             trailingIcon = {
                 Column(Modifier.padding(end = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase", modifier = Modifier.size(20.dp).clickable { amount = ((amount.toIntOrNull() ?: 0) + 10).toString() })
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease", modifier = Modifier.size(20.dp).clickable { val current = amount.toIntOrNull() ?: 0; if (current >= 10) amount = (current - 10).toString() })
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Increase", modifier = Modifier.size(20.dp).clickable(role = Role.Button) { amount = ((amount.toIntOrNull() ?: 0) + 10).toString() })
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Decrease", modifier = Modifier.size(20.dp).clickable(role = Role.Button) { val current = amount.toIntOrNull() ?: 0; if (current >= 10) amount = (current - 10).toString() })
                 }
             }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
         )
