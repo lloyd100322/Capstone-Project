@@ -201,7 +201,7 @@ fun PhoneInputContent(
         verticalAlignment =
             Alignment.CenterVertically,
         modifier =
-            Modifier.clickable(role = Role.Button) {
+            Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
                 onBack()
             }
     ) {
@@ -339,7 +339,7 @@ fun OtpInputContent(
         verticalAlignment =
             Alignment.CenterVertically,
         modifier =
-            Modifier.clickable(role = Role.Button) {
+            Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
                 viewModel.navigateBack()
             }
     ) {
@@ -494,7 +494,7 @@ fun NewPasswordContent(
         verticalAlignment =
             Alignment.CenterVertically,
         modifier =
-            Modifier.clickable(role = Role.Button) {
+            Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
                 viewModel.navigateBack()
             }
     ) {
