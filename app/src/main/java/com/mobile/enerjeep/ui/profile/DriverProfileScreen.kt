@@ -442,13 +442,14 @@ fun DriverEditProfileContent(
             .verticalScroll(
                 rememberScrollState()
             )
+            .imePadding()
             .padding(24.dp)
     ) {
         Row(
             verticalAlignment =
                 Alignment.CenterVertically,
             modifier =
-                Modifier.clickable {
+                Modifier.clickable(role = Role.Button) {
                     onCancel()
                 }
         ) {
@@ -646,6 +647,7 @@ fun DriverSecurityContent(
             .verticalScroll(
                 rememberScrollState()
             )
+            .imePadding()
             .padding(24.dp)
     ) {
         Row(
