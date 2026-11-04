@@ -543,14 +543,12 @@ fun TabButton(
 ) {
     val backgroundColor = if (isSelected) Color.White else Color.Transparent
     val textColor = if (isSelected) Color.Black else TextSecondary
-    val elevation = if (isSelected) 2.dp else 0.dp
-
     Card(
         modifier = modifier.fillMaxHeight(),
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
