@@ -149,7 +149,7 @@ service cloud.firestore {
                  'emergencyContact', 'fcmToken', 'updatedAt'
                ])
         )
-        );
+        ;
 
       // Each member can read only their own server-created notifications.
       match /notifications/{notificationId} {
@@ -167,7 +167,7 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // /userSecrets - salted password hashes, owner-only reads
+    // /userSecrets - private salted password hashes
     // ------------------------------------------------------------------
     match /userSecrets/{phone} {
       // Password hashes are never readable by Android clients. Login,
