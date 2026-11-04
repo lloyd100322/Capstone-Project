@@ -155,7 +155,7 @@ test("clients cannot directly delete account documents", async () => {
 
 test("OTP-only admin sessions cannot manage station queues", async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-admin_1700000000"));
+    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-admin"));
   });
   const db = dbAs(ADMIN_PHONE, "u-admin");
 
