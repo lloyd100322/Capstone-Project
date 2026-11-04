@@ -204,6 +204,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(contacts) { contact ->
@@ -381,6 +382,7 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(visible) { log ->
