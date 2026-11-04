@@ -362,6 +362,7 @@ fun QueueScreen(
                                             }
                                         }
                                     },
+                                contentPadding = PaddingValues(bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
                                 itemsIndexed(searchedQueue, key = { _, vehicle -> vehicle.id }) { index, vehicle ->
@@ -477,6 +478,7 @@ fun QueueScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(max = 560.dp),
+                                contentPadding = PaddingValues(bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(filteredHistory, key = { it.id }) { history ->
