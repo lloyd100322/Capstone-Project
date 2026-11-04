@@ -293,7 +293,7 @@ fun AccountCard(
             containerColor = Color.White
         ),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
