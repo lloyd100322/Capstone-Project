@@ -272,6 +272,8 @@ fun NotificationCenterBell(
                                         Color(0xFFEAF2FF)
                                     }
                                 )
+                            ,
+                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                             ) {
                                 Column(Modifier.padding(14.dp)) {
                                     Row(
