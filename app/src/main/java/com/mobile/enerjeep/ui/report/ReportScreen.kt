@@ -95,7 +95,7 @@ fun ReportScreen(
             val sectionScope = rememberCoroutineScope()
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().background(LightGrayBackground),
+                modifier = Modifier.fillMaxSize().background(LightGrayBackground).imePadding(),
                 contentPadding = PaddingValues(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 48.dp)
             ) {
                 item(key = "report-overview") {
