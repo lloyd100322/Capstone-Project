@@ -170,7 +170,7 @@ fun AccountManagementScreen(
                 leadingIcon = {
                     Icon(
                         Icons.Default.Search,
-                        contentDescription = "Search",
+                        contentDescription = "Hanapin",
                         tint = TextSecondary
                     )
                 },
