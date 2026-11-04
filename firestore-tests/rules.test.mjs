@@ -87,7 +87,7 @@ beforeEach(async () => {
       [MONUMENTO_ADMIN_PHONE, "u-monumento-admin"],
       [SUPER_PHONE, "u-super"],
     ]) {
-      await setDoc(doc(db, `secureSessions/${uid}_1700000000`), {
+      await setDoc(doc(db, `secureSessions/${uid}`), {
         phoneNumber: phone,
         authTime: 1700000000,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -133,7 +133,7 @@ beforeEach(async () => {
 
 test("OTP-only Firebase sessions cannot access protected application data", async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-driver_1700000000"));
+    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-driver"));
   });
   const db = dbAs(DRIVER_PHONE, "u-driver");
 
