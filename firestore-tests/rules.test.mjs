@@ -46,7 +46,10 @@ const MONUMENTO_ADMIN_PHONE = "+639171000004";
 const driverId = "user-driver-1";
 
 function dbAs(phone, uid) {
-  return testEnv.authenticatedContext(uid, { phone_number: phone }).firestore();
+  return testEnv.authenticatedContext(uid, {
+    phone_number: phone,
+    auth_time: 1700000000,
+  }).firestore();
 }
 
 before(async () => {
@@ -84,8 +87,9 @@ beforeEach(async () => {
       [MONUMENTO_ADMIN_PHONE, "u-monumento-admin"],
       [SUPER_PHONE, "u-super"],
     ]) {
-      await setDoc(doc(db, `secureSessions/${uid}`), {
+      await setDoc(doc(db, `secureSessions/${uid}_1700000000`), {
         phoneNumber: phone,
+        authTime: 1700000000,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       });
     }
@@ -129,7 +133,7 @@ beforeEach(async () => {
 
 test("OTP-only Firebase sessions cannot access protected application data", async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-driver"));
+    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-driver_1700000000"));
   });
   const db = dbAs(DRIVER_PHONE, "u-driver");
 
