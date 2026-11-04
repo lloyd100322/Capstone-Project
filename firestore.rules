@@ -146,17 +146,9 @@ service cloud.firestore {
                .hasOnly([
                  'firstName', 'lastName',
                  'emergencyContactName', 'emergencyContactNumber',
-                 'emergencyContact', 'fcmToken', 'updatedAt', 'password'
+                 'emergencyContact', 'fcmToken', 'updatedAt'
                ])
         )
-        // OTP-verified password recovery may remove a legacy plaintext field
-        // before a secure session exists; it cannot write a password value.
-        || (
-          isOwner(phone)
-          && doesNotSetPassword()
-          && !request.resource.data.keys().hasAny(['password'])
-          && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['password', 'updatedAt'])
         );
 
       // Each member can read only their own server-created notifications.
@@ -178,14 +170,21 @@ service cloud.firestore {
     // /userSecrets - salted password hashes, owner-only reads
     // ------------------------------------------------------------------
     match /userSecrets/{phone} {
-      // Password verification occurs only after Firebase Phone Auth has
-      // established the matching phone-number session. The client never
-      // receives password hashes before OTP verification.
-      allow get: if isMember() && isOwner(phone);
-      allow list: if false;
+      // Password hashes are never readable by Android clients. Login,
+      // password change, and password reset use trusted Cloud Functions.
+      allow get, list: if false;
 
-      // The owner sets their own secret (register / change / reset) and
-      // an admin sets it once when creating the account.
+      // Account creation is the only client-side secret CREATE. It must be
+      // in the same atomic batch/transaction as a brand-new account profile.
+      // Existing password documents can never be overwritten by a client.
+      function createsMatchingNewAccount() {
+        return !exists(/databases/$(database)/documents/users/$(phone))
+          && existsAfter(/databases/$(database)/documents/users/$(phone))
+          && getAfter(/databases/$(database)/documents/users/$(phone)).data.phoneNumber == phone
+          && getAfter(/databases/$(database)/documents/users/$(phone)).data.status == 'active'
+          && getAfter(/databases/$(database)/documents/users/$(phone)).data.role in ['admin', 'driver'];
+      }
+
       function validSecret() {
         return request.resource.data.keys().hasOnly([
                  'passwordHash', 'passwordSalt', 'iterations',
@@ -195,17 +194,15 @@ service cloud.firestore {
                  'passwordHash', 'passwordSalt', 'iterations'
                ])
                && request.resource.data.passwordHash is string
-               && request.resource.data.passwordHash.size() > 0
+               && request.resource.data.passwordHash.matches('^[0-9a-fA-F]{64}$')
                && request.resource.data.passwordSalt is string
-               && request.resource.data.passwordSalt.size() > 0
+               && request.resource.data.passwordSalt.matches('^[0-9a-fA-F]{32}$')
                && request.resource.data.iterations is int
-               && request.resource.data.iterations > 0;
+               && request.resource.data.iterations == 210000;
       }
 
-      allow create: if validSecret() && (isOwner(phone) || isAdmin());
-      allow update: if validSecret() && isOwner(phone);
-      // Password-secret deletion is part of the trusted account deletion workflow.
-      allow delete: if false;
+      allow create: if isAdmin() && createsMatchingNewAccount() && validSecret();
+      allow update, delete: if false;
     }
 
     // ------------------------------------------------------------------

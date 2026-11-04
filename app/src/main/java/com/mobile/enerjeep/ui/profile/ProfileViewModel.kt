@@ -6,9 +6,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
-import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import com.mobile.enerjeep.data.UserRole
@@ -310,109 +310,53 @@ class ProfileViewModel @Inject constructor(
         confirmPass: String,
         onSuccess: () -> Unit = {}
     ) {
+        if (oldPass.isBlank()) {
+            ToastFeedback.show("Ilagay ang kasalukuyang password.")
+            return
+        }
 
-        if (newPass.length < 6) {
-
-            ToastFeedback.show(
-                "Dapat hindi bababa sa 6 na karakter ang bagong password."
-            )
-
+        if (newPass.length < 6 || newPass.length > 128) {
+            ToastFeedback.show("Ang bagong password ay dapat 6 hanggang 128 karakter.")
             return
         }
 
         if (newPass != confirmPass) {
-
-            ToastFeedback.show(
-                "Hindi magkapareho ang bagong password at kumpirmasyon."
-            )
-
+            ToastFeedback.show("Hindi magkapareho ang bagong password at kumpirmasyon.")
             return
         }
 
-        val phone =
-            userSession.userProfile
-                ?.phoneNumber
-                ?.trim()
-                ?: return
+        if (newPass == oldPass) {
+            ToastFeedback.show("Pumili ng ibang password kaysa sa kasalukuyan.")
+            return
+        }
+
+        val phone = userSession.userProfile
+            ?.phoneNumber
+            ?.trim()
+            ?: return
 
         viewModelScope.launch {
-
             try {
-
-                val userReference =
-                    firestore
-                        .collection(
-                            FirestoreCollections.USERS
+                val result = FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("changeOwnPassword")
+                    .call(
+                        mapOf(
+                            "oldPassword" to oldPass,
+                            "newPassword" to newPass
                         )
-                        .document(phone)
-
-                val secretsReference =
-                    firestore
-                        .collection(
-                            FirestoreCollections.USER_SECRETS
-                        )
-                        .document(phone)
-
-                val document = userReference.get().await()
-                val secrets = secretsReference.get().await()
-
-                val salt = secrets.getString("passwordSalt")
-                val savedHash = secrets.getString("passwordHash")
-                val savedIterations =
-                    secrets.getLong("iterations")?.toInt()
-                        ?: PasswordHasher.LEGACY_ITERATIONS
-
-                val passwordMatches = if (
-                    !salt.isNullOrBlank() &&
-                    !savedHash.isNullOrBlank()
-                ) {
-                    PasswordHasher.verify(
-                        oldPass, salt, savedHash, savedIterations
                     )
-                } else {
-                    // Legacy account that still has the old plaintext field.
-                    document.getString("password") == oldPass
+                    .await()
+
+                val response = result.data as? Map<*, *>
+                if (response?.get("success") != true) {
+                    throw IllegalStateException("Hindi nakumpirma ng server ang password update.")
                 }
 
-                if (!passwordMatches) {
+                // The cached verifier contains the former password.
+                SecureLoginCache.clear(phone)
 
-                    ToastFeedback.show(
-                        "Mali ang kasalukuyang password."
-                    )
-
-                    return@launch
-                }
-
-                // Save only a salted hash; never a readable password.
-                val salted = PasswordHasher.hash(newPass)
-                val batch = firestore.batch()
-
-                batch.set(
-                    secretsReference,
-                    mapOf(
-                        "passwordHash" to salted.hash,
-                        "passwordSalt" to salted.salt,
-                        "iterations" to salted.iterations,
-                        "updatedAt" to
-                                FieldValue.serverTimestamp()
-                    )
-                )
-
-                // Remove the old plaintext field if it still exists.
-                batch.update(
-                    userReference,
-                    mapOf(
-                        "password" to FieldValue.delete(),
-                        "updatedAt" to
-                                FieldValue.serverTimestamp()
-                    )
-                )
-
-                batch.commit().await()
-
-                val oldProfile =
-                    userSession.userProfile
-                        ?: return@launch
+                val oldProfile = userSession.userProfile
+                    ?: return@launch
 
                 pushFromValues(
                     oldProfile.firstName,
@@ -425,18 +369,11 @@ class ProfileViewModel @Inject constructor(
                     oldProfile.adminStation
                 )
 
-                ToastFeedback.show(
-                    "Matagumpay na napalitan ang password."
-                )
-
-                // Only leave the Security screen once the save really finished.
+                ToastFeedback.show("Matagumpay na napalitan ang password.")
                 onSuccess()
-
             } catch (e: Exception) {
-
                 ToastFeedback.show(
-                    e.message
-                        ?: "Hindi ma-update ang password"
+                    e.message ?: "Hindi ma-update ang password. Subukan muli."
                 )
             }
         }

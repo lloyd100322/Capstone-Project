@@ -10,15 +10,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
-import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.FirebaseFunctionsException
 import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.data.FirestoreCollections
-import com.mobile.enerjeep.data.PasswordHasher
-import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.data.UserProfile
 import com.mobile.enerjeep.data.UserRole
 import com.mobile.enerjeep.data.UserSession
@@ -316,8 +312,8 @@ class LoginViewModel @Inject constructor(
     }
 
     /**
-     * Step 2: verify the OTP with Firebase Auth, re-check the password,
-     * then load the profile and establish the app session.
+     * Step 2: verify the OTP with Firebase Auth, ask the trusted server
+     * to re-check the password, then load the profile and establish the app session.
      */
     private fun signInWithPhoneAuthCredential(
         credential: PhoneAuthCredential
@@ -389,20 +385,8 @@ class LoginViewModel @Inject constructor(
                     return@launch
                 }
 
-                if (!verifyPassword(phone, typedPassword, userDocument.reference, data)) {
-                    Log.e(
-                        "Login",
-                        "Post-OTP DIAGNOSE: verifyPassword FAILED for " +
-                            "$phone - hindi tugma ang hash at walang " +
-                            "legacy plaintext na tugma. Password/secret " +
-                            "ang problema."
-                    )
-                    auth.signOut()
-                    _uiState.value = LoginUiState.Error(
-                        "Maling numero o password. Subukan muli."
-                    )
-                    return@launch
-                }
+                // completeSecureLogin has already verified the password
+                // and migrated any legacy value on the trusted server.
 
                 val roleString =
                     data["role"] as? String
@@ -477,168 +461,6 @@ class LoginViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    /**
-     * Checks the typed password against the salted hash in
-     * /userSecrets. Older accounts still have a plaintext `password`
-     * field on the profile document; those are verified once and
-     * immediately migrated to a hash (the plaintext field is deleted).
-     * Hashes written at the older, weaker work factor are silently
-     * upgraded to the current one after a successful login.
-     */
-    private suspend fun verifyPassword(
-        phone: String,
-        typedPassword: String,
-        userReference: DocumentReference,
-        data: Map<String, Any>
-    ): Boolean {
-        val secrets = firestore
-            .collection(FirestoreCollections.USER_SECRETS)
-            .document(phone)
-            .get()
-            .await()
-
-        val salt = secrets.getString("passwordSalt")
-        val hash = secrets.getString("passwordHash")
-
-        // Documents carry the work factor they were written with;
-        // documents from before the field existed used the legacy one.
-        val storedIterations = secrets.getLong("iterations")?.toInt()
-            ?: PasswordHasher.LEGACY_ITERATIONS
-
-        if (!salt.isNullOrBlank() && !hash.isNullOrBlank()) {
-            val matched = PasswordHasher.verify(
-                typedPassword, salt, hash, storedIterations
-            )
-
-            if (matched) {
-                var cachedSalt = salt
-                var cachedHash = hash
-                var cachedIterations = storedIterations
-
-                if (storedIterations < PasswordHasher.ITERATIONS) {
-                    try {
-                        val upgraded = persistPasswordHash(
-                            phone,
-                            typedPassword,
-                            userReference
-                        )
-                        cachedSalt = upgraded.salt
-                        cachedHash = upgraded.hash
-                        cachedIterations = upgraded.iterations
-                    } catch (e: Exception) {
-                        // Login still succeeds with the existing valid hash.
-                        Log.w("Login", "Password upgrade failed", e)
-                    }
-                }
-
-                SecureLoginCache.save(
-                    phone,
-                    cachedSalt,
-                    cachedHash,
-                    cachedIterations
-                )
-                return true
-            }
-
-            /*
-             * Self-heal: kung SIRA o LUMA ang hash sa userSecrets pero
-             * tugma pa rin ang legacy plaintext password sa profile,
-             * palitan ang hash (migrate) at hayaang pumasok ang user -
-             * hindi dapat ma-lockout ang account dahil sa sirang hash.
-             * Kung hindi rin tugma ang legacy, talagang mali ang password.
-             */
-            val legacyMatch = data["password"] as? String
-            if (!legacyMatch.isNullOrBlank() && legacyMatch == typedPassword) {
-                try {
-                    val upgraded = persistPasswordHash(
-                        phone,
-                        typedPassword,
-                        userReference
-                    )
-                    SecureLoginCache.save(
-                        phone,
-                        upgraded.salt,
-                        upgraded.hash,
-                        upgraded.iterations
-                    )
-                } catch (e: Exception) {
-                    // Login still succeeds; the next login retries migration.
-                    Log.w("Login", "Password self-heal failed", e)
-                }
-                return true
-            }
-            return false
-        }
-
-        // Legacy plaintext account: verify, then migrate to a hash.
-        val legacy = data["password"] as? String ?: run {
-            Log.e(
-                "Login",
-                "verifyPassword DIAGNOSE: walang hash (o sira) sa " +
-                    "userSecrets/$phone at walang legacy password sa profile."
-            )
-            return false
-        }
-        val matched = legacy == typedPassword
-
-        if (matched) {
-            try {
-                val upgraded = persistPasswordHash(
-                    phone,
-                    typedPassword,
-                    userReference
-                )
-                SecureLoginCache.save(
-                    phone,
-                    upgraded.salt,
-                    upgraded.hash,
-                    upgraded.iterations
-                )
-            } catch (e: Exception) {
-                // Login still succeeds; the next login tries again.
-                Log.w("Login", "Password migration failed", e)
-            }
-        }
-
-        return matched
-    }
-
-    /**
-     * Writes the salted hash to /userSecrets (at the current work
-     * factor) and removes any leftover plaintext password from the
-     * profile document.
-     */
-    private suspend fun persistPasswordHash(
-        phone: String,
-        plainPassword: String,
-        userReference: DocumentReference
-    ): PasswordHasher.SaltedHash {
-        val salted = PasswordHasher.hash(plainPassword)
-
-        val batch = firestore.batch()
-
-        batch.set(
-            firestore
-                .collection(FirestoreCollections.USER_SECRETS)
-                .document(phone),
-            mapOf(
-                "passwordHash" to salted.hash,
-                "passwordSalt" to salted.salt,
-                "iterations" to salted.iterations,
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-        )
-
-        // Remove the plaintext password from the profile document.
-        batch.update(
-            userReference,
-            mapOf("password" to FieldValue.delete())
-        )
-
-        batch.commit().await()
-        return salted
     }
 
     fun resetState() {

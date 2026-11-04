@@ -10,10 +10,9 @@ import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
 import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.mobile.enerjeep.data.FirestoreCollections
-import com.mobile.enerjeep.data.PasswordHasher
 import com.mobile.enerjeep.data.SecureLoginCache
 import com.mobile.enerjeep.ui.components.ToastFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -269,7 +268,7 @@ class ResetPasswordViewModel @Inject constructor(
                 // Same rule as login: inactive ADMIN accounts cannot be
                 // recovered through the reset flow.
                 if (
-                    role != "driver" &&
+                    !role.matches(Regex("driver|admin|superadmin")) ||
                     accountStatus.equals("inactive", ignoreCase = true)
                 ) {
                     endVerifiedSession()
@@ -318,39 +317,18 @@ class ResetPasswordViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val salted = PasswordHasher.hash(state.newPassword)
+                val result = FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("resetOwnPassword")
+                    .call(mapOf("newPassword" to state.newPassword))
+                    .await()
 
-                val batch = firestore.batch()
+                val response = result.data as? Map<*, *>
+                if (response?.get("success") != true) {
+                    throw IllegalStateException("Hindi nakumpirma ng server ang password reset.")
+                }
 
-                batch.set(
-                    firestore
-                        .collection(FirestoreCollections.USER_SECRETS)
-                        .document(fullPhone()),
-                    mapOf(
-                        "passwordHash" to salted.hash,
-                        "passwordSalt" to salted.salt,
-                        "iterations" to salted.iterations,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
-
-                // Remove the old plaintext field if it still exists.
-                batch.update(
-                    ref,
-                    mapOf(
-                        "password" to FieldValue.delete(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
-
-                batch.commit().await()
-
-                SecureLoginCache.save(
-                    fullPhone(),
-                    salted.salt,
-                    salted.hash,
-                    salted.iterations
-                )
+                // Remove any cached verifier for the former password.
+                SecureLoginCache.clear(fullPhone())
 
                 // Password saved: end the temporary OTP session so the app
                 // never keeps this phone logged in without the password.

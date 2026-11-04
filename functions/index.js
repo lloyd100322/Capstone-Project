@@ -1651,3 +1651,175 @@ exports.validateSecureSession = onCall(
     }
   }
 );
+
+
+/**
+ * Changes the authenticated member's password. The old password is checked
+ * on the server against the private hash before a new hash can be written.
+ * The Android client never reads or writes /userSecrets.
+ */
+exports.changeOwnPassword = onCall(
+  { enforceAppCheck: true, region: "us-central1", maxInstances: 20 },
+  async (request) => {
+    const caller = await getVerifiedUserContext(request);
+    const data = request.data || {};
+    const oldPassword = typeof data.oldPassword === "string" ? data.oldPassword : "";
+    const newPassword = typeof data.newPassword === "string" ? data.newPassword : "";
+
+    if (!oldPassword || oldPassword.length > 128 ||
+        newPassword.length < 6 || newPassword.length > 128 ||
+        oldPassword === newPassword) {
+      throw new HttpsError("invalid-argument", "Hindi valid ang password na ipapalit.");
+    }
+
+    const userRef = db.collection("users").doc(caller.phone);
+    const secretRef = db.collection("userSecrets").doc(caller.phone);
+
+    await db.runTransaction(async (tx) => {
+      const [userSnapshot, secretSnapshot] = await Promise.all([
+        tx.get(userRef),
+        tx.get(secretRef),
+      ]);
+
+      const role = String(userSnapshot.get("role") || "").toLowerCase();
+      if (!userSnapshot.exists ||
+          !["admin", "superadmin", "driver"].includes(role) ||
+          String(userSnapshot.get("status") || "active").toLowerCase() !== "active") {
+        throw new HttpsError("permission-denied", "Hindi aktibo ang account na ito.");
+      }
+
+      const secretData = secretSnapshot.exists ? secretSnapshot.data() || {} : {};
+      let passwordMatches = verifyStoredPassword(oldPassword, secretData);
+      if (!passwordMatches) {
+        const legacyPassword = userSnapshot.get("password");
+        if (typeof legacyPassword === "string" && legacyPassword.length > 0) {
+          crypto.pbkdf2Sync(
+            oldPassword,
+            LOGIN_DUMMY_SALT,
+            12000,
+            LOGIN_HASH_BITS / 8,
+            "sha256"
+          );
+          passwordMatches = safeEqualText(oldPassword, legacyPassword);
+        }
+      }
+
+      if (!passwordMatches) {
+        throw new HttpsError("permission-denied", "Mali ang kasalukuyang password.");
+      }
+
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.pbkdf2Sync(
+        newPassword,
+        Buffer.from(salt, "hex"),
+        210000,
+        LOGIN_HASH_BITS / 8,
+        "sha256"
+      ).toString("hex");
+
+      tx.set(secretRef, {
+        passwordHash: hash,
+        passwordSalt: salt,
+        iterations: 210000,
+        createdAt: secretSnapshot.exists
+          ? (secretSnapshot.get("createdAt") || FieldValue.serverTimestamp())
+          : FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      if (typeof userSnapshot.get("password") === "string") {
+        tx.update(userRef, {
+          password: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    });
+
+    return { success: true };
+  }
+);
+
+/**
+ * Resets a password only after a recent Firebase Phone Auth OTP sign-in.
+ * This intentionally does not require a secure app session because the
+ * caller is still in the signed-out recovery flow.
+ */
+exports.resetOwnPassword = onCall(
+  { enforceAppCheck: true, region: "us-central1", maxInstances: 20 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "I-verify muna ang numero gamit ang OTP.");
+    }
+
+    const phone = request.auth.token.phone_number;
+    const firebaseClaims = request.auth.token.firebase;
+    const signInProvider = firebaseClaims && firebaseClaims.sign_in_provider;
+    const authTime = Number(request.auth.token.auth_time);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const newPassword = request.data && request.data.newPassword;
+
+    if (typeof phone !== "string" || !/^\+639[0-9]{9}$/.test(phone) ||
+        signInProvider !== "phone" ||
+        !Number.isSafeInteger(authTime) ||
+        authTime <= 0 ||
+        authTime > nowSeconds + 60 ||
+        nowSeconds - authTime > 10 * 60) {
+      throw new HttpsError(
+        "permission-denied",
+        "Nag-expire ang OTP verification. Humingi muli ng bagong OTP."
+      );
+    }
+
+    if (typeof newPassword !== "string" ||
+        newPassword.length < 6 ||
+        newPassword.length > 128) {
+      throw new HttpsError("invalid-argument", "Ang password ay dapat 6 hanggang 128 karakter.");
+    }
+
+    const userRef = db.collection("users").doc(phone);
+    const secretRef = db.collection("userSecrets").doc(phone);
+
+    await db.runTransaction(async (tx) => {
+      const [userSnapshot, secretSnapshot] = await Promise.all([
+        tx.get(userRef),
+        tx.get(secretRef),
+      ]);
+
+      const role = String(userSnapshot.get("role") || "").toLowerCase();
+      if (!userSnapshot.exists ||
+          !["admin", "superadmin", "driver"].includes(role) ||
+          String(userSnapshot.get("status") || "active").toLowerCase() !== "active") {
+        throw new HttpsError("permission-denied", "Hindi aktibo o hindi valid ang account na ito.");
+      }
+
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.pbkdf2Sync(
+        newPassword,
+        Buffer.from(salt, "hex"),
+        210000,
+        LOGIN_HASH_BITS / 8,
+        "sha256"
+      ).toString("hex");
+
+      tx.set(secretRef, {
+        passwordHash: hash,
+        passwordSalt: salt,
+        iterations: 210000,
+        createdAt: secretSnapshot.exists
+          ? (secretSnapshot.get("createdAt") || FieldValue.serverTimestamp())
+          : FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const profileUpdates = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (typeof userSnapshot.get("password") === "string") {
+        profileUpdates.password = FieldValue.delete();
+      }
+      tx.update(userRef, profileUpdates);
+    });
+
+    return { success: true };
+  }
+);

@@ -24,6 +24,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   deleteField,
+  writeBatch,
   doc,
   collection,
   getDoc,
@@ -580,20 +581,64 @@ test("audit entries can never be edited or deleted", async () => {
 
 // --------------------------------------------------------------- secrets & roles
 
-test("a user can read ONLY his own password secret", async () => {
-  await assertSucceeds(
-    getDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), `userSecrets/${DRIVER_PHONE}`))
-  );
-  await assertFails(
-    getDoc(doc(dbAs(DRIVER_PHONE, "u-driver"), `userSecrets/${ADMIN_PHONE}`))
-  );
+test("clients cannot read any password secret", async () => {
+  const driverDb = dbAs(DRIVER_PHONE, "u-driver");
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  await assertFails(getDoc(doc(driverDb, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(getDoc(doc(driverDb, `userSecrets/${ADMIN_PHONE}`)));
+  await assertFails(getDoc(doc(adminDb, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(getDocs(collection(driverDb, "userSecrets")));
 });
 
-test("clients cannot directly delete password secrets", async () => {
+test("clients cannot create or overwrite an existing password secret", async () => {
+  const driverDb = dbAs(DRIVER_PHONE, "u-driver");
   const adminDb = dbAs(ADMIN_PHONE, "u-admin");
-  const superDb = dbAs(SUPER_PHONE, "u-super");
-  await assertFails(deleteDoc(doc(adminDb, `userSecrets/${DRIVER_PHONE}`)));
-  await assertFails(deleteDoc(doc(superDb, `userSecrets/${DRIVER_PHONE}`)));
+  const driverSecret = {
+    passwordHash: "a".repeat(64),
+    passwordSalt: "b".repeat(32),
+    iterations: 210000,
+    updatedAt: new Date(),
+  };
+
+  await assertFails(setDoc(doc(driverDb, `userSecrets/${DRIVER_PHONE}`), driverSecret));
+  await assertFails(updateDoc(doc(driverDb, `userSecrets/${DRIVER_PHONE}`), {
+    passwordHash: "c".repeat(64),
+  }));
+  await assertFails(updateDoc(doc(adminDb, `userSecrets/${DRIVER_PHONE}`), {
+    passwordHash: "d".repeat(64),
+  }));
+  await assertFails(setDoc(doc(adminDb, "userSecrets/+639171000005"), driverSecret));
+});
+
+test("an admin can create a password secret only with a brand-new account in one atomic batch", async () => {
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  const phone = "+639171000005";
+  const batch = writeBatch(adminDb);
+
+  batch.set(doc(adminDb, `users/${phone}`), {
+    userId: "user-new-password-test",
+    firstName: "New",
+    lastName: "Driver",
+    phoneNumber: phone,
+    role: "driver",
+    status: "active",
+    createdAt: new Date(),
+  });
+  batch.set(doc(adminDb, `userSecrets/${phone}`), {
+    passwordHash: "a".repeat(64),
+    passwordSalt: "b".repeat(32),
+    iterations: 210000,
+    createdAt: new Date(),
+  });
+
+  await assertSucceeds(batch.commit());
+
+  // A later, separate secret create must fail because the profile already exists.
+  await assertFails(setDoc(doc(adminDb, `userSecrets/${phone}`), {
+    passwordHash: "c".repeat(64),
+    passwordSalt: "d".repeat(32),
+    iterations: 210000,
+  }));
 });
 
 test("unauthenticated clients CANNOT read password secrets before OTP", async () => {
@@ -676,14 +721,14 @@ test("a user can NEVER rewrite his own identity or account-state fields", async 
   );
 });
 
-test("a legacy plaintext password field can be REMOVED but never SET", async () => {
+test("clients cannot set or remove the legacy plaintext password field", async () => {
   const db = dbAs(DRIVER_PHONE, "u-driver");
   await assertFails(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
       password: "Enerjeep@2026",
     })
   );
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, `users/${DRIVER_PHONE}`), {
       password: deleteField(),
     })
