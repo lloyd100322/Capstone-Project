@@ -59,12 +59,6 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold
         )
-        Text(
-            "Ang mga admin dito ang makikita ng mga driver sa Emergency " +
-                    "button. Idagdag lang ang mga \"available\" na tatawagan.",
-            fontSize = 12.sp,
-            color = TextSecondary
-        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -334,12 +328,6 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold
         )
-        Text(
-            "Sino ang gumawa ng bawat aksyon at kailan - para sa " +
-                    "accountability. Hindi ito pwedeng baguhin o burahin.",
-            fontSize = 12.sp,
-            color = TextSecondary
-        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -502,11 +490,6 @@ fun SettingsView(viewModel: SuperadminViewModel) {
             .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
     ) {
         Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text(
-            "Oras ng awtomatikong reset ng pila at bawas kada upuan ng jeep.",
-            fontSize = 12.sp,
-            color = TextSecondary
-        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -518,13 +501,6 @@ fun SettingsView(viewModel: SuperadminViewModel) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Reset ng Pila", fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Awtomatiko ang reset sa oras na ito. " +
-                            "Halimbawa: 9:00 PM. Walang manual na reset.",
-                    fontSize = 11.sp,
-                    color = TextSecondary
-                )
                 Spacer(Modifier.height(8.dp))
                 /*
                  * 12-hour format ang pagpili ng oras (hal. "9:00 PM")
@@ -592,13 +568,6 @@ fun SettingsView(viewModel: SuperadminViewModel) {
                 Text(
                     "Bawas kada Upuan (Seater)",
                     fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Kapag nag-dispatch, ang bawas ay awtomatiko mula sa " +
-                            "bilang ng upuan ng jeep.",
-                    fontSize = 11.sp,
-                    color = TextSecondary
                 )
                 Spacer(Modifier.height(8.dp))
 
