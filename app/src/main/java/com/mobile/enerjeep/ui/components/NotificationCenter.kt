@@ -259,7 +259,7 @@ fun NotificationCenterBell(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            state.errorMessage,
+                            state.errorMessage.orEmpty(),
                             color = ErrorRed
                         )
                         Spacer(Modifier.height(12.dp))
