@@ -43,7 +43,13 @@ jobs:
             echo "Android SDK manager was not found under $ANDROID_HOME/cmdline-tools"
             exit 1
           fi
+          set +e
           yes | "$SDKMANAGER" --licenses
+          SDK_MANAGER_EXIT=${PIPESTATUS[1]}
+          set -e
+          if [ "$SDK_MANAGER_EXIT" -ne 0 ]; then
+            exit "$SDK_MANAGER_EXIT"
+          fi
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle
