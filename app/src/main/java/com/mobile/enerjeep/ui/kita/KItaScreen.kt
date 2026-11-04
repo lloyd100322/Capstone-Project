@@ -165,6 +165,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
              */
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(finalRecords, key = { it.id }) { record ->
