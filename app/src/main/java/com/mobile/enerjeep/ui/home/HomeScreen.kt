@@ -203,6 +203,8 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .consumeWindowInsets(innerPadding)
+                    // Keep scrollable module content clear of the bottom navigation.
+                    .padding(bottom = 20.dp)
             ) {
                 when (selectedTab) {
                     HomeTab.Home -> {
