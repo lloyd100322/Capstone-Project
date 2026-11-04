@@ -452,7 +452,7 @@ fun SuperadminTabButton(
 ) {
     Surface(
         modifier = modifier
-            .height(40.dp)
+            .heightIn(min = 48.dp)
             .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         color = if (selected) Color(0xFFEDE9FE) else Color.Transparent
