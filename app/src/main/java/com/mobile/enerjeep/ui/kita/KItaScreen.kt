@@ -76,7 +76,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         Spacer(Modifier.height(32.dp))
         Text("Aking Kita", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(Modifier.height(24.dp))
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(24.dp)) {
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
             Column(Modifier.padding(20.dp)) {
                 Text(if (historyFilter.period == HistoryPeriod.TODAY) "Malinis na Kita Ngayon" else "Malinis na Kita", color = Color.White.copy(alpha = .8f), fontSize = 14.sp)
                 Spacer(Modifier.height(4.dp))
@@ -168,7 +168,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(finalRecords, key = { it.id }) { record ->
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(1.dp)) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
                         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(record.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
