@@ -48,9 +48,9 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     LaunchedEffect(Unit) { viewModel.refreshIdentity() }
     /*
      * Wala nang "Ngayon | Kasaysayan" tabs - ang date filter na lang ang
-     * natitira at default nito ay "Ngayon" (HistoryFilterState). Ang
-     * summary card ay laging batay sa nakikitang listahan, kaya tugma
-     * ang mga numero sa mga record na ipinapakita.
+     * natitira at default nito ay "Lahat ng petsa" upang agad makita ang
+     * buong earnings history. Ang summary card ay laging batay sa
+     * nakikitang listahan, kaya tugma ang mga numero sa mga record.
      */
     val filteredByDate = filterHistoryRecords(
         records = uiState.records,
