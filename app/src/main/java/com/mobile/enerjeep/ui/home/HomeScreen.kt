@@ -511,7 +511,8 @@ fun HomeContent(
                 },
                 backgroundColor = ErrorRedLight,
                 contentColor = ErrorRed,
-                onClick = onEmergencyClick
+                onClick = onEmergencyClick,
+                borderColor = ErrorRed
             )
         }
     }
