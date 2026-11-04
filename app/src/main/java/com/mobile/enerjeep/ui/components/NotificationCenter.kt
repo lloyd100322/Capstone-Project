@@ -181,7 +181,7 @@ fun NotificationCenterBell(
         ) {
             Icon(
                 imageVector = Icons.Default.Notifications,
-                contentDescription = "Mga Abiso",
+                contentDescription = if (state.unreadCount > 0) "Mga Abiso, ${state.unreadCount} hindi pa nababasa" else "Mga Abiso",
                 tint = EnerjeepBlue,
                 modifier = Modifier.size(27.dp)
             )
