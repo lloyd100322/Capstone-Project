@@ -344,10 +344,12 @@ fun LoginScreen(
                             color = EnerjeepBlue,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable(
-                                role = Role.Button,
-                                enabled = !isBusy
-                            ) {
+                            modifier = Modifier
+                                .padding(vertical = 12.dp)
+                                .clickable(
+                                    role = Role.Button,
+                                    enabled = !isBusy
+                                ) {
                                 appNavigator.navigateTo(
                                     Screen.ResetPassword
                                 )
