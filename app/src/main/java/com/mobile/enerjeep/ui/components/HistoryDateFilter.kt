@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -157,11 +158,14 @@ fun HistoryDateFilterBar(
 
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
         Text(
-            text = if (state.period == HistoryPeriod.SPECIFIC_DATE) state.selectedDate?.let(::formatSelectedHistoryDate) ?: "Pumili ng petsa" else state.period.label
+            text = if (state.period == HistoryPeriod.SPECIFIC_DATE) state.selectedDate?.let(::formatSelectedHistoryDate) ?: "Pumili ng petsa" else state.period.label,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
         Box {
             IconButton(onClick = { filterMenu = true }) {
-                Icon(Icons.Default.FilterList, contentDescription = "Filter history by date")
+                Icon(Icons.Default.FilterList, contentDescription = "Salain ang kasaysayan ayon sa petsa")
             }
             DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
                 HistoryPeriod.entries.forEach { period ->
@@ -179,7 +183,7 @@ fun HistoryDateFilterBar(
         }
         Box {
             IconButton(onClick = { sortMenu = true }) {
-                Icon(Icons.Default.Sort, contentDescription = "Sort history")
+                Icon(Icons.Default.Sort, contentDescription = "Ayusin ang pagkakasunod-sunod ng kasaysayan")
             }
             DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                 DropdownMenuItem(
