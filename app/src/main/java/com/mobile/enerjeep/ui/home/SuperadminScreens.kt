@@ -37,6 +37,8 @@ import com.mobile.enerjeep.ui.theme.TextSecondary
 fun EmergencyListView(viewModel: SuperadminViewModel) {
     val contacts by viewModel.emergencyContacts.collectAsStateWithLifecycle()
     val adminAccounts by viewModel.adminAccounts.collectAsStateWithLifecycle()
+    val contactsError by viewModel.emergencyContactsError.collectAsStateWithLifecycle()
+    val adminAccountsError by viewModel.adminAccountsError.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
 
     var selectedAdmin by remember {
@@ -81,7 +83,18 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                 )
                 Spacer(Modifier.height(8.dp))
 
-                if (adminAccounts.isEmpty()) {
+                if (adminAccountsError != null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            adminAccountsError.orEmpty(),
+                            fontSize = 12.sp,
+                            color = ErrorRed
+                        )
+                        OutlinedButton(onClick = viewModel::retryListeners) {
+                            Text("Subukang muli", maxLines = 1)
+                        }
+                    }
+                } else if (adminAccounts.isEmpty()) {
                     Text(
                         "Walang admin account.",
                         fontSize = 12.sp,
@@ -199,7 +212,25 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         Text("Kasalukuyang Listahan", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
 
-        if (contacts.isEmpty()) {
+        if (contactsError != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    contactsError.orEmpty(),
+                    color = ErrorRed,
+                    fontSize = 13.sp
+                )
+                Button(
+                    onClick = viewModel::retryListeners,
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                ) {
+                    Text("Subukang muli", maxLines = 1)
+                }
+            }
+        } else if (contacts.isEmpty()) {
             Text("Walang laman ang listahan.", color = TextSecondary)
         } else {
             LazyColumn(
@@ -257,6 +288,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
 @Composable
 fun ActivityLogView(viewModel: SuperadminViewModel) {
     val logs by viewModel.activityLogs.collectAsStateWithLifecycle()
+    val logsError by viewModel.activityLogsError.collectAsStateWithLifecycle()
 
     /*
      * Mga filter ng talaan: uri ng aksyon at petsa (HistoryDateFilterBar -
@@ -372,7 +404,25 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
 
         Spacer(Modifier.height(12.dp))
 
-        if (logs.isEmpty()) {
+        if (logsError != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    logsError.orEmpty(),
+                    color = ErrorRed,
+                    fontSize = 13.sp
+                )
+                Button(
+                    onClick = viewModel::retryListeners,
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                ) {
+                    Text("Subukang muli", maxLines = 1)
+                }
+            }
+        } else if (logs.isEmpty()) {
             Text("Wala pang naitatalang aktibidad.", color = TextSecondary)
         } else if (visible.isEmpty()) {
             Text(
