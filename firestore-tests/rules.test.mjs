@@ -78,6 +78,17 @@ beforeEach(async () => {
     await setDoc(doc(db, `users/${SUPER_PHONE}`), {
       role: "superadmin", status: "active", userId: "user-super-1",
     });
+    for (const [phone, uid] of [
+      [DRIVER_PHONE, "u-driver"],
+      [ADMIN_PHONE, "u-admin"],
+      [MONUMENTO_ADMIN_PHONE, "u-monumento-admin"],
+      [SUPER_PHONE, "u-super"],
+    ]) {
+      await setDoc(doc(db, `secureSessions/${uid}`), {
+        phoneNumber: phone,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      });
+    }
     await setDoc(doc(db, "queue/q-drv"), {
       driverId, status: "Nakapila", position: 3, route: "marilao",
     });
@@ -114,6 +125,53 @@ beforeEach(async () => {
     await setDoc(doc(db, "ledger/dispatch-driver"), { driverId, amount: 450, grossAmount: 500, otherFees: 50, netAmount: 450 });
     await setDoc(doc(db, "ledger/dispatch-other"), { driverId: "user-other-1", amount: 600, grossAmount: 650, otherFees: 50, netAmount: 600 });
   });
+});
+
+test("OTP-only Firebase sessions cannot access protected application data", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-driver"));
+  });
+  const db = dbAs(DRIVER_PHONE, "u-driver");
+
+  // The phone owner may read only their own basic profile during recovery.
+  await assertSucceeds(getDoc(doc(db, `users/${DRIVER_PHONE}`)));
+  await assertFails(getDocs(collection(db, "queue")));
+  await assertFails(getDoc(doc(db, `userSecrets/${DRIVER_PHONE}`)));
+  await assertFails(getDoc(doc(db, "ledger/dispatch-driver")));
+  await assertFails(getDoc(doc(db, "incidents/shared-1")));
+  await assertFails(getDocs(collection(db, `users/${DRIVER_PHONE}/notifications`)));
+});
+
+test("clients cannot directly delete account documents", async () => {
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+  const superDb = dbAs(SUPER_PHONE, "u-super");
+  await assertFails(deleteDoc(doc(adminDb, `users/${DRIVER_PHONE}`)));
+  await assertFails(deleteDoc(doc(superDb, `users/${DRIVER_PHONE}`)));
+});
+
+test("admins cannot directly dispatch or rewrite protected queue fields", async () => {
+  const db = dbAs(ADMIN_PHONE, "u-admin");
+  await assertFails(updateDoc(doc(db, "queue/q-drv"), {
+    status: "dispatched",
+    position: 0,
+    income: 500,
+  }));
+  await assertFails(updateDoc(doc(db, "queue/q-drv"), {
+    driverId: "spoofed-driver",
+  }));
+});
+
+test("admins cannot directly create, update, or delete ledger records", async () => {
+  const db = dbAs(ADMIN_PHONE, "u-admin");
+  await assertFails(setDoc(doc(db, "ledger/manual-fake"), {
+    driverId,
+    amount: 50000,
+    source: "ledger",
+  }));
+  await assertFails(updateDoc(doc(db, "ledger/dispatch-driver"), {
+    amount: 999999,
+  }));
+  await assertFails(deleteDoc(doc(db, "ledger/dispatch-driver")));
 });
 
 // ---------------------------------------------------------- queue / end-travel
@@ -178,11 +236,17 @@ test("driver CANNOT change another entry's status or identity fields", async () 
 test("Marilao admin can manage its own queue but can only read Monumento", async () => {
   const db = dbAs(ADMIN_PHONE, "u-admin");
 
-  await assertSucceeds(
+  await assertFails(
     updateDoc(doc(db, "queue/q-oth"), {
       status: "dispatched",
       position: 0,
       income: 500,
+    })
+  );
+  await assertSucceeds(
+    updateDoc(doc(db, "queue/q-oth"), {
+      position: 5,
+      updatedAt: new Date(),
     })
   );
 
