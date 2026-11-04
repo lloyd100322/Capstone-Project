@@ -27,25 +27,42 @@ service cloud.firestore {
       return request.auth.token.phone_number;
     }
 
-    // The role of the signed-in user, read directly from their own
-    // document. `get()` inside rules is not limited by the target
-    // document's own rules, so this works even for private documents.
+    // A phone-authenticated session is not enough by itself. The trusted
+    // completeSecureLogin callable creates this server-only record after
+    // verifying the password as well as Firebase Phone Authentication.
+    function hasSecureSession() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/secureSessions/$(request.auth.uid))
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)).data.phoneNumber == authPhone()
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)).data.expiresAt is timestamp
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)).data.expiresAt > request.time;
+    }
+
+    function ownAccountIsActive() {
+      return signedIn() && authPhone() != null
+        && exists(/databases/$(database)/documents/users/$(authPhone()))
+        && get(/databases/$(database)/documents/users/$(authPhone())).data.get('status', 'active') == 'active';
+    }
+
+    // The role of the signed-in user, read directly from their own document.
     function ownRole() {
       return signedIn() && authPhone() != null
+        && exists(/databases/$(database)/documents/users/$(authPhone()))
         ? get(/databases/$(database)/documents/users/$(authPhone())).data.role
         : null;
     }
 
     function isMember() {
-      return ownRole() in ['superadmin', 'admin', 'driver'];
+      return hasSecureSession() && ownAccountIsActive()
+        && ownRole() in ['superadmin', 'admin', 'driver'];
     }
 
     function isAdmin() {
-      return ownRole() in ['admin', 'superadmin'];
+      return isMember() && ownRole() in ['admin', 'superadmin'];
     }
 
     function isSuperadmin() {
-      return ownRole() == 'superadmin';
+      return isMember() && ownRole() == 'superadmin';
     }
 
     function isOwner(phone) {
@@ -73,7 +90,9 @@ service cloud.firestore {
     // /users - profiles (no credentials ever live here)
     // ------------------------------------------------------------------
     match /users/{phone} {
-      allow get: if isAdmin() || (isMember() && isOwner(phone));
+      // A phone-verified user may read only their own profile during login
+      // or password recovery. All other account reads require a secure session.
+      allow get: if (signedIn() && isOwner(phone)) || isAdmin();
 
       // Account management lists every account (admin) or looks up
       // drivers (admin screens). Drivers never list this collection.
@@ -127,6 +146,15 @@ service cloud.firestore {
                  'emergencyContactName', 'emergencyContactNumber',
                  'emergencyContact', 'fcmToken', 'updatedAt', 'password'
                ])
+        )
+        // OTP-verified password recovery may remove a legacy plaintext field
+        // before a secure session exists; it cannot write a password value.
+        || (
+          isOwner(phone)
+          && doesNotSetPassword()
+          && !request.resource.data.keys().hasAny(['password'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['password', 'updatedAt'])
         );
 
       // Each member can read only their own server-created notifications.
@@ -140,7 +168,8 @@ service cloud.firestore {
         allow create, delete: if false;
       }
 
-      allow delete: if isAdmin();
+      // Account removal must pass through the trusted deleteAccount callable.
+      allow delete: if false;
     }
 
     // ------------------------------------------------------------------
@@ -150,7 +179,7 @@ service cloud.firestore {
       // Password verification occurs only after Firebase Phone Auth has
       // established the matching phone-number session. The client never
       // receives password hashes before OTP verification.
-      allow get: if isOwner(phone);
+      allow get: if isMember() && isOwner(phone);
       allow list: if false;
 
       // The owner sets their own secret (register / change / reset) and
@@ -196,11 +225,6 @@ service cloud.firestore {
         : '';
     }
 
-    function ownAccountIsActive() {
-      return signedIn() && authPhone() != null
-        && get(/databases/$(database)/documents/users/$(authPhone())).data.get('status', 'active') == 'active';
-    }
-
     function queueRouteStation(route) {
       return route is string && route.matches('(?i)^marilao.*') ? 'marilao'
         : route is string && route.matches('(?i)^monumento.*') ? 'monumento'
@@ -220,14 +244,35 @@ service cloud.firestore {
 
     match /queue/{entryId} {
       allow read: if isMember();
-      allow create: if canManageQueueRoute(request.resource.data.route);
-      allow update: if (isSuperadmin() && ownAccountIsActive())
-                    || (
-                      canManageQueueRoute(resource.data.route)
-                      && queueRouteStation(request.resource.data.route)
-                         == queueRouteStation(resource.data.route)
-                    );
-      allow delete: if canManageQueueRoute(resource.data.route);
+      // Clients may add only a fresh waiting entry. Dispatch/completion and
+      // other lifecycle transitions are performed by trusted Cloud Functions.
+      allow create: if canManageQueueRoute(request.resource.data.route)
+        && request.resource.data.keys().hasOnly([
+          'id', 'driverId', 'plateNumber', 'driverName', 'route',
+          'position', 'status', 'time', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.driverId is string
+        && request.resource.data.driverId.size() > 0
+        && request.resource.data.status == 'Nakapila'
+        && request.resource.data.position is int
+        && request.resource.data.position > 0;
+      // Direct client writes are limited to reordering and cancellation.
+      // Dispatch and travel completion must use atomic trusted transactions.
+      allow update: if canManageQueueRoute(resource.data.route)
+        && queueRouteStation(request.resource.data.route)
+             == queueRouteStation(resource.data.route)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['position', 'isCancelled', 'cancelledAt', 'updatedAt'])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['position'])
+          || (request.resource.data.position is int && request.resource.data.position > 0)
+        )
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isCancelled'])
+          || request.resource.data.isCancelled is bool
+        );
+      // Deletions are handled by the account/queue cleanup Cloud Functions.
+      allow delete: if false;
     }
 
     // ------------------------------------------------------------------
@@ -318,7 +363,8 @@ service cloud.firestore {
       allow read: if isAdmin()
                   || (isMember() && resource.data.driverId ==
                        get(/databases/$(database)/documents/users/$(authPhone())).data.userId);
-      allow create, update, delete: if isAdmin();
+      // Dispatch and manual collection records are created by trusted callables only.
+      allow create, update, delete: if false;
     }
 
     // ------------------------------------------------------------------
