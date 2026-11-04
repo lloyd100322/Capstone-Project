@@ -271,7 +271,7 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
     var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     Column(Modifier.fillMaxWidth()) {
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Kabuuang Multa mula sa Insidente", color = Color.White); Spacer(Modifier.height(8.dp)); Text(formatCurrency(totalPenalty).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White) }
         }
         Spacer(Modifier.height(24.dp))
@@ -312,7 +312,7 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
     var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
     Column(Modifier.fillMaxWidth()) {
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
             Column(Modifier.padding(24.dp)) { Text("Multa Ngayon", color = Color.White.copy(alpha = .9f)); Spacer(Modifier.height(8.dp)); Text(formatCurrency(multiyaNgayon).replace(".00", ""), fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White); Spacer(Modifier.height(8.dp)); Text("Kabuuang: ${formatCurrency(kabuuangMultiya).replace(".00", "")}", fontSize = 12.sp, color = Color.White.copy(alpha = .8f)) }
         }
         Spacer(Modifier.height(24.dp))
@@ -358,7 +358,7 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
     val nakalap = remember(allDonasyon) { allDonasyon.filter { it.type != "gamit" }.sumOf { it.amount } }
     val nagamit = remember(allDonasyon) { allDonasyon.filter { it.type == "gamit" }.sumOf { it.amount } }
     Column(Modifier.fillMaxWidth()) {
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) {
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
             Column(Modifier.padding(24.dp)) {
                 Text("Natitirang Donasyon", color = Color.White.copy(alpha = .9f))
                 Spacer(Modifier.height(8.dp))
@@ -442,7 +442,7 @@ fun YearlyIncomeRow(data: YearlyIncome) {
 
 @Composable
 fun IncomeHistoryCard(history: IncomeHistory) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) { Text(history.plateNumber, fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(2.dp)); Text(history.driverName, fontSize = 14.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text("Malinis na Kita: ${formatCurrency(history.netAmount).replace(".00", "")}", fontSize = 14.sp, color = TextSecondary) }
             Column(horizontalAlignment = Alignment.End) { Text(formatCurrency(history.grossAmount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 18.sp); Spacer(Modifier.height(4.dp)); Text(history.date, fontSize = 12.sp, color = TextSecondary) }
@@ -452,7 +452,7 @@ fun IncomeHistoryCard(history: IncomeHistory) {
 
 @Composable
 fun ReportIncidentCard(incident: ReportIncidentItem) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) { Text(incident.title, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(4.dp)); Text("Plaka: ${incident.plateNumber}", fontSize = 12.sp, color = TextSecondary); Text("Lokasyon: ${incident.location}", fontSize = 12.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text(incident.date, fontSize = 12.sp, color = TextSecondary) }
             Text(formatCurrency(incident.penalty).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -462,7 +462,7 @@ fun ReportIncidentCard(incident: ReportIncidentItem) {
 
 @Composable
 fun ReportMultiyaCard(multiya: ReportMultiyaItem) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) { Text(multiya.plateNumber, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(multiya.driverName, fontSize = 13.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text(multiya.date, fontSize = 12.sp, color = TextSecondary) }
             Text(formatCurrency(multiya.amount).replace(".00", ""), fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -473,7 +473,7 @@ fun ReportMultiyaCard(multiya: ReportMultiyaItem) {
 @Composable
 fun DonasyonCardItem(donasyon: DonasyonItem) {
     val isGamit = donasyon.type == "gamit"
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) { Text(if (isGamit) "Gamit • " + donasyon.donor else donasyon.donor, fontWeight = FontWeight.Bold, fontSize = 15.sp); Spacer(Modifier.height(2.dp)); Text(donasyon.source, fontSize = 13.sp, color = TextSecondary); Spacer(Modifier.height(4.dp)); Text(donasyon.date, fontSize = 12.sp, color = TextSecondary); if (donasyon.note.isNotBlank()) Text(donasyon.note, fontSize = 12.sp, color = TextSecondary) }
             Text(
@@ -515,7 +515,7 @@ fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (Do
 
 @Composable
 fun TabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (isSelected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(if (isSelected) 2.dp else 0.dp)) {
+    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (isSelected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (isSelected) Color.Black else TextSecondary) }
     }
 }
