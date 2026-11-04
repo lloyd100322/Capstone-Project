@@ -153,6 +153,31 @@ test("clients cannot directly delete account documents", async () => {
   await assertFails(deleteDoc(doc(superDb, `users/${DRIVER_PHONE}`)));
 });
 
+test("OTP-only admin sessions cannot manage station queues", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await deleteDoc(doc(ctx.firestore(), "secureSessions/u-admin_1700000000"));
+  });
+  const db = dbAs(ADMIN_PHONE, "u-admin");
+
+  await assertFails(getDocs(collection(db, "queue")));
+  await assertFails(
+    setDoc(doc(db, "queue/q-otp-admin"), {
+      id: "q-otp-admin",
+      driverId: "user-otp-admin",
+      plateNumber: "TXB 449",
+      driverName: "OTP Admin Test",
+      route: "Marilao – Monumento",
+      position: 5,
+      status: "Nakapila",
+      time: "10:00 AM",
+      createdAt: new Date(),
+    })
+  );
+  await assertFails(updateDoc(doc(db, "queue/q-drv"), {
+    position: 4,
+  }));
+});
+
 test("admins cannot directly dispatch or rewrite protected queue fields", async () => {
   const db = dbAs(ADMIN_PHONE, "u-admin");
   await assertFails(updateDoc(doc(db, "queue/q-drv"), {
