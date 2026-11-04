@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -161,7 +162,7 @@ fun IncidentSummaryCard(modifier: Modifier = Modifier, count: Int, label: String
 
 @Composable
 fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(modifier.height(40.dp).clickable(onClick = onClick), shape = RoundedCornerShape(20.dp), color = if (isSelected) Color.White else Color.Transparent) {
+    Surface(modifier.heightIn(min = 48.dp).clickable(role = Role.Tab, onClick = onClick), shape = RoundedCornerShape(12.dp), color = if (isSelected) Color.White else Color.Transparent) {
         Box(contentAlignment = Alignment.Center) { Text(text, color = if (isSelected) Color.Black else TextSecondary, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 14.sp) }
     }
 }
