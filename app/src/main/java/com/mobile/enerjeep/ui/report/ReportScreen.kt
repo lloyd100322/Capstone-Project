@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -246,7 +247,23 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
         }
         val history = filterHistoryRecords(filteredPlates, { it.date }, historyFilter)
         Spacer(Modifier.height(12.dp))
-        if (history.isEmpty()) EmptyHistory() else history.forEach { IncomeHistoryCard(it); Spacer(Modifier.height(12.dp)) }
+        if (history.isEmpty()) {
+            EmptyHistory()
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(
+                    history,
+                    key = { index, item -> "${item.plateNumber}_${item.date}_$index" }
+                ) { _, item ->
+                    IncomeHistoryCard(item)
+                }
+            }
+        }
 
         /*
          * Ang mga chart ay nasa IBABA ng Kasaysayan.
@@ -301,8 +318,22 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
         val source = if (selectedTab == 0) currentIncidents else allIncidents
         val searched = source.filter { it.plateNumber.contains(searchQuery, true) || it.title.contains(searchQuery, true) || it.location.contains(searchQuery, true) }
         val list = if (selectedTab == 1) filterHistoryRecords(searched, { it.date }, historyFilter) else searched
-        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang naitalang insidente.", color = TextSecondary) }
-        else list.forEach { ReportIncidentCard(it); Spacer(Modifier.height(12.dp)) }
+        if (list.isEmpty()) {
+            if (selectedTab == 1) EmptyHistory()
+            else Text("Walang naitalang insidente.", color = TextSecondary)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(
+                    list,
+                    key = { index, item -> "${item.plateNumber}_${item.title}_${item.date}_$index" }
+                ) { _, item ->
+                    ReportIncidentCard(item)
+                }
+            }
+        }
     }
 }
 
@@ -341,8 +372,22 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
             historyFilter,
             { it.createdAtMillis.takeIf { millis -> millis > 0L } }
         ) else searched
-        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang multa ngayon.", color = TextSecondary) }
-        else list.forEach { ReportMultiyaCard(it); Spacer(Modifier.height(12.dp)) }
+        if (list.isEmpty()) {
+            if (selectedTab == 1) EmptyHistory()
+            else Text("Walang multa ngayon.", color = TextSecondary)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(
+                    list,
+                    key = { index, item -> item.id.ifBlank { "${item.plateNumber}_${item.date}_$index" } }
+                ) { _, item ->
+                    ReportMultiyaCard(item)
+                }
+            }
+        }
     }
 }
 
@@ -402,8 +447,22 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
         val source = if (selectedTab == 0) currentDonasyon else allDonasyon
         val searched = source.filter { it.donor.contains(searchQuery, true) || it.source.contains(searchQuery, true) }
         val list = if (selectedTab == 1) filterHistoryRecords(searched, { it.date }, historyFilter) else searched
-        if (list.isEmpty()) { if (selectedTab == 1) EmptyHistory() else Text("Walang donasyon.", color = TextSecondary) }
-        else list.forEach { DonasyonCardItem(it); Spacer(Modifier.height(12.dp)) }
+        if (list.isEmpty()) {
+            if (selectedTab == 1) EmptyHistory()
+            else Text("Walang donasyon.", color = TextSecondary)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(
+                    list,
+                    key = { index, item -> "${item.donor}_${item.source}_${item.date}_$index" }
+                ) { _, item ->
+                    DonasyonCardItem(item)
+                }
+            }
+        }
     }
     if (showAddModal) ModalBottomSheet(onDismissRequest = { showAddModal = false }, sheetState = sheetState, containerColor = Color.White) {
         AddDonasyonFormContent(isGamit = false, onCancel = { showAddModal = false }, onSubmit = { onAddDonasyon(it); showAddModal = false; selectedTab = 0 })

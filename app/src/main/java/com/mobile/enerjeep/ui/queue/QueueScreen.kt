@@ -7,6 +7,9 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -327,9 +330,10 @@ fun QueueScreen(
                              * daliri). Hindi nito hinaharangan ang
                              * single-finger scroll.
                              */
-                            Column(
+                            LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .heightIn(max = 560.dp)
                                     .pointerInput(Unit) {
                                         awaitEachGesture {
                                             var event =
@@ -356,9 +360,10 @@ fun QueueScreen(
                                                 event = awaitPointerEvent()
                                             }
                                         }
-                                    }
+                                    },
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                searchedQueue.forEachIndexed { index, vehicle ->
+                                itemsIndexed(searchedQueue, key = { _, vehicle -> vehicle.id }) { index, vehicle ->
                                     val isDragging = dragIndex == index
                                     Box(
                                         modifier = Modifier
@@ -446,7 +451,6 @@ fun QueueScreen(
                                             }
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(16.dp))
                                 }
                             }
                         }
@@ -468,10 +472,15 @@ fun QueueScreen(
                                 Text("Wala pang kasaysayan ng dispatch.", color = TextSecondary)
                             }
                         } else {
-                            filteredHistory.forEach { history ->
-                                HistoryItem(history)
-
-                                Spacer(modifier = Modifier.height(12.dp))
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 560.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(filteredHistory, key = { it.id }) { history ->
+                                    HistoryItem(history)
+                                }
                             }
                         }
                     }
