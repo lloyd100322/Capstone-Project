@@ -76,8 +76,8 @@ const { FieldValue } = require("firebase-admin/firestore");
 
 const QUEUE_STATUSES_INACTIVE = ["dispatched", "cancelled", "completed", "resolved"];
 
-/** Resolve the signed-in administrator and enforce active account status. */
-async function getAdminContext(request) {
+/** Require a server-verified password + OTP session for protected callables. */
+async function getVerifiedUserContext(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
   }
@@ -85,17 +85,42 @@ async function getAdminContext(request) {
   if (typeof phone !== "string" || !phone) {
     throw new HttpsError("permission-denied", "Walang verified phone number.");
   }
-  const user = await db.collection("users").doc(phone).get();
-  const role = user.get("role");
+
+  const [user, secureSession] = await Promise.all([
+    db.collection("users").doc(phone).get(),
+    db.collection("secureSessions").doc(request.auth.uid).get(),
+  ]);
+  const expiresAt = secureSession.get("expiresAt");
+  const role = String(user.get("role") || "").toLowerCase();
   if (!user.exists ||
-      !["admin", "superadmin"].includes(role) ||
+      !secureSession.exists ||
+      secureSession.get("phoneNumber") !== phone ||
+      !expiresAt ||
+      typeof expiresAt.toMillis !== "function" ||
+      expiresAt.toMillis() <= Date.now() ||
+      !["admin", "superadmin", "driver"].includes(role) ||
       String(user.get("status") || "active").toLowerCase() !== "active") {
-    throw new HttpsError("permission-denied", "Aktibong administrator account lamang ang maaaring gumawa nito.");
+    throw new HttpsError("permission-denied", "Kailangan ang aktibong password at OTP-verified session.");
   }
+
   return {
     phone,
     role,
     station: String(user.get("adminStation") || "").trim().toLowerCase(),
+    user,
+  };
+}
+
+/** Resolve the signed-in administrator and enforce the verified active session. */
+async function getAdminContext(request) {
+  const verified = await getVerifiedUserContext(request);
+  if (!["admin", "superadmin"].includes(verified.role)) {
+    throw new HttpsError("permission-denied", "Aktibong administrator account lamang ang maaaring gumawa nito.");
+  }
+  return {
+    phone: verified.phone,
+    role: verified.role,
+    station: verified.station,
   };
 }
 
@@ -875,17 +900,8 @@ exports.dispatchQueueVehicle = onCall(
 exports.getIncidentDriverPhone = onCall(
   { enforceAppCheck: true, region: "us-central1" },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
-    }
-
-    const callerPhone = request.auth.token.phone_number;
-    if (typeof callerPhone !== "string" || !callerPhone) {
-      throw new HttpsError("permission-denied", "Walang verified phone number.");
-    }
-
-    const caller = await db.collection("users").doc(callerPhone).get();
-    if (!caller.exists || caller.get("role") !== "driver") {
+    const caller = await getVerifiedUserContext(request);
+    if (caller.role !== "driver") {
       throw new HttpsError("permission-denied", "Driver account lamang ang maaaring gumamit ng contact lookup.");
     }
 
@@ -933,20 +949,13 @@ exports.getIncidentDriverPhone = onCall(
 exports.finishDriverTravel = onCall(
   { enforceAppCheck: true, region: "us-central1" },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
-    }
-
-    const phone = request.auth.token.phone_number;
-    if (typeof phone !== "string" || !phone) {
-      throw new HttpsError("permission-denied", "Walang verified phone number.");
-    }
-
-    const userSnap = await db.collection("users").doc(phone).get();
-    if (!userSnap.exists || userSnap.get("role") !== "driver") {
+    const caller = await getVerifiedUserContext(request);
+    if (caller.role !== "driver") {
       throw new HttpsError("permission-denied", "Driver account lamang ang puwedeng magtapos ng biyahe.");
     }
 
+    const phone = caller.phone;
+    const userSnap = caller.user;
     const driverId = userSnap.get("userId");
     const entryId = request.data && request.data.queueEntryId;
     if (typeof driverId !== "string" || !driverId ||
@@ -1028,14 +1037,11 @@ exports.finishDriverTravel = onCall(
 exports.updateDriverProfile = onCall(
   { enforceAppCheck: true, region: "us-central1" },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Kailangan mag-login muna.");
+    const caller = await getVerifiedUserContext(request);
+    if (caller.role !== "driver") {
+      throw new HttpsError("permission-denied", "Driver account lamang ang maaaring mag-edit ng profile.");
     }
-
-    const phone = request.auth.token.phone_number;
-    if (typeof phone !== "string" || !phone) {
-      throw new HttpsError("permission-denied", "Walang verified phone number.");
-    }
+    const phone = caller.phone;
 
     const data = request.data || {};
     const firstName = typeof data.firstName === "string" ? data.firstName.trim() : null;
@@ -1365,5 +1371,273 @@ exports.verifyLoginCredentials = onCall(
     }
 
     return { valid };
+  }
+);
+
+
+
+/**
+ * Creates a manual ledger collection through a trusted, validated operation.
+ * The requestId makes retries idempotent, and the driver identity is resolved
+ * from the server-side users collection rather than trusted from the client.
+ */
+exports.addManualLedgerEntry = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    const caller = await getAdminContext(request);
+    const data = request.data || {};
+    const plateNumber = typeof data.plateNumber === "string"
+      ? data.plateNumber.trim().toUpperCase()
+      : "";
+    const normalizedPlate = plateNumber.replace(/[^A-Z0-9]/g, "");
+    const amount = data.amount;
+    const feeType = typeof data.feeType === "string" ? data.feeType.trim() : "";
+    const incidentId = typeof data.incidentId === "string" ? data.incidentId.trim() : "";
+    const requestId = typeof data.requestId === "string" ? data.requestId.trim() : "";
+
+    if (!/^[A-Z]{2,3}[0-9]{1,4}$/.test(normalizedPlate) ||
+        typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 ||
+        !feeType || feeType.length > 50 ||
+        !/^[0-9a-f-]{36}$/i.test(requestId) ||
+        incidentId.length > 180) {
+      throw new HttpsError("invalid-argument", "Hindi valid ang detalye ng koleksiyon.");
+    }
+
+    const ledgerId = "manual_" + requestId;
+    const ledgerRef = db.collection("ledger").doc(ledgerId);
+    const callerRef = db.collection("users").doc(caller.phone);
+    const driversQuery = db.collection("users").where("role", "==", "driver");
+    const incidentRef = incidentId
+      ? db.collection("incidents").doc(incidentId)
+      : null;
+    const activityRef = db.collection("activityLogs").doc();
+
+    try {
+      const result = await db.runTransaction(async (tx) => {
+        const [callerSnapshot, driversSnapshot, existing] = await Promise.all([
+          tx.get(callerRef),
+          tx.get(driversQuery),
+          tx.get(ledgerRef),
+        ]);
+        if (!callerSnapshot.exists ||
+            !["admin", "superadmin"].includes(
+              String(callerSnapshot.get("role") || "").toLowerCase()
+            ) ||
+            String(callerSnapshot.get("status") || "active").toLowerCase() !== "active") {
+          throw new HttpsError("permission-denied", "Wala nang aktibong pahintulot ang account na ito.");
+        }
+
+        const matchingDrivers = driversSnapshot.docs.filter((document) =>
+          String(document.get("plateNumber") || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "") === normalizedPlate
+        );
+        if (matchingDrivers.length !== 1) {
+          throw new HttpsError(
+            matchingDrivers.length === 0 ? "not-found" : "failed-precondition",
+            matchingDrivers.length === 0
+              ? "Hindi makita ang driver para sa napiling plaka."
+              : "May duplicate na plate number. Ayusin muna ang driver accounts."
+          );
+        }
+
+        const driver = matchingDrivers[0];
+        const driverId = String(driver.get("userId") || "").trim();
+        const driverStatus = String(driver.get("status") || "active").toLowerCase();
+        if (!driverId || driverStatus !== "active") {
+          throw new HttpsError("failed-precondition", "Hindi aktibo o walang valid na User ID ang driver.");
+        }
+
+        const incident = incidentRef ? await tx.get(incidentRef) : null;
+        if (incidentRef && (!incident || !incident.exists)) {
+          throw new HttpsError("not-found", "Hindi makita ang naka-link na insidente.");
+        }
+        if (incident && incident.exists) {
+          const incidentPlate = String(incident.get("plateNumber") || "")
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "");
+          if (incidentPlate && incidentPlate !== normalizedPlate) {
+            throw new HttpsError("invalid-argument", "Hindi tugma ang plaka at ang insidente.");
+          }
+        }
+
+        if (existing.exists) {
+          const saved = existing.data() || {};
+          const sameRequest = saved.createdByPhone === caller.phone &&
+            saved.driverId === driverId &&
+            Number(saved.amount) === amount &&
+            saved.feeType === feeType &&
+            String(saved.incidentId || "") === incidentId;
+          if (!sameRequest) {
+            throw new HttpsError("already-exists", "Nagamit na ang request ID para sa ibang transaksiyon.");
+          }
+          return { alreadyRecorded: true, ledgerId };
+        }
+
+        const driverName = [
+          String(driver.get("firstName") || "").trim(),
+          String(driver.get("lastName") || "").trim(),
+        ].filter(Boolean).join(" ") || "Driver";
+        const canonicalPlate = String(driver.get("plateNumber") || plateNumber).trim().toUpperCase();
+        const date = new Intl.DateTimeFormat("en-US", {
+          timeZone: "Asia/Manila",
+          month: "short",
+          day: "2-digit",
+          year: "numeric",
+        }).format(new Date());
+
+        const ledgerData = {
+          id: ledgerId,
+          requestId,
+          driverId,
+          driverName,
+          plateNumber: canonicalPlate,
+          date,
+          amount,
+          grossAmount: amount,
+          otherFees: 0,
+          netAmount: amount,
+          feeType,
+          status: "Bayad",
+          source: "ledger",
+          createdByPhone: caller.phone,
+          createdAt: FieldValue.serverTimestamp(),
+        };
+        if (incidentId) ledgerData.incidentId = incidentId;
+
+        const actorName = [
+          String(callerSnapshot.get("firstName") || "").trim(),
+          String(callerSnapshot.get("lastName") || "").trim(),
+        ].filter(Boolean).join(" ") || "Hindi kilala";
+
+        tx.set(ledgerRef, ledgerData);
+        tx.set(activityRef, {
+          actorName,
+          actorPhone: caller.phone,
+          actorRole: String(callerSnapshot.get("role") || "").toLowerCase(),
+          action: "Bayad ng Multa",
+          detail: canonicalPlate + " • " + feeType + " • ₱" + amount +
+            (incidentId ? " • Incident " + incidentId : ""),
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        return { alreadyRecorded: false, ledgerId };
+      });
+
+      return { success: true, ...result };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("addManualLedgerEntry failed:", error);
+      throw new HttpsError("internal", "Hindi na-save ang koleksiyon. Subukan muli.");
+    }
+  }
+);
+
+
+
+const SECURE_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Called only after Firebase Phone Auth has verified the OTP.
+ * The server repeats password verification and creates a private,
+ * short-lived Firestore session that security rules require for app data.
+ */
+exports.completeSecureLogin = onCall(
+  { enforceAppCheck: true, region: "us-central1", maxInstances: 20 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Kailangan munang ma-verify ang numero.");
+    }
+    const phone = request.auth.token.phone_number;
+    const password = request.data && request.data.password;
+    if (typeof phone !== "string" || !/^\+639[0-9]{9}$/.test(phone) ||
+        typeof password !== "string" || !password || password.length > 128) {
+      return { success: false };
+    }
+
+    const userRef = db.collection("users").doc(phone);
+    const secretRef = db.collection("userSecrets").doc(phone);
+    const sessionRef = db.collection("secureSessions").doc(request.auth.uid);
+
+    const success = await db.runTransaction(async (tx) => {
+      const [userSnapshot, secretSnapshot] = await Promise.all([
+        tx.get(userRef),
+        tx.get(secretRef),
+      ]);
+      const role = String(userSnapshot.get("role") || "").toLowerCase();
+      if (!userSnapshot.exists ||
+          !["admin", "superadmin", "driver"].includes(role) ||
+          String(userSnapshot.get("status") || "active").toLowerCase() !== "active") {
+        return false;
+      }
+
+      const secretData = secretSnapshot.exists ? secretSnapshot.data() || {} : {};
+      let valid = verifyStoredPassword(password, secretData);
+      const legacyPassword = userSnapshot.get("password");
+      if (!valid && typeof legacyPassword === "string" && legacyPassword.length > 0) {
+        crypto.pbkdf2Sync(
+          password,
+          LOGIN_DUMMY_SALT,
+          12000,
+          LOGIN_HASH_BITS / 8,
+          "sha256"
+        );
+        valid = safeEqualText(password, legacyPassword);
+      }
+      if (!valid) return false;
+
+      // Finish legacy password migration on the trusted server.
+      if (typeof legacyPassword === "string") {
+        const salt = crypto.randomBytes(16).toString("hex");
+        const hash = crypto.pbkdf2Sync(
+          password,
+          Buffer.from(salt, "hex"),
+          210000,
+          LOGIN_HASH_BITS / 8,
+          "sha256"
+        ).toString("hex");
+        tx.set(secretRef, {
+          passwordHash: hash,
+          passwordSalt: salt,
+          iterations: 210000,
+          createdAt: secretSnapshot.exists
+            ? (secretSnapshot.get("createdAt") || FieldValue.serverTimestamp())
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        tx.update(userRef, {
+          password: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      tx.set(sessionRef, {
+        phoneNumber: phone,
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(
+          Date.now() + SECURE_SESSION_TTL_MS
+        ),
+      });
+      return true;
+    });
+
+    return { success };
+  }
+);
+
+/** Validate a restored app session before showing protected screens. */
+exports.validateSecureSession = onCall(
+  { enforceAppCheck: true, region: "us-central1" },
+  async (request) => {
+    if (!request.auth) return { valid: false };
+    try {
+      await getVerifiedUserContext(request);
+      return { valid: true };
+    } catch (error) {
+      if (error instanceof HttpsError &&
+          ["unauthenticated", "permission-denied"].includes(error.code)) {
+        return { valid: false };
+      }
+      throw error;
+    }
   }
 );
