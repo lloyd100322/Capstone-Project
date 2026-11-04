@@ -449,7 +449,7 @@ fun DriverEditProfileContent(
             verticalAlignment =
                 Alignment.CenterVertically,
             modifier =
-                Modifier.clickable(role = Role.Button) {
+                Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
                     onCancel()
                 }
         ) {
