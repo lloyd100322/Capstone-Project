@@ -177,8 +177,7 @@ private fun SectionChip(label: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(8.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, FieldBorderColor)
+        color = Color.White
     ) {
         Text(
             text = label,
