@@ -65,7 +65,16 @@ class AccountManagementViewModel @Inject constructor(
         listenForAccounts()
     }
 
+    fun retryLoading() {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+        listenForAccounts()
+    }
+
     private fun listenForAccounts() {
+        usersListener?.remove()
         usersListener = firestore
             .collection(FirestoreCollections.USERS)
             .addSnapshotListener { snapshot, error ->
