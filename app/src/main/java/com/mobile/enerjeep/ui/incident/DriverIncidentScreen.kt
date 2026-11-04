@@ -147,7 +147,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
 
 @Composable
 fun IncidentSummaryCard(modifier: Modifier = Modifier, count: Int, label: String, iconColor: Color, borderColor: Color, icon: @Composable () -> Unit) {
-    Card(modifier.height(100.dp), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
+    Card(modifier.height(100.dp), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxHeight().width(4.dp).background(borderColor))
             Column(Modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
@@ -172,7 +172,7 @@ fun DriverIncidentCard(
     onCallDriver: () -> Unit
 ) {
     // Contact details are resolved only when the user taps the call action.
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevationCardDefaults.cardElevation(defaultElevation = 4.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
