@@ -147,38 +147,72 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
         }
         HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
         Spacer(Modifier.height(16.dp))
-        if (finalRecords.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    if (historyFilter.period == HistoryPeriod.TODAY)
-                        "Wala pang kita ngayon. Piliin ang \"Lahat ng petsa\" para makita ang nakaraang kita."
-                    else
-                        "Walang record sa napiling filter.",
-                    color = TextSecondary,
-                    fontSize = 14.sp
-                )
+        when {
+            uiState.errorMessage != null -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        uiState.errorMessage,
+                        color = Color.Red,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = viewModel::retryLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                    ) {
+                        Text("Subukang muli", maxLines = 1)
+                    }
+                }
             }
-        } else {
-            /*
-             * Bounded lazy list: long earnings histories are composed
-             * only as they approach the visible area.
-             */
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(finalRecords, key = { it.id }) { record ->
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(record.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
-                                Spacer(Modifier.height(2.dp))
-                                Text(record.date, fontSize = 12.sp, color = TextSecondary)
+            uiState.isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = EnerjeepBlue)
+                }
+            }
+            finalRecords.isEmpty() -> {
+                Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        if (historyFilter.period == HistoryPeriod.TODAY)
+                            "Wala pang kita ngayon. Piliin ang \"Lahat ng petsa\" para makita ang nakaraang kita."
+                        else
+                            "Walang record sa napiling filter.",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            else -> {
+                /*
+                 * Bounded lazy list: long earnings histories are composed
+                 * only as they approach the visible area.
+                 */
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(finalRecords, key = { it.id }) { record ->
+                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(record.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(record.date, fontSize = 12.sp, color = TextSecondary)
+                                }
+                                // Lahat ng record ay kita (dispatch earnings) -
+                                // walang pulang bawas sa listahan na ito.
+                                Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = SuccessGreen)
                             }
-                            // Lahat ng record ay kita (dispatch earnings) -
-                            // walang pulang bawas sa listahan na ito.
-                            Text("₱${String.format("%,.0f", record.amount)}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = SuccessGreen)
                         }
                     }
                 }
