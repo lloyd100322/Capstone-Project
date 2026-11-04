@@ -141,7 +141,14 @@ fun HomeScreen(
                         },
                         label = {
                             Text("Pila", fontSize = 12.sp)
-                        }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = EnerjeepBlue,
+                            selectedTextColor = EnerjeepBlue,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = Color.Transparent
+                        )
                     )
 
                     NavigationBarItem(
@@ -154,7 +161,14 @@ fun HomeScreen(
                         },
                         label = {
                             Text("Insidente", fontSize = 12.sp)
-                        }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = EnerjeepBlue,
+                            selectedTextColor = EnerjeepBlue,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = Color.Transparent
+                        )
                     )
 
                     NavigationBarItem(
@@ -168,7 +182,14 @@ fun HomeScreen(
                         },
                         label = {
                             Text("Mga Ulat", fontSize = 12.sp)
-                        }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = EnerjeepBlue,
+                            selectedTextColor = EnerjeepBlue,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = Color.Transparent
+                        )
                     )
 
                     NavigationBarItem(
