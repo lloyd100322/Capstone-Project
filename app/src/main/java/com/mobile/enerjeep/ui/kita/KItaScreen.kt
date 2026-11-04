@@ -156,7 +156,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        uiState.errorMessage,
+                        uiState.errorMessage.orEmpty(),
                         color = Color.Red,
                         fontSize = 14.sp
                     )
