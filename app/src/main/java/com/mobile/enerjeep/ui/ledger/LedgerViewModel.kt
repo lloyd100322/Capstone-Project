@@ -4,11 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
-import com.mobile.enerjeep.data.PhilippineIdentifiers
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -199,69 +198,30 @@ class LedgerViewModel @Inject constructor(
                 if (cleanPlateNumber.isBlank()) {
                     throw IllegalArgumentException("Pumili muna ng plaka")
                 }
-                if (amount <= 0.0) {
+                if (!amount.isFinite() || amount <= 0.0) {
                     throw IllegalArgumentException("Dapat mas mataas sa ₱0 ang halaga")
                 }
+                if (feeType.isBlank()) {
+                    throw IllegalArgumentException("Piliin ang uri ng bayad")
+                }
 
-                /*
-                 * The plate is compared the same way everywhere in the app,
-                 * so "abc 1234" and "ABC-1234" still find the same driver.
-                 * The stored value is never rewritten.
-                 */
-                val driverSnapshot = firestore.collection(FirestoreCollections.USERS)
-                    .whereEqualTo("role", "driver")
-                    .get().await()
-                val driverDocument = driverSnapshot.documents.firstOrNull {
-                    PhilippineIdentifiers.platesMatch(
-                        it.getString("plateNumber"),
-                        cleanPlateNumber
+                // The server resolves driverId and writes the ledger + audit
+                // entry atomically. A stable request ID prevents duplicate
+                // records if the callable is retried after a network timeout.
+                val requestId = UUID.randomUUID().toString()
+                FirebaseFunctions.getInstance("us-central1")
+                    .getHttpsCallable("addManualLedgerEntry")
+                    .call(
+                        mapOf(
+                            "plateNumber" to cleanPlateNumber,
+                            "amount" to amount,
+                            "feeType" to feeType.trim(),
+                            "incidentId" to incidentId?.trim()?.takeIf { it.isNotBlank() },
+                            "requestId" to requestId
+                        )
                     )
-                }
-                if (driverDocument == null) {
-                    _uiState.value = LedgerUiState.Error("Hindi makita ang driver para sa plaka $cleanPlateNumber")
-                    return@launch
-                }
-                val driverId = driverDocument.getString("userId").orEmpty().trim()
-                if (driverId.isBlank()) {
-                    _uiState.value = LedgerUiState.Error("Walang User ID ang driver na may plaka $cleanPlateNumber")
-                    return@launch
-                }
+                    .await()
 
-                val firstName = driverDocument.getString("firstName").orEmpty().trim()
-                val lastName = driverDocument.getString("lastName").orEmpty().trim()
-                val resolvedName = listOf(firstName, lastName).filter { it.isNotBlank() }
-                    .joinToString(" ").ifBlank { driverName.trim() }.ifBlank { "Driver" }
-                val documentId = UUID.randomUUID().toString()
-                // Stored date text: Locale.US para pareho sa bawat device
-                // at madaling ma-parse pabalik.
-                val nowText = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date())
-                val data = hashMapOf<String, Any>(
-                    "id" to documentId,
-                    "driverId" to driverId,
-                    "plateNumber" to cleanPlateNumber,
-                    "driverName" to resolvedName,
-                    "date" to nowText,
-                    "amount" to amount,
-                    "grossAmount" to amount,
-                    "otherFees" to 0.0,
-                    "netAmount" to amount,
-                    "feeType" to feeType.trim(),
-                    "status" to "Bayad",
-                    "source" to "ledger",
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-                incidentId?.trim()?.takeIf { it.isNotBlank() }?.let {
-                    data["incidentId"] = it
-                }
-                firestore.collection(FirestoreCollections.LEDGER).document(documentId).set(data).await()
-
-                com.mobile.enerjeep.data.ActivityLogger.log(
-                    firestore,
-                    userSession,
-                    "Bayad ng Multa",
-                    "$plateNumber • $feeType • ₱$amount" +
-                        (incidentId?.let { " • Incident $it" } ?: "")
-                )
                 onComplete(true, null)
             } catch (e: Exception) {
                 val message = e.message ?: "Hindi na-save ang collection"
