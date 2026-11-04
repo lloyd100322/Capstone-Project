@@ -106,6 +106,7 @@ fun QueueScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(24.dp)
         ) {
             // Header
