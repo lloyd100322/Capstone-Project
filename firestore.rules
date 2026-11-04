@@ -32,10 +32,12 @@ service cloud.firestore {
     // verifying the password as well as Firebase Phone Authentication.
     function hasSecureSession() {
       return signedIn()
-        && exists(/databases/$(database)/documents/secureSessions/$(request.auth.uid))
-        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)).data.phoneNumber == authPhone()
-        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)).data.expiresAt is timestamp
-        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)).data.expiresAt > request.time;
+        && request.auth.token.auth_time is int
+        && exists(/databases/$(database)/documents/secureSessions/$(request.auth.uid)_$(request.auth.token.auth_time))
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)_$(request.auth.token.auth_time)).data.phoneNumber == authPhone()
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)_$(request.auth.token.auth_time)).data.authTime == request.auth.token.auth_time
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)_$(request.auth.token.auth_time)).data.expiresAt is timestamp
+        && get(/databases/$(database)/documents/secureSessions/$(request.auth.uid)_$(request.auth.token.auth_time)).data.expiresAt > request.time;
     }
 
     function ownAccountIsActive() {
