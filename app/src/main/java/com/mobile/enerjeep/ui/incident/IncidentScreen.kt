@@ -365,12 +365,12 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
 
 @Composable
 fun IncidentStatCard(modifier: Modifier = Modifier, title: String, value: String, icon: @Composable () -> Unit) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) { Column(Modifier.padding(16.dp)) { icon(); Spacer(Modifier.height(12.dp)); Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(title, fontSize = 12.sp, color = TextSecondary) } }
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) { Column(Modifier.padding(16.dp)) { icon(); Spacer(Modifier.height(12.dp)); Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text(title, fontSize = 12.sp, color = TextSecondary) } }
 }
 
 @Composable
 fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkResolvedClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Column(Modifier.padding(20.dp)) {
             Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.location, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
@@ -381,7 +381,7 @@ fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkReso
 
 @Composable
 fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Column(Modifier.padding(20.dp)) {
             Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
@@ -472,7 +472,7 @@ fun IncidentFormTextField(label: String, value: String, onValueChange: (String) 
 
 @Composable
 fun IncidentTabButton(modifier: Modifier, text: String, selected: Boolean, onClick: () -> Unit) {
-    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (selected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) } }
+    Card(modifier = modifier.fillMaxHeight().padding(horizontal = 4.dp), onClick = onClick, colors = CardDefaults.cardColors(containerColor = if (selected) Color.White else Color.Transparent), shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) } }
 }
 
 @Composable
