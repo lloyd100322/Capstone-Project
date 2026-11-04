@@ -316,6 +316,42 @@ test("superadmin can manage both terminal queues", async () => {
   );
 });
 
+test("only superadmin can normalize a legacy queue entry with no route", async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), "queue/q-legacy"), {
+      driverId: "legacy-driver",
+      status: "Nakapila",
+      position: 99,
+    });
+  });
+
+  const superDb = dbAs(SUPER_PHONE, "u-super");
+  const adminDb = dbAs(ADMIN_PHONE, "u-admin");
+
+  await assertFails(
+    updateDoc(doc(adminDb, "queue/q-legacy"), {
+      route: "Marilao – Monumento",
+      position: 6,
+      updatedAt: new Date(),
+    })
+  );
+
+  await assertSucceeds(
+    updateDoc(doc(superDb, "queue/q-legacy"), {
+      route: "Marilao – Monumento",
+      position: 6,
+      updatedAt: new Date(),
+    })
+  );
+
+  await assertFails(
+    updateDoc(doc(superDb, "queue/q-legacy"), {
+      status: "dispatched",
+      position: 0,
+    })
+  );
+});
+
 test("deactivated station admin cannot modify a queue with an old session", async () => {
   const superDb = dbAs(SUPER_PHONE, "u-super");
   await assertSucceeds(
