@@ -877,42 +877,47 @@ fun DispatchAlertsSheet(
                         key = { index, alert -> "${alert.plateNumber}_${alert.route}_${alert.time}_$index" }
                     ) { _, alert ->
                         Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = LightGrayBackground
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = LightGrayBackground
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                tint = EnerjeepBlue,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    "Na-dispatch: " +
-                                            listOf(
-                                                alert.plateNumber,
-                                                alert.route
-                                            ).filter { it.isNotBlank() }
-                                                .joinToString(" • "),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = EnerjeepBlue,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Text(
-                                    alert.time,
-                                    fontSize = 11.sp,
-                                    color = TextSecondary
-                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        "Na-dispatch: " +
+                                                listOf(
+                                                    alert.plateNumber,
+                                                    alert.route
+                                                ).filter { it.isNotBlank() }
+                                                    .joinToString(" • "),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        alert.time,
+                                        fontSize = 11.sp,
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }

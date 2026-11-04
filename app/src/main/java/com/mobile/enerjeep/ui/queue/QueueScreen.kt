@@ -872,7 +872,7 @@ fun DispatchCollectionContent(
         inc - fees
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Koleksyon sa Dispatch", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             IconButton(onClick = onCancel) { Icon(Icons.Default.Close, contentDescription = "Close") }

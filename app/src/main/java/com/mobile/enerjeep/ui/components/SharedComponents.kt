@@ -23,6 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.mobile.enerjeep.ui.theme.TextSecondary
@@ -44,7 +46,7 @@ fun SummaryCard(
             .height(140.dp)
             .then(
                 if (onClick != null) {
-                    Modifier.clickable { onClick() }
+                    Modifier.clickable(role = Role.Button) { onClick() }
                 } else {
                     Modifier
                 }
@@ -75,14 +77,18 @@ fun SummaryCard(
                     text = value,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = Color.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = title,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = TextSecondary
+                        color = TextSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (onClick != null) {
                         Spacer(modifier = Modifier.width(4.dp))
