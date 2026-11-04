@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.ui.ledger
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.Timestamp
@@ -9,6 +10,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.mobile.enerjeep.data.FirestoreCollections
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -19,7 +21,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 import javax.inject.Inject
 
 data class LedgerItem(
@@ -56,7 +57,8 @@ sealed interface LedgerUiState {
 @HiltViewModel
 class LedgerViewModel @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val userSession: com.mobile.enerjeep.data.UserSession
+    private val userSession: com.mobile.enerjeep.data.UserSession,
+    @ApplicationContext context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<LedgerUiState>(LedgerUiState.Loading)
@@ -64,6 +66,10 @@ class LedgerViewModel @Inject constructor(
 
     private val _driverOptions = MutableStateFlow<List<LedgerDriverOption>>(emptyList())
     val driverOptions = _driverOptions.asStateFlow()
+
+    private val pendingLedgerRequests = PendingLedgerRequestStore(
+        context.getSharedPreferences(PENDING_LEDGER_PREFERENCES, Context.MODE_PRIVATE)
+    )
 
     private var ledgerListener: ListenerRegistration? = null
     private var driverListener: ListenerRegistration? = null
@@ -195,33 +201,59 @@ class LedgerViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val cleanPlateNumber = plateNumber.trim()
+                val cleanFeeType = feeType.trim()
+                val cleanIncidentId = incidentId?.trim()?.takeIf { it.isNotBlank() }
                 if (cleanPlateNumber.isBlank()) {
                     throw IllegalArgumentException("Pumili muna ng plaka")
                 }
                 if (!amount.isFinite() || amount <= 0.0) {
                     throw IllegalArgumentException("Dapat mas mataas sa ₱0 ang halaga")
                 }
-                if (feeType.isBlank()) {
+                if (cleanFeeType.isBlank()) {
                     throw IllegalArgumentException("Piliin ang uri ng bayad")
                 }
 
-                // The server resolves driverId and writes the ledger + audit
-                // entry atomically. A stable request ID prevents duplicate
-                // records if the callable is retried after a network timeout.
-                val requestId = UUID.randomUUID().toString()
-                FirebaseFunctions.getInstance("us-central1")
+                // Include the authenticated admin so two accounts sharing a
+                // device cannot reuse each other's pending request IDs.
+                val actorPhone = userSession.userProfile?.phoneNumber?.trim().orEmpty()
+                if (actorPhone.isBlank()) {
+                    throw IllegalStateException("Hindi makita ang aktibong account. Mag-login muli.")
+                }
+
+                // Persist the same request ID for the same transaction details.
+                // If the server saves the ledger row but the response times out,
+                // the next attempt reuses the ID and the callable returns the
+                // already-recorded result instead of creating a duplicate row.
+                val fingerprint = LedgerRequestFingerprint.create(
+                    actorPhone = actorPhone,
+                    plateNumber = cleanPlateNumber,
+                    amount = amount,
+                    feeType = cleanFeeType,
+                    incidentId = cleanIncidentId
+                )
+                val requestId = pendingLedgerRequests.getOrCreate(fingerprint)
+                val result = FirebaseFunctions.getInstance("us-central1")
                     .getHttpsCallable("addManualLedgerEntry")
                     .call(
                         mapOf(
                             "plateNumber" to cleanPlateNumber,
                             "amount" to amount,
-                            "feeType" to feeType.trim(),
-                            "incidentId" to incidentId?.trim()?.takeIf { it.isNotBlank() },
+                            "feeType" to cleanFeeType,
+                            "incidentId" to cleanIncidentId,
                             "requestId" to requestId
                         )
                     )
                     .await()
 
+                val response = result.data as? Map<*, *>
+                if (response?.get("success") != true) {
+                    throw IllegalStateException("Hindi nakumpirma ng server ang ledger transaction. Ulitin ang parehong request.")
+                }
+
+                // Clear only after the callable confirms success. If local
+                // cleanup fails, retaining the key is still safe because the
+                // backend treats the same request ID as already recorded.
+                pendingLedgerRequests.markCompleted(fingerprint, requestId)
                 onComplete(true, null)
             } catch (e: Exception) {
                 val message = e.message ?: "Hindi na-save ang collection"
@@ -237,5 +269,9 @@ class LedgerViewModel @Inject constructor(
         ledgerListener?.remove()
         driverListener?.remove()
         super.onCleared()
+    }
+
+    private companion object {
+        const val PENDING_LEDGER_PREFERENCES = "enerjeep_pending_ledger_requests"
     }
 }
