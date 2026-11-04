@@ -53,7 +53,8 @@ data class AppNotification(
 
 data class NotificationCenterState(
     val notifications: List<AppNotification> = emptyList(),
-    val loading: Boolean = true
+    val loading: Boolean = true,
+    val errorMessage: String? = null
 ) {
     val unreadCount: Int
         get() = notifications.count { !it.read }
@@ -82,36 +83,51 @@ class NotificationCenterViewModel @Inject constructor(
                     notifications = emptyList(),
                     loading = phone != null
                 )
-                if (phone == null) return@collectLatest
-
-                notificationListener = firestore
-                    .collection(FirestoreCollections.USERS)
-                    .document(phone)
-                    .collection(FirestoreCollections.NOTIFICATIONS)
-                    .orderBy("createdAt", Query.Direction.DESCENDING)
-                    .limit(50)
-                    .addSnapshotListener { snapshot, error ->
-                        if (error != null) {
-                            _uiState.value = _uiState.value.copy(loading = false)
-                            return@addSnapshotListener
-                        }
-                        val items = snapshot?.documents.orEmpty().map { document ->
-                            AppNotification(
-                                id = document.id,
-                                type = document.getString("type").orEmpty(),
-                                title = document.getString("title") ?: "Bagong Abiso",
-                                body = document.getString("body").orEmpty(),
-                                read = document.getBoolean("read") == true,
-                                createdAt = document.getTimestamp("createdAt")?.toDate()
-                            )
-                        }
-                        _uiState.value = NotificationCenterState(
-                            notifications = items,
-                            loading = false
-                        )
-                    }
+                if (phone != null) observeNotifications(phone)
             }
         }
+    }
+
+    private fun observeNotifications(phone: String) {
+        notificationListener?.remove()
+        _uiState.value = _uiState.value.copy(
+            loading = true,
+            errorMessage = null
+        )
+        notificationListener = firestore
+            .collection(FirestoreCollections.USERS)
+            .document(phone)
+            .collection(FirestoreCollections.NOTIFICATIONS)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(50)
+            .addSnapshotListener { snapshot, error ->
+                if (activePhone != phone) return@addSnapshotListener
+                if (error != null) {
+                    _uiState.value = _uiState.value.copy(
+                        loading = false,
+                        errorMessage = "Hindi ma-load ang mga abiso. Suriin ang internet at subukang muli."
+                    )
+                    return@addSnapshotListener
+                }
+                val items = snapshot?.documents.orEmpty().map { document ->
+                    AppNotification(
+                        id = document.id,
+                        type = document.getString("type").orEmpty(),
+                        title = document.getString("title") ?: "Bagong Abiso",
+                        body = document.getString("body").orEmpty(),
+                        read = document.getBoolean("read") == true,
+                        createdAt = document.getTimestamp("createdAt")?.toDate()
+                    )
+                }
+                _uiState.value = NotificationCenterState(
+                    notifications = items,
+                    loading = false
+                )
+            }
+    }
+
+    fun retryLoading() {
+        activePhone?.let(::observeNotifications)
     }
 
     fun markAllRead() {
@@ -231,6 +247,28 @@ fun NotificationCenterBell(
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(color = EnerjeepBlue)
+                    }
+                }
+                state.errorMessage != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 180.dp)
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            state.errorMessage,
+                            color = ErrorRed
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = viewModel::retryLoading,
+                            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                        ) {
+                            Text("Subukang muli", maxLines = 1)
+                        }
                     }
                 }
                 state.notifications.isEmpty() -> {
