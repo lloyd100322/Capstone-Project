@@ -124,13 +124,10 @@ class AccountManagementViewModel @Inject constructor(
                             document.getString("phoneNumber").orEmpty()
                         }
 
-                    val isActive = if (roleLower == "driver") {
-                        document.getBoolean("isVehicleActive") ?: true
-                    } else {
-                        !document.getString("status")
-                            .orEmpty()
-                            .equals("inactive", ignoreCase = true)
-                    }
+                    // Account Management displays account status, not vehicle availability.
+                    val isActive = !document.getString("status")
+                        .orEmpty()
+                        .equals("inactive", ignoreCase = true)
 
                     AccountItem(
                         id = document.id,
