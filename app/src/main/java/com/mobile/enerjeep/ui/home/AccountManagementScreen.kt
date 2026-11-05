@@ -241,11 +241,18 @@ fun AccountManagementScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 uiState.filteredAccounts.forEach { account ->
+
+                    val canDeleteAccount =
+                        !viewModel.isCurrentAccount(account) &&
+                                account.role != "Superadmin" &&
+                                (isSuperadmin || account.role == "Driver")
+
                     AccountCard(
                         account = account,
                         onDelete = {
                             accountPendingDeletion = account
                         },
+                        canDelete = canDeleteAccount,
                         isBusy = account.id in uiState.busyAccountIds
                     )
                 }
@@ -295,10 +302,12 @@ fun AccountManagementScreen(
     }
 }
 
+
 @Composable
 fun AccountCard(
     account: AccountItem,
     onDelete: () -> Unit,
+    canDelete: Boolean,
     isBusy: Boolean = false
 ) {
     Card(
@@ -312,68 +321,86 @@ fun AccountCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            /*
-             * Iisang linya sa itaas: pangalan + role badge (kaliwa),
-             * status badge bago ang basurahan (kanan) - kapareho ng
-             * layout ng status + cancel sa mga pila ng jeep. Wala nang
-             * ibang button - delete at status na lang.
-             */
+
+            // Account name and role
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = account.name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    val roleBgColor =
-                        when {
-                            account.role == "Superadmin" -> Color(0xFF6D28D9)
-                            account.role.startsWith("Admin") -> Color(0xFF1B49B5)
-                            else -> WarningOrangeLight
-                        }
-
-                    val roleTextColor =
-                        if (account.role == "Driver") {
-                            Color(0xFFD97706)
-                        } else {
-                            Color.White
-                        }
-
-                    Surface(
-                        color = roleBgColor,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(24.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(
-                                horizontal = 10.dp
-                            )
-                        ) {
-                            Text(
-                                text = account.role,
-                                color = roleTextColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = account.name,
+                    modifier = Modifier.weight(1f),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 Spacer(modifier = Modifier.width(8.dp))
 
+                val roleBgColor = when {
+                    account.role == "Superadmin" ->
+                        Color(0xFF6D28D9)
+                    account.role.startsWith("Admin") ->
+                        Color(0xFF1B49B5)
+                    else -> WarningOrangeLight
+                }
+
+                val roleTextColor =
+                    if (account.role == "Driver") {
+                        Color(0xFFD97706)
+                    } else {
+                        Color.White
+                    }
+
+                Surface(
+                    color = roleBgColor,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.height(24.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.padding(
+                            horizontal = 10.dp
+                        )
+                    ) {
+                        Text(
+                            text = account.role,
+                            color = roleTextColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Account number
+            Text(
+                text = account.phone,
+                fontSize = 14.sp,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // Account creation date
+            Text(
+                text = "Ginawa noong ${account.dateCreated}",
+                fontSize = 12.sp,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Account status and authorized delete action
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 val statusBgColor =
                     if (account.isActive) {
                         Color(0xFFDCFCE7)
@@ -415,75 +442,59 @@ fun AccountCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                IconButton(
-                    onClick = onDelete,
-                    enabled = !isBusy,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .border(
-                            1.dp,
-                            ErrorRedLight,
-                            RoundedCornerShape(12.dp)
+                if (canDelete) {
+                    IconButton(
+                        onClick = onDelete,
+                        enabled = !isBusy,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .border(
+                                1.dp,
+                                ErrorRedLight,
+                                RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = Color.Red
                         )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color.Red
-                    )
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = account.phone,
-                fontSize = 14.sp,
-                color = TextSecondary
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = "Ginawa noong ${account.dateCreated}",
-                fontSize = 12.sp,
-                color = TextSecondary
-            )
         }
     }
 }
 
-@Composable
-fun SuperadminTabButton(
-    modifier: Modifier = Modifier,
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .clickable(role = Role.Button, onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) Color(0xFF1B49B5) else Color(0xFFEAF1FF),
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.5.dp,
-            color = Color(0xFF1B49B5)
-        ),
-        shadowElevation = 1.dp
+    @Composable
+    fun SuperadminTabButton(
+        modifier: Modifier = Modifier,
+        text: String,
+        selected: Boolean,
+        onClick: () -> Unit
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+        Surface(
+            modifier = modifier
+                .heightIn(min = 48.dp)
+                .clickable(role = Role.Button, onClick = onClick),
+            shape = RoundedCornerShape(12.dp),
+            color = if (selected) Color(0xFF1B49B5) else Color(0xFFEAF1FF),
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.5.dp,
+                color = Color(0xFF1B49B5)
+            ),
+            shadowElevation = 1.dp
         ) {
-            Text(
-                text = text,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (selected) Color.White else Color(0xFF1B49B5)
-            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (selected) Color.White else Color(0xFF1B49B5)
+                )
+            }
         }
     }
-}

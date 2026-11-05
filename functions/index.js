@@ -450,11 +450,16 @@ exports.onQueueDispatched = onDocumentUpdated(
   }
 );
 
+
 /**
- * Bawat bagong incident report ay ipinapaalam sa lahat ng active roles,
- * kahit sentToDriver=false at kahit resolved na ang initial status.
- * Kapag nag-transition mula unresolved tungo sa resolved, nagpapadala rin
- * ng isang hiwalay na status update; ordinaryong edits ay hindi duplicate.
+ * Incident notifications:
+ * - Save Draft (sentToDriver=false): walang notification.
+ * - New incident with sentToDriver=true: magpadala ng notification.
+ * - Draft changed from false to true: magpadala kapag pinindot ang Ipadala.
+ * - Resolved update: magpadala lamang kung naipadala na ang incident.
+ *
+ * Deterministic notification IDs prevent duplicate notifications
+ * when Cloud Functions retries an event.
  */
 exports.onIncidentShared = onDocumentWritten(
   { document: "incidents/{incidentId}", region: "asia-east2" },
@@ -463,7 +468,9 @@ exports.onIncidentShared = onDocumentWritten(
     const afterSnapshot = event.data.after;
     if (!afterSnapshot.exists) return null;
 
-    const before = beforeSnapshot.exists ? (beforeSnapshot.data() || {}) : {};
+    const before = beforeSnapshot.exists
+      ? (beforeSnapshot.data() || {})
+      : {};
     const incident = afterSnapshot.data() || {};
 
     // Remove the legacy phone field when an incident is touched.
@@ -475,24 +482,48 @@ exports.onIncidentShared = onDocumentWritten(
 
     const isResolved = incident.isResolved === true ||
       String(incident.status || "").toLowerCase() === "resolved";
+
     const wasResolved = before.isResolved === true ||
       String(before.status || "").toLowerCase() === "resolved";
-    const isNewIncident = !beforeSnapshot.exists;
-    const becameResolved = beforeSnapshot.exists && !wasResolved && isResolved;
 
-    if (!isNewIncident && !becameResolved) return null;
+    const isNewIncident = !beforeSnapshot.exists;
+    const wasSentToDriver = before.sentToDriver === true;
+    const isSentToDriver = incident.sentToDriver === true;
+
+    // Notify only for a new shared incident or the first false -> true transition.
+    const shouldNotifyShared =
+      isSentToDriver && (isNewIncident || !wasSentToDriver);
+
+    // Send a resolution update only if the incident was already shared.
+    const shouldNotifyResolved =
+      beforeSnapshot.exists &&
+      wasSentToDriver &&
+      isSentToDriver &&
+      !wasResolved &&
+      isResolved;
+
+    if (!shouldNotifyShared && !shouldNotifyResolved) return null;
 
     const incidentId = String(event.params.incidentId);
-    const notificationId = isNewIncident
-      ? "incident_" + incidentId
+
+    // Separate ID prevents an old, incorrectly created draft notification
+    // from blocking the actual notification when the draft is sent.
+    const notificationId = shouldNotifyShared
+      ? "incident_shared_" + incidentId
       : "incident_" + incidentId + "_resolved";
+
     const statusLabel = isResolved ? "Naayos" : "Hindi pa naayos";
-    const title = isNewIncident
-      ? (isResolved ? "Bagong Insidente • Naayos" : "Bagong Insidente sa Kooperatiba")
+
+    const title = shouldNotifyShared
+      ? (isResolved
+          ? "Bagong Insidente • Naayos"
+          : "Bagong Insidente sa Kooperatiba")
       : "Naayos na ang Insidente";
+
     const plate = String(incident.plateNumber || "");
     const incidentTitle = String(incident.title || "Insidente");
     const location = String(incident.location || "");
+
     const body = [plate, incidentTitle, location, statusLabel]
       .filter((part) => part.trim().length > 0)
       .join(" • ")
@@ -503,19 +534,24 @@ exports.onIncidentShared = onDocumentWritten(
     const createdRecipients = [];
 
     for (const userDocument of activeMembers) {
-      const created = await createUserNotification(userDocument.ref, notificationId, {
-        type: "incident",
-        title,
-        body,
-        entityId: incidentId,
-        incidentId,
-        driverId: String(incident.driverId || ""),
-        plateNumber: plate,
-        incidentTitle,
-        location,
-        status: isResolved ? "resolved" : "open",
-        statusLabel,
-      });
+      const created = await createUserNotification(
+        userDocument.ref,
+        notificationId,
+        {
+          type: "incident",
+          title,
+          body,
+          entityId: incidentId,
+          incidentId,
+          driverId: String(incident.driverId || ""),
+          plateNumber: plate,
+          incidentTitle,
+          location,
+          status: isResolved ? "resolved" : "open",
+          statusLabel,
+        }
+      );
+
       if (created) {
         createdRecipients.push(userDocument);
       }
@@ -545,6 +581,7 @@ exports.onIncidentShared = onDocumentWritten(
       "onIncidentShared: na-save ang abiso sa " +
       createdRecipients.length + " active account(s)."
     );
+
     return null;
   }
 );
