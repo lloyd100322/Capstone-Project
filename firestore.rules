@@ -120,14 +120,14 @@ service cloud.firestore {
         && request.resource.data.status == 'active'
         && (isSuperadmin() || request.resource.data.role == 'driver');
 
-            // Protect every existing Superadmin account from accidental
-      // deactivation or role demotion. A Superadmin may still manage
-      // ordinary Admin and Driver accounts.
+            // Account activation/deactivation is not an app feature. The
+      // client may maintain the separate Driver vehicle-availability flag,
+      // but may not change the account status used by authentication.
       allow update: if (
           isAdmin()
           && doesNotSetPassword()
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'isVehicleActive', 'updatedAt'])
+               .hasOnly(['isVehicleActive', 'updatedAt'])
           && (isSuperadmin() || resource.data.role == 'driver')
           && resource.data.role != 'superadmin'
         )
