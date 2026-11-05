@@ -120,17 +120,21 @@ service cloud.firestore {
         && request.resource.data.status == 'active'
         && (isSuperadmin() || request.resource.data.role == 'driver');
 
-      // Account-state changes are restricted to explicit mutable fields.
+            // Protect every existing Superadmin account from accidental
+      // deactivation or role demotion. A Superadmin may still manage
+      // ordinary Admin and Driver accounts.
       allow update: if (
           isAdmin()
           && doesNotSetPassword()
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'isVehicleActive', 'updatedAt'])
           && (isSuperadmin() || resource.data.role == 'driver')
+          && resource.data.role != 'superadmin'
         )
         || (
           isSuperadmin()
           && doesNotSetPassword()
+          && resource.data.role != 'superadmin'
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['role', 'updatedAt'])
           && request.resource.data.role in ['admin', 'driver', 'superadmin']
@@ -145,8 +149,7 @@ service cloud.firestore {
                  'emergencyContactName', 'emergencyContactNumber',
                  'emergencyContact', 'fcmToken', 'updatedAt'
                ])
-        )
-        ;
+        );
 
       // Each member can read only their own server-created notifications.
       match /notifications/{notificationId} {

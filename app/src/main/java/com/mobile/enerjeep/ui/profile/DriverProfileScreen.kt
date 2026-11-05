@@ -12,7 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -271,7 +271,7 @@ fun DriverProfileMainContent(
                 ) {
                     Icon(
                         imageVector =
-                            Icons.Default.PersonOutline,
+                            Icons.Filled.Person,
                         contentDescription = null,
                         tint = EnerjeepBlue,
                         modifier =
@@ -288,6 +288,11 @@ fun DriverProfileMainContent(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Color.Black
+                        )
+                        Text(
+                            text = "I-update ang iyong impormasyon",
+                            fontSize = 12.sp,
+                            color = TextSecondary
                         )
 
                     }
