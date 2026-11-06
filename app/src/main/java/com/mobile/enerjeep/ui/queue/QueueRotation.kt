@@ -244,7 +244,7 @@ object QueueRotation {
                             }.thenBy {
                                 it.getLong("position") ?: Long.MAX_VALUE
                             }.thenBy {
-                                it.safeTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
+                                it.getTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
                             }
                         )
 
