@@ -39,6 +39,8 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
     val contactsError by viewModel.emergencyContactsError.collectAsStateWithLifecycle()
     val adminAccountsError by viewModel.adminAccountsError.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val isAddingEmergencyContact by viewModel.isAddingEmergencyContact.collectAsStateWithLifecycle()
+    val removingEmergencyContactIds by viewModel.removingEmergencyContactIds.collectAsStateWithLifecycle()
 
     var selectedAdmin by remember {
         mutableStateOf<Pair<String, String>?>(null)
@@ -146,16 +148,24 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                                 selectedAdmin = null
                             }
                         },
-                        enabled = selectedAdmin != null,
+                        enabled = selectedAdmin != null && !isAddingEmergencyContact,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EnerjeepBlue
                         ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Idagdag ang Admin", maxLines = 1)
+                        if (isAddingEmergencyContact) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Idagdag ang Admin", maxLines = 1)
+                        }
                     }
                 }
             }
@@ -213,15 +223,24 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         manualName = ""
                         manualNumber = ""
                     },
+                    enabled = !isAddingEmergencyContact,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = EnerjeepBlue
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Idagdag ang Numero", maxLines = 1)
+                    if (isAddingEmergencyContact) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Idagdag ang Numero", maxLines = 1)
+                    }
                 }
             }
         }
@@ -291,13 +310,22 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         IconButton(
                             onClick = {
                                 viewModel.removeEmergencyContact(contact)
-                            }
+                            },
+                            enabled = contact.id !in removingEmergencyContactIds
                         ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Alisin",
-                                tint = ErrorRed
-                            )
+                            if (contact.id in removingEmergencyContactIds) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = ErrorRed
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Alisin",
+                                    tint = ErrorRed
+                                )
+                            }
                         }
                     }
                 }
