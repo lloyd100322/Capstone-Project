@@ -122,7 +122,8 @@ class NotificationCenterViewModel @Inject constructor(
                 }
                 _uiState.value = NotificationCenterState(
                     notifications = items,
-                    loading = false
+                    loading = false,
+                    markingRead = _uiState.value.markingRead
                 )
             }
     }
