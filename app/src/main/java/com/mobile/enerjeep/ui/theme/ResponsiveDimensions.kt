@@ -7,7 +7,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mobile.enerjeep.R
+import com.intuit.sdp.R as SdpR
+import com.intuit.ssp.R as SspR
 
 /**
  * Compose adapters for Intuit SDP/SSP resources.
@@ -18,7 +19,7 @@ import com.mobile.enerjeep.R
  */
 @Composable
 fun responsivePageHorizontalPadding(): Dp =
-    dimensionResource(R.dimen._20sdp).coerceIn(16.dp, 24.dp)
+    dimensionResource(SdpR.dimen._20sdp).coerceIn(16.dp, 24.dp)
 
 /**
  * SSP dimensions are returned by dimensionResource as Dp. Convert back to
@@ -27,7 +28,7 @@ fun responsivePageHorizontalPadding(): Dp =
  */
 @Composable
 fun responsivePageTitleSize(): TextUnit {
-    val titleDimension = dimensionResource(R.dimen._26ssp)
+    val titleDimension = dimensionResource(SspR.dimen._26ssp)
     val titleSp = with(LocalDensity.current) { titleDimension.toSp() }
     return titleSp.value.coerceIn(26f, 28f).sp
 }
