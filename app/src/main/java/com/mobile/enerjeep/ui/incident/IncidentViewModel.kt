@@ -324,8 +324,14 @@ class IncidentViewModel @Inject constructor(
     /**
      * Sends a previously saved (but not sent) incident to the drivers.
      */
-    fun sendIncidentToDriver(incidentId: String) {
+    fun sendIncidentToDriver(
+        incidentId: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        if (incidentId in _sendingIncidentIds.value) return
+        _sendingIncidentIds.value = _sendingIncidentIds.value + incidentId
         viewModelScope.launch {
+            var succeeded = false
             try {
                 firestore
                     .collection(FirestoreCollections.INCIDENTS)
@@ -345,6 +351,7 @@ class IncidentViewModel @Inject constructor(
                     incidentId
                 )
 
+                succeeded = true
                 ToastFeedback.show(
                     "Naipadala na sa mga driver ang insidente."
                 )
@@ -352,6 +359,9 @@ class IncidentViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi maipadala ang insidente."
                 )
+            } finally {
+                _sendingIncidentIds.value = _sendingIncidentIds.value - incidentId
+                onComplete(succeeded)
             }
         }
     }
@@ -360,6 +370,12 @@ class IncidentViewModel @Inject constructor(
     private var reportingIncident = false
     private val _isReporting = MutableStateFlow(false)
     val isReporting = _isReporting.asStateFlow()
+
+    private val _resolvingIncidentIds = MutableStateFlow<Set<String>>(emptySet())
+    val resolvingIncidentIds = _resolvingIncidentIds.asStateFlow()
+
+    private val _sendingIncidentIds = MutableStateFlow<Set<String>>(emptySet())
+    val sendingIncidentIds = _sendingIncidentIds.asStateFlow()
 
     fun reportIncident(
         plateNumber: String,
@@ -524,11 +540,14 @@ class IncidentViewModel @Inject constructor(
     }
 
     fun resolveIncident(
-        incidentId: String
+        incidentId: String,
+        onComplete: (Boolean) -> Unit = {}
     ) {
+        if (incidentId in _resolvingIncidentIds.value) return
+        _resolvingIncidentIds.value = _resolvingIncidentIds.value + incidentId
 
         viewModelScope.launch {
-
+            var succeeded = false
             try {
 
                 firestore
@@ -555,6 +574,7 @@ class IncidentViewModel @Inject constructor(
                     incidentId
                 )
 
+                succeeded = true
                 ToastFeedback.show(
                     "Naayos na ang insidente. Nasa Kasaysayan na ito."
                 )
@@ -565,6 +585,9 @@ class IncidentViewModel @Inject constructor(
                     e.message
                         ?: "Hindi ma-resolve ang insidente"
                 )
+            } finally {
+                _resolvingIncidentIds.value = _resolvingIncidentIds.value - incidentId
+                onComplete(succeeded)
             }
         }
     }
