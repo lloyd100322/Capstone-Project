@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.queue
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -109,7 +111,7 @@ fun QueueScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(24.dp)
+                .padding(responsivePageHorizontalPadding())
         ) {
             // Header
             Row(
@@ -127,7 +129,7 @@ fun QueueScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Text(text = "Pila ng Dispatch", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold, color = Color.Black)
 
             Spacer(modifier = Modifier.height(24.dp))
 
