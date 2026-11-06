@@ -59,6 +59,7 @@ fun ProfileScreen(
 
     val isUpdatingProfile by viewModel.isUpdatingProfile.collectAsStateWithLifecycle()
     val isUpdatingPassword by viewModel.isUpdatingPassword.collectAsStateWithLifecycle()
+    val isSigningOut by viewModel.isSigningOut.collectAsStateWithLifecycle()
 
     var currentView by
     remember {
@@ -168,6 +169,7 @@ fun ProfileScreen(
                                     viewModel.signOut()
                                     onSignOut()
                                 },
+                                isSigningOut = isSigningOut,
                                 isSuperadmin =
                                     state.profile.role.equals(
                                         "superadmin",
@@ -293,6 +295,7 @@ fun ProfileMainContent(
     onSecurityClick: () -> Unit,
     onSignOutClick: () -> Unit,
     isSuperadmin: Boolean = false,
+    isSigningOut: Boolean = false,
     onSettingsClick: () -> Unit = {}
 ) {
 
@@ -559,33 +562,38 @@ fun ProfileMainContent(
         )
 
         OutlinedButton(
-            onClick =
-                onSignOutClick,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-            shape =
-                RoundedCornerShape(28.dp)
+            onClick = onSignOutClick,
+            enabled = !isSigningOut,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(28.dp)
         ) {
-
-            Icon(
-                Icons.Default.ExitToApp,
-                contentDescription = null,
-                tint = ProfileError
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.width(8.dp)
-            )
-
-            Text(
-                text = "Mag-sign Out",
-                color = ProfileError,
-                fontWeight =
-                    FontWeight.Bold
-            )
+            if (isSigningOut) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = ProfileError
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Nagsa-sign out...",
+                    color = ProfileError,
+                    fontWeight = FontWeight.Bold
+                )
+            } else {
+                Icon(
+                    Icons.Default.ExitToApp,
+                    contentDescription = null,
+                    tint = ProfileError
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Mag-sign Out",
+                    color = ProfileError,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Spacer(
