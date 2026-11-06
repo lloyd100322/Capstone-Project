@@ -356,8 +356,10 @@ class IncidentViewModel @Inject constructor(
         }
     }
 
-    // In-flight flag for reportIncident (double-tap protection).
+    // In-flight state lets the report form show progress and prevent duplicate submissions.
     private var reportingIncident = false
+    private val _isReporting = MutableStateFlow(false)
+    val isReporting = _isReporting.asStateFlow()
 
     fun reportIncident(
         plateNumber: String,
@@ -365,7 +367,8 @@ class IncidentViewModel @Inject constructor(
         location: String,
         penalty: String,
         description: String,
-        sendToDriver: Boolean = true
+        sendToDriver: Boolean = true,
+        onComplete: (Boolean) -> Unit = {}
     ) {
 
         val profile =
@@ -388,9 +391,10 @@ class IncidentViewModel @Inject constructor(
         // In-flight guard: a double tap must not record the incident twice.
         if (reportingIncident) return
         reportingIncident = true
+        _isReporting.value = true
 
         viewModelScope.launch {
-
+            var succeeded = false
             try {
 
                 val driverDocument =
@@ -467,7 +471,8 @@ class IncidentViewModel @Inject constructor(
                         "description" to
                                 description.trim(),
 
-                        "sentToDriver" to sendToDriver,
+                        // All newly reported incidents are immediately visible to drivers.
+                        "sentToDriver" to true,
 
                         "isResolved" to false,
 
@@ -499,8 +504,9 @@ class IncidentViewModel @Inject constructor(
                     "${plateNumber.trim()} • $type • $location"
                 )
 
+                succeeded = true
                 ToastFeedback.show(
-                    "Naitala ang insidente para sa ${plateNumber.trim()}."
+                    "Naipadala ang insidente sa mga driver para sa ${plateNumber.trim()}."
                 )
 
             } catch (e: Exception) {
@@ -511,6 +517,8 @@ class IncidentViewModel @Inject constructor(
                 )
             } finally {
                 reportingIncident = false
+                _isReporting.value = false
+                onComplete(succeeded)
             }
         }
     }
