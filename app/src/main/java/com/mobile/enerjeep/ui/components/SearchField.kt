@@ -1,21 +1,7 @@
-/*
- * Copyright (c) 2026 enerjeep Capstone Project.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.mobile.enerjeep.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -26,16 +12,46 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /**
- * Shared search input used by the report screens and the
- * Talaan ng Aktibidad filter.
+ * Shared compact, single-line search input used across the app.
  */
 @Composable
-fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String) {
-    OutlinedTextField(value, onValueChange, modifier = Modifier.fillMaxWidth(), placeholder = { Text(placeholder, color = TextSecondary) }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Hanapin", tint = TextSecondary) }, shape = RoundedCornerShape(12.dp), singleLine = true, colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue, unfocusedContainerColor = Color.White, focusedContainerColor = Color.White))
+fun SearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth().height(48.dp),
+        textStyle = TextStyle(fontSize = 14.sp),
+        placeholder = {
+            Text(placeholder, color = TextSecondary, fontSize = 13.sp, maxLines = 1)
+        },
+        leadingIcon = {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = "Hanapin",
+                tint = TextSecondary,
+                modifier = Modifier.height(18.dp)
+            )
+        },
+        shape = RoundedCornerShape(10.dp),
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedBorderColor = FieldBorderColor,
+            focusedBorderColor = EnerjeepBlue,
+            unfocusedContainerColor = Color.White,
+            focusedContainerColor = Color.White
+        )
+    )
 }
