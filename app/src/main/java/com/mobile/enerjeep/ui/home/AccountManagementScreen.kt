@@ -310,158 +310,146 @@ fun AccountCard(
     canDelete: Boolean,
     isBusy: Boolean = false
 ) {
+    val roleBackground = when {
+        account.role == "Superadmin" -> Color(0xFF6D28D9)
+        account.role.startsWith("Admin") -> Color(0xFF1B49B5)
+        else -> WarningOrangeLight
+    }
+    val roleForeground =
+        if (account.role == "Driver") Color(0xFFD97706) else Color.White
+
+    val statusBackground =
+        if (account.isActive) Color(0xFFDCFCE7) else Color(0xFFF3F4F6)
+    val statusForeground =
+        if (account.isActive) Color(0xFF166534) else TextSecondary
+    val statusLabel = if (account.isActive) "Aktibo" else "Hindi Aktibo"
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-
-            // Account name and role
+            /*
+             * Keep the name, role, account status, and delete action on
+             * one header row to match the account cards in the manuscript.
+             * The name is the flexible item, so long names truncate rather
+             * than pushing the status and delete controls off-screen.
+             */
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = account.name,
+                // Keep the driver's full name and role together as one group.
+                // Long names can wrap to a second line instead of being forced
+                // into a narrow single-line slot.
+                Row(
                     modifier = Modifier.weight(1f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = account.name,
+                        modifier = Modifier.weight(1f, fill = false),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                val roleBgColor = when {
-                    account.role == "Superadmin" ->
-                        Color(0xFF6D28D9)
-                    account.role.startsWith("Admin") ->
-                        Color(0xFF1B49B5)
-                    else -> WarningOrangeLight
+                    Surface(
+                        color = roleBackground,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(22.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Text(
+                                text = account.role,
+                                color = roleForeground,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
 
-                val roleTextColor =
-                    if (account.role == "Driver") {
-                        Color(0xFFD97706)
-                    } else {
-                        Color.White
+                // Keep status and delete at the trailing edge, without
+                // inserting a spacer between the name and the role badge.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Surface(
+                        color = statusBackground,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(22.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Text(
+                                text = statusLabel,
+                                color = statusForeground,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
 
-                Surface(
-                    color = roleBgColor,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(24.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.padding(
-                            horizontal = 10.dp
-                        )
-                    ) {
-                        Text(
-                            text = account.role,
-                            color = roleTextColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    if (canDelete) {
+                        IconButton(
+                            onClick = onDelete,
+                            enabled = !isBusy,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = ErrorRedLight,
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Burahin ang account ni ${account.name}",
+                                tint = Color.Red,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Account number
             Text(
                 text = account.phone,
-                fontSize = 14.sp,
-                color = TextSecondary
+                fontSize = 13.sp,
+                color = TextSecondary,
+                maxLines = 1
             )
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            // Account creation date
             Text(
                 text = "Ginawa noong ${account.dateCreated}",
-                fontSize = 12.sp,
-                color = TextSecondary
+                fontSize = 11.sp,
+                color = TextSecondary,
+                maxLines = 1
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Account status and authorized delete action
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val statusBgColor =
-                    if (account.isActive) {
-                        Color(0xFFDCFCE7)
-                    } else {
-                        Color(0xFFF3F4F6)
-                    }
-
-                val statusTextColor =
-                    if (account.isActive) {
-                        Color(0xFF166534)
-                    } else {
-                        TextSecondary
-                    }
-
-                val statusText =
-                    if (account.isActive) {
-                        "Aktibo"
-                    } else {
-                        "Hindi Aktibo"
-                    }
-
-                Surface(
-                    color = statusBgColor,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(24.dp)
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.padding(
-                            horizontal = 10.dp
-                        )
-                    ) {
-                        Text(
-                            text = statusText,
-                            color = statusTextColor,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                if (canDelete) {
-                    IconButton(
-                        onClick = onDelete,
-                        enabled = !isBusy,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .border(
-                                1.dp,
-                                ErrorRedLight,
-                                RoundedCornerShape(12.dp)
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = Color.Red
-                        )
-                    }
-                }
-            }
         }
     }
 }
