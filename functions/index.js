@@ -229,6 +229,16 @@ exports.dailyQueueReset = onSchedule(
     const queueControlRef = db.collection("settings").doc("queueControl");
     const observedRevision = (await queueControlRef.get()).get("revision") || 0;
     const queueIds = (await db.collection("queue").get()).docs.map((d) => d.id);
+    const driverAccounts = await db.collection("users")
+      .where("role", "==", "driver")
+      .get();
+    const accountCreatedAtByDriver = new Map(driverAccounts.docs.map((user) => {
+      const rawCreatedAt = user.get("createdAt");
+      const createdAtMillis = rawCreatedAt && typeof rawCreatedAt.toMillis === "function"
+        ? rawCreatedAt.toMillis()
+        : Number.MAX_SAFE_INTEGER;
+      return [String(user.get("userId") || user.id), createdAtMillis];
+    }));
 
     const rotated = await db.runTransaction(async (tx) => {
       const queueControl = await tx.get(queueControlRef);
@@ -255,25 +265,36 @@ exports.dailyQueueReset = onSchedule(
         if (snap.exists) docs.push(snap);
       }
 
+      const accountCreationMillis = (document) => {
+        const storedQueueTimestamp = document.get("accountCreatedAt");
+        if (storedQueueTimestamp && typeof storedQueueTimestamp.toMillis === "function") {
+          return storedQueueTimestamp.toMillis();
+        }
+        const originalAccountTimestamp = accountCreatedAtByDriver.get(
+          String(document.get("driverId") || "")
+        );
+        if (Number.isFinite(originalAccountTimestamp)) return originalAccountTimestamp;
+        const queueCreatedAt = document.get("createdAt");
+        return queueCreatedAt && typeof queueCreatedAt.toMillis === "function"
+          ? queueCreatedAt.toMillis()
+          : Number.MAX_SAFE_INTEGER;
+      };
+
       [1, 0].forEach((key) => {
         const active = docs
           .filter((d) => isQueueActive(d.data()) && routeKey(d.data().route) === key)
-          .sort(
-            (a, b) =>
-              (a.get("position") ?? Number.MAX_SAFE_INTEGER) -
-              (b.get("position") ?? Number.MAX_SAFE_INTEGER)
+          .sort((a, b) =>
+            accountCreationMillis(a) - accountCreationMillis(b) ||
+            String(a.get("driverId") || a.id).localeCompare(String(b.get("driverId") || b.id))
           );
 
-        if (active.length > 1) {
-          // Rotation: ang #1 ngayon ay napupunta sa huli.
-          const rotated = [...active.slice(1), active[0]];
-          rotated.forEach((doc, index) => {
-            tx.update(doc.ref, {
-              position: index + 1,
-              updatedAt: FieldValue.serverTimestamp(),
-            });
+        // Restore the fixed account-created roster order at the start of each day.
+        active.forEach((doc, index) => {
+          tx.update(doc.ref, {
+            position: index + 1,
+            updatedAt: FieldValue.serverTimestamp(),
           });
-        }
+        });
       });
 
       tx.set(
@@ -290,7 +311,7 @@ exports.dailyQueueReset = onSchedule(
     });
 
     if (rotated) {
-      console.log("dailyQueueReset: na-ikot ang pila para sa bagong araw");
+      console.log("dailyQueueReset: ibinalik ang pila sa fixed account-creation order");
     }
   }
 );
@@ -902,6 +923,9 @@ exports.dispatchQueueVehicle = onCall(
               hour: "2-digit",
               minute: "2-digit",
             }).format(new Date()),
+            accountCreatedAt: driver.get("createdAt") ||
+              target.get("accountCreatedAt") ||
+              FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
           });
         }
