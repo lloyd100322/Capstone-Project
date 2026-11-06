@@ -75,10 +75,12 @@ object QueueRotation {
     }
 
     /**
-     * Isang tseke ng araw: kapag lampas na sa cut-off, ibinabalik ang
-     * aktibong pila sa permanenteng roster order ayon sa account creation
-     * date (pinakamatagal na account muna). Ang basa ng queue ay SA LOOB
-     * ng transaction kaya walang stale na listahan.
+     * Isang tseke ng araw: kapag lampas na sa cut-off, umiikot ang bawat
+     * ruta nang isang puwesto sa permanenteng master order ayon sa account
+     * creation date. Ang dating #1 ay inililipat sa dulo at ang kasunod
+     * ang nagiging bagong #1. Nasa settings/queueRotation ang cursor para
+     * magpatuloy ang rotation sa susunod na araw. Ang basa ng queue ay SA
+     * LOOB ng transaction kaya walang stale na listahan.
      */
     suspend fun rotateOnce(firestore: FirebaseFirestore): Result {
         val queueCollection = firestore.collection(FirestoreCollections.QUEUE)
