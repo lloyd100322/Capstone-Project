@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
+import com.intuit.sdp.R as SdpR
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
@@ -55,6 +57,16 @@ fun QueueScreen(
     // Collect Business State from ViewModel safely
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cutoffHourLabel by viewModel.cutoffLabel.collectAsStateWithLifecycle()
+
+    // SDP values are mapped to the existing 360dp reference layout:
+    // _20sdp ≈ 24dp, _27sdp ≈ 32dp, and _13sdp ≈ 16dp at that width.
+    // Keep typography, touch targets, and gesture dimensions in sp/dp.
+    val screenInset = dimensionResource(SdpR.dimen._20sdp)
+    val largeSectionGap = dimensionResource(SdpR.dimen._27sdp)
+    val sectionGap = dimensionResource(SdpR.dimen._20sdp)
+    val standardGap = dimensionResource(SdpR.dimen._13sdp)
+    val smallGap = dimensionResource(SdpR.dimen._10sdp)
+    val statusCardInset = dimensionResource(SdpR.dimen._12sdp)
 
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
@@ -104,7 +116,7 @@ fun QueueScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(24.dp)
+                .padding(screenInset)
         ) {
             // Header
             Row(
@@ -120,11 +132,11 @@ fun QueueScreen(
                 Text(text = "Enerjeep", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(largeSectionGap))
 
             Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(sectionGap))
 
             // Search Bar
             OutlinedTextField(
@@ -143,7 +155,7 @@ fun QueueScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(standardGap))
 
             /*
              * Awtomatikong reset tuwing cut-off hour (editable ng
@@ -157,7 +169,7 @@ fun QueueScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    modifier = Modifier.fillMaxWidth().padding(statusCardInset),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -170,12 +182,12 @@ fun QueueScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(standardGap))
 
             // Handle UI States
             when (val state = uiState) {
                 is QueueUiState.Loading -> {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(largeSectionGap), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = EnerjeepBlue)
                     }
                 }
@@ -185,7 +197,7 @@ fun QueueScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(text = state.message, color = ErrorRed)
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(smallGap))
                         Button(
                             onClick = viewModel::retryLoading,
                             colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
@@ -201,7 +213,7 @@ fun QueueScreen(
                             value = state.totalInQueue.toString(),
                             icon = { Image(painter = painterResource(id = R.drawable.app_icon), contentDescription = null, modifier = Modifier.size(20.dp)) }
                         )
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(standardGap))
                         QueueStatCard(
                             modifier = Modifier.weight(1f),
                             title = "Na-dispatch Ngayon",
@@ -210,7 +222,7 @@ fun QueueScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(sectionGap))
 
                     /*
                      * Tabs: 2 routes + Kasaysayan. Marilao–Monumento
@@ -271,7 +283,7 @@ fun QueueScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(sectionGap))
 
                     // Dynamic Lists (filtered by the search bar: plaka o driver)
                     val searchMatches = { plate: String, driver: String ->
@@ -285,7 +297,7 @@ fun QueueScreen(
                             fontSize = 11.sp,
                             color = TextSecondary
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(smallGap))
                     }
                     if (selectedTab == 0 || selectedTab == 1) {
                         /*
@@ -303,7 +315,7 @@ fun QueueScreen(
                                     searchMatches(vehicle.plateNumber, vehicle.driverName)
                         }
                         if (searchedQueue.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(largeSectionGap), contentAlignment = Alignment.Center) {
                                 Text("Walang sasakyan sa pila.", color = TextSecondary)
                             }
                         } else {
@@ -330,7 +342,7 @@ fun QueueScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 16.dp)
+                                    .padding(bottom = standardGap)
                                     .pointerInput(Unit) {
                                         awaitEachGesture {
                                             var event =
@@ -358,7 +370,7 @@ fun QueueScreen(
                                             }
                                         }
                                     },
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                verticalArrangement = Arrangement.spacedBy(standardGap)
                             ) {
                                 searchedQueue.forEachIndexed { index, vehicle ->
                                     val isDragging = dragIndex == index
@@ -465,15 +477,15 @@ fun QueueScreen(
                         )
 
                         if (filteredHistory.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(largeSectionGap), contentAlignment = Alignment.Center) {
                                 Text("Wala pang kasaysayan ng dispatch.", color = TextSecondary)
                             }
                         } else {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    .padding(bottom = standardGap),
+                                verticalArrangement = Arrangement.spacedBy(smallGap)
                             ) {
                                 filteredHistory.forEach { history ->
                                     HistoryItem(history)
@@ -515,15 +527,17 @@ fun QueueScreen(
 
 @Composable
 fun QueueStatCard(modifier: Modifier = Modifier, title: String, value: String, icon: @Composable () -> Unit) {
+    val cardInset = dimensionResource(SdpR.dimen._13sdp)
+    val itemGap = dimensionResource(SdpR.dimen._10sdp)
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(cardInset)) {
             icon()
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(itemGap))
             Text(text = value, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
             Text(text = title, fontSize = 12.sp, color = TextSecondary)
         }
@@ -575,6 +589,13 @@ fun QueueItem(
     onCancelClick: () -> Unit,
     onRestoreClick: () -> Unit = {}
 ) {
+    val cardInset = dimensionResource(
+        if (compact) SdpR.dimen._10sdp else SdpR.dimen._17sdp
+    )
+    val compactGap = dimensionResource(SdpR.dimen._7sdp)
+    val standardGap = dimensionResource(SdpR.dimen._17sdp)
+    val itemGap = dimensionResource(SdpR.dimen._10sdp)
+
     var showCancelConfirm by remember { mutableStateOf(false) }
 
     if (showCancelConfirm) {
@@ -607,7 +628,7 @@ fun QueueItem(
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(if (compact) 12.dp else 20.dp)) {
+        Column(modifier = Modifier.padding(cardInset)) {
             Row(verticalAlignment = Alignment.Top) {
                 Surface(
                     modifier = Modifier.size(if (compact) 32.dp else 40.dp),
@@ -695,7 +716,7 @@ fun QueueItem(
                 }
             }
 
-            Spacer(modifier = Modifier.height(if (compact) 8.dp else 20.dp))
+            Spacer(modifier = Modifier.height(if (compact) compactGap else standardGap))
 
             if (canDispatch) {
                 Button(
@@ -721,7 +742,7 @@ fun QueueItem(
             if (canReorder && !vehicle.isCancelled) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(itemGap)
                 ) {
                     OutlinedButton(
                         onClick = {
@@ -772,6 +793,7 @@ fun QueueItem(
 
 @Composable
 fun HistoryItem(history: HistoryVehicle) {
+    val cardInset = dimensionResource(SdpR.dimen._13sdp)
     /*
      * History statuses are LABELS, not buttons. "Dispatch" used to be a
      * solid blue chip that looked clickable - it is now a plain muted
@@ -789,7 +811,7 @@ fun HistoryItem(history: HistoryVehicle) {
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(cardInset), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     WorldIcon(modifier = Modifier.size(14.dp), color = Color.Black)
@@ -845,6 +867,12 @@ fun DispatchCollectionContent(
     onCancel: () -> Unit,
     onDispatch: (Double, Double) -> Unit
 ) {
+    val sheetInset = dimensionResource(SdpR.dimen._20sdp)
+    val largeGap = dimensionResource(SdpR.dimen._27sdp)
+    val sectionGap = dimensionResource(SdpR.dimen._20sdp)
+    val smallGap = dimensionResource(SdpR.dimen._10sdp)
+    val standardGap = dimensionResource(SdpR.dimen._13sdp)
+
     var income by remember { mutableStateOf("") }
     var otherFees by remember { mutableStateOf("") }
 
@@ -867,22 +895,22 @@ fun DispatchCollectionContent(
         inc - fees
     }
 
-    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(sheetInset)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Koleksyon sa Dispatch", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             IconButton(onClick = onCancel) { Icon(Icons.Default.Close, contentDescription = "Close") }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(sectionGap))
 
         InfoRow(label = "Plaka", value = plateNumber, icon = { TruckIcon(modifier = Modifier.size(16.dp), color = TextSecondary) })
         InfoRow(label = "Ruta", value = route, icon = { RouteIcon(modifier = Modifier.size(16.dp), color = TextSecondary) })
         InfoRow(label = "Driver", value = driverName, icon = null)
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(largeGap))
 
         Text(text = "Kita (Income)", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(smallGap))
         OutlinedTextField(
             value = income,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) income = it },
@@ -893,10 +921,10 @@ fun DispatchCollectionContent(
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(sectionGap))
 
         Text(text = "Bawas (Awtomatiko batay sa Upuan)", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(smallGap))
         OutlinedTextField(
             value = otherFees,
             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) otherFees = it },
@@ -907,18 +935,18 @@ fun DispatchCollectionContent(
             colors = OutlinedTextFieldDefaults.colors(unfocusedBorderColor = FieldBorderColor)
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(sectionGap))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(text = "Malinis na Kita", color = TextSecondary)
             Text(text = "₱${netValue.toInt()}", fontWeight = FontWeight.Bold, color = EnerjeepBlue)
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(largeGap))
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor)) { Text("Kanselahin", color = Color.Black) }
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(standardGap))
             Button(
                 onClick = { onDispatch(income.toDoubleOrNull() ?: 0.0, otherFees.toDoubleOrNull() ?: 0.0) },
                 modifier = Modifier.weight(1f).height(56.dp),
