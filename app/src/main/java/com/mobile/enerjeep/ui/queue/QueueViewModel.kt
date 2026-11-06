@@ -658,6 +658,17 @@ class QueueViewModel @Inject constructor(
     // Queue entries whose dispatch is currently being written.
     private val dispatchingIds = mutableSetOf<String>()
 
+    private val _busyActions = MutableStateFlow<Set<String>>(emptySet())
+    val busyActions = _busyActions.asStateFlow()
+
+    private fun setBusyAction(key: String, busy: Boolean) {
+        _busyActions.value = if (busy) {
+            _busyActions.value + key
+        } else {
+            _busyActions.value - key
+        }
+    }
+
     /**
      * The automatic "bawas" shown in the dispatch modal: a fixed amount
      * per seater from the settings. The admin may still change it at
@@ -719,7 +730,8 @@ class QueueViewModel @Inject constructor(
     fun dispatchVehicle(
         vehicleId: String,
         income: Double,
-        otherFees: Double
+        otherFees: Double,
+        onComplete: () -> Unit = {}
     ) {
         if (income < 0.0) {
             ToastFeedback.show("Hindi maaaring negatibo ang kita")
@@ -745,6 +757,9 @@ class QueueViewModel @Inject constructor(
                 return
             }
 
+        val busyKey = "dispatch:$vehicleId"
+        setBusyAction(busyKey, true)
+
         viewModelScope.launch {
             try {
                 FirebaseFunctions.getInstance("us-central1")
@@ -762,12 +777,8 @@ class QueueViewModel @Inject constructor(
                     .filter { it.isNotBlank() }
                     .joinToString(" — ")
 
-                ActivityLogger.log(
-                    firestore,
-                    userSession,
-                    "Dispatch",
-                    "${vehicle.plateNumber} — ${vehicle.driverName} • ${oppositeRoute(vehicle.route)}"
-                )
+                // Dispatch is logged by the trusted Cloud Function in the
+                // same transaction as the queue and ledger writes.
                 ToastFeedback.show("Na-dispatch na ang driver: $dispatchedLabel")
                 DispatchNotifier.post(
                     EnerJeepApp.instance,
@@ -782,6 +793,8 @@ class QueueViewModel @Inject constructor(
                 ToastFeedback.show(e.message ?: "Hindi ma-dispatch ang sasakyan")
             } finally {
                 dispatchingIds.remove(vehicleId)
+                setBusyAction(busyKey, false)
+                onComplete()
             }
         }
     }
@@ -795,6 +808,9 @@ class QueueViewModel @Inject constructor(
      */
     fun cancelQueueEntry(vehicleId: String) {
         if (!canManageQueueEntryOrNotify(vehicleId)) return
+        val busyKey = "cancel:$vehicleId"
+        if (busyKey in _busyActions.value) return
+        setBusyAction(busyKey, true)
         viewModelScope.launch {
             try {
                 val queueControlRef = queueControlReference()
@@ -923,6 +939,8 @@ class QueueViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi makansela ang sasakyan."
                 )
+            } finally {
+                setBusyAction(busyKey, false)
             }
         }
     }
@@ -934,6 +952,9 @@ class QueueViewModel @Inject constructor(
      */
     fun restoreQueueEntry(vehicleId: String) {
         if (!canManageQueueEntryOrNotify(vehicleId)) return
+        val busyKey = "restore:$vehicleId"
+        if (busyKey in _busyActions.value) return
+        setBusyAction(busyKey, true)
         viewModelScope.launch {
             try {
                 val queueControlRef = queueControlReference()
@@ -1058,6 +1079,8 @@ class QueueViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi maibalik ang sasakyan sa pila."
                 )
+            } finally {
+                setBusyAction(busyKey, false)
             }
         }
     }
@@ -1069,6 +1092,9 @@ class QueueViewModel @Inject constructor(
         if (!canManageQueueEntryOrNotify(vehicleId)) return
         val currentState = _uiState.value as? QueueUiState.Success ?: return
         val targetVehicle = currentState.activeQueue.firstOrNull { it.id == vehicleId } ?: return
+        val busyKey = "position:$vehicleId"
+        if (busyKey in _busyActions.value) return
+        setBusyAction(busyKey, true)
 
         viewModelScope.launch {
             try {
@@ -1137,6 +1163,8 @@ class QueueViewModel @Inject constructor(
                 }.await()
             } catch (e: Exception) {
                 ToastFeedback.show(e.message ?: "Hindi ma-update ang posisyon")
+            } finally {
+                setBusyAction(busyKey, false)
             }
         }
     }
