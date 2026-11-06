@@ -109,7 +109,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                     SearchField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = "Hanapin ayon sa uri, plaka, o lokasyon"
+                        placeholder = "Hanapin: uri / plaka / lugar"
                     )
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth().height(48.dp)) {
@@ -267,7 +267,6 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
     var location by remember { mutableStateOf("") }
     var penalty by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -282,7 +281,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         ExposedDropdownMenuBox(
             expanded = expandedDriver,
             onExpandedChange = {
-                if (!submitted && !isReporting && driverOptions.isNotEmpty()) {
+                if (!isReporting && driverOptions.isNotEmpty()) {
                     expandedDriver = !expandedDriver
                 }
             }
@@ -292,7 +291,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                     ?: "Walang dispatched na jeep",
                 onValueChange = {},
                 readOnly = true,
-                enabled = !submitted && !isReporting && driverOptions.isNotEmpty(),
+                enabled = !isReporting && driverOptions.isNotEmpty(),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) },
                 modifier = Modifier.fillMaxWidth().menuAnchor()
             )
@@ -322,21 +321,21 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         IncidentFormTextField(
             "Uri ng Insidente",
             incidentType,
-            { if (!submitted && !isReporting) incidentType = it },
+            { if (!isReporting) incidentType = it },
             "Ilagay ang uri ng insidente"
         )
         Spacer(Modifier.height(16.dp))
         IncidentFormTextField(
             "Lokasyon",
             location,
-            { if (!submitted && !isReporting) location = it },
+            { if (!isReporting) location = it },
             "Ilagay ang lokasyon"
         )
         Spacer(Modifier.height(16.dp))
         IncidentFormTextField(
             "Multa",
             penalty,
-            { if (!submitted && !isReporting && (it.isEmpty() || it.all(Char::isDigit))) penalty = it },
+            { if (!isReporting && (it.isEmpty() || it.all(Char::isDigit))) penalty = it },
             "0",
             leadingIcon = { PesoIcon(size = 18.dp, color = TextSecondary) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -346,7 +345,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             description,
-            { if (!submitted && !isReporting) description = it },
+            { if (!isReporting) description = it },
             modifier = Modifier.fillMaxWidth().height(120.dp),
             placeholder = { Text("Ilarawan ang nangyari...") },
             enabled = !submitted && !isReporting
@@ -364,9 +363,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
             Spacer(Modifier.width(16.dp))
             Button(
                 onClick = {
-                    if (submitted) {
-                        onBack()
-                    } else if (!isReporting && selectedDriver != null) {
+                    if (!isReporting && selectedDriver != null) {
                         viewModel.reportIncident(
                             selectedDriver!!.plateNumber,
                             incidentType,
@@ -375,11 +372,11 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                             description,
                             sendToDriver = true
                         ) { success ->
-                            if (success) submitted = true
+                            if (success) onBack()
                         }
                     }
                 },
-                enabled = submitted || (selectedDriver != null && driverOptions.isNotEmpty() && !isReporting),
+                enabled = selectedDriver != null && driverOptions.isNotEmpty() && !isReporting,
                 modifier = Modifier.weight(1f).height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
@@ -391,17 +388,9 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                         color = Color.White
                     )
                 } else {
-                    Text(if (submitted) "Tapos" else "Ipasa")
+                    Text("Ipasa")
                 }
             }
-        }
-        if (submitted) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "Na-save at naipadala na sa mga driver ang report. Maaari mo nang isara ang form.",
-                color = SuccessGreen,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 }
