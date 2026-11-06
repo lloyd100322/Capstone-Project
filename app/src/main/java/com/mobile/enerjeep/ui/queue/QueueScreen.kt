@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
@@ -129,21 +130,10 @@ fun QueueScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Search Bar
-            OutlinedTextField(
+            SearchField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Hanapin ayon sa plaka", color = TextSecondary) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = FieldBorderColor,
-                    focusedBorderColor = EnerjeepBlue,
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White
-                )
+                placeholder = "Hanapin ayon sa plaka"
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -727,31 +717,15 @@ fun QueueItem(
                     )
                 }
 
-                // For cancelled jeeps, the restore action stays at the
-                // upper-right corner. Active jeeps keep the cancel action here.
-                if (canManage && vehicle.isCancelled) {
-                    TextButton(
-                        onClick = onRestoreClick,
-                        enabled = !isRestoring && !isAnyQueueActionRunning,
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
-                    ) {
-                        if (isRestoring) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = SuccessGreen
-                            )
-                        } else {
-                            Text(
-                                text = "Ibalik",
-                                fontSize = 11.sp,
-                                color = SuccessGreen,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                } else if (canManage && !vehicle.isCancelled) {
+                // The cancelled label stays in the upper-right corner.
+                // Restore is a proper outlined action at the lower-left.
+                if (vehicle.isCancelled) {
+                    StatusBadge(
+                        text = "Nakansela",
+                        backgroundColor = statusBg,
+                        textColor = statusColor
+                    )
+                } else if (canManage) {
                     IconButton(
                         onClick = { showCancelConfirm = true },
                         enabled = !isCancelling && !isAnyQueueActionRunning,
@@ -772,22 +746,6 @@ fun QueueItem(
                             )
                         }
                     }
-                }
-            }
-
-            // The cancelled label is deliberately anchored at the card's
-            // lower-right corner, opposite the restore action above.
-            if (vehicle.isCancelled) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    StatusBadge(
-                        text = "Nakansela",
-                        backgroundColor = statusBg,
-                        textColor = statusColor
-                    )
                 }
             }
 
@@ -813,31 +771,34 @@ fun QueueItem(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            if (!isAnyQueueActionRunning && displayPosition > 1) onMoveBy(-1)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(if (compact) 48.dp else 56.dp)
-                            .semantics {
-                                contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
+                    // Walang up arrow kapag nasa #1 na.
+                    if (displayPosition > 1) {
+                        OutlinedButton(
+                            onClick = {
+                                if (!isAnyQueueActionRunning) onMoveBy(-1)
                             },
-                        enabled = !isAnyQueueActionRunning && displayPosition > 1,
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        if (isMovingUp) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            ArrowUpIcon(
-                                modifier = Modifier.size(28.dp),
-                                color = EnerjeepBlue
-                            )
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(if (compact) 48.dp else 56.dp)
+                                .semantics {
+                                    contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
+                                },
+                            enabled = !isAnyQueueActionRunning,
+                            shape = RoundedCornerShape(16.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            if (isMovingUp) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                ArrowUpIcon(
+                                    modifier = Modifier.size(28.dp),
+                                    color = EnerjeepBlue
+                                )
+                            }
                         }
                     }
 
@@ -870,7 +831,33 @@ fun QueueItem(
                     }
                 }
             }
-        }
+
+            if (canManage && vehicle.isCancelled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    OutlinedButton(
+                        onClick = onRestoreClick,
+                        enabled = !isRestoring && !isAnyQueueActionRunning,
+                        modifier = Modifier.height(40.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                    ) {
+                        if (isRestoring) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = SuccessGreen
+                            )
+                        } else {
+                            Text("Ibalik", fontSize = 12.sp, color = SuccessGreen)
+                        }
+                    }
+                }
+            }        }
     }
 }
 
