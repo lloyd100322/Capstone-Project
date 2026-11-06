@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -655,6 +657,9 @@ class QueueViewModel @Inject constructor(
      * Dispatches the selected driver and creates exactly one ledger
      * transaction. Active drivers return to the end of the queue.
      */
+    // Serializes queue mutations from this app instance while allowing each button to show its own loading state.
+    private val queueMutationMutex = Mutex()
+
     // Queue entries whose dispatch is currently being written.
     private val dispatchingIds = mutableSetOf<String>()
 
@@ -763,16 +768,20 @@ class QueueViewModel @Inject constructor(
         viewModelScope.launch {
             var completed = false
             try {
-                FirebaseFunctions.getInstance("us-central1")
-                    .getHttpsCallable("dispatchQueueVehicle")
-                    .call(
-                        mapOf(
-                            "queueEntryId" to vehicleId,
-                            "income" to income,
-                            "otherFees" to otherFees
+                // Wait for earlier queue actions from this app instance. The
+                // callable re-reads the queue inside its own server transaction.
+                queueMutationMutex.withLock {
+                    FirebaseFunctions.getInstance("us-central1")
+                        .getHttpsCallable("dispatchQueueVehicle")
+                        .call(
+                            mapOf(
+                                "queueEntryId" to vehicleId,
+                                "income" to income,
+                                "otherFees" to otherFees
+                            )
                         )
-                    )
-                    .await()
+                        .await()
+                }
                 completed = true
 
                 val dispatchedLabel = listOf(vehicle.plateNumber, vehicle.driverName)
@@ -815,128 +824,114 @@ class QueueViewModel @Inject constructor(
         setBusyAction(busyKey, true)
         viewModelScope.launch {
             try {
-                val queueControlRef = queueControlReference()
-                val observedQueueRevision = queueControlRef.get().await()
-                    .getLong("revision") ?: 0L
-                val queueSnapshot = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .get()
-                    .await()
+                queueMutationMutex.withLock {
+                    val queueControlRef = queueControlReference()
+                    val observedQueueRevision = queueControlRef.get().await()
+                        .getLong("revision") ?: 0L
+                    val queueSnapshot = firestore
+                        .collection(FirestoreCollections.QUEUE)
+                        .get()
+                        .await()
 
-                val target = queueSnapshot.documents
-                    .firstOrNull { it.id == vehicleId }
-                    ?: throw IllegalStateException(
-                        "Hindi makita ang sasakyan sa pila."
-                    )
-
-                if (!isActiveStatus(target.getString("status")) ||
-                    target.getBoolean("isCancelled") == true
-                ) {
-                    throw IllegalStateException(
-                        "Ang entry na ito ay wala na sa aktibong pila o nakansela na."
-                    )
-                }
-
-                /*
-                 * Lahat ng reference - ang FRESH na listahan ay binabasa
-                 * SA LOOB ng transaction (pareho ng QueueRotation).
-                 */
-                val queueReferencesById =
-                    queueSnapshot.documents.associate { it.id to it.reference }
-
-                /*
-                 * Transaction: only cancel if the entry is still active
-                 * and was not changed by someone else in the meantime.
-                 */
-                firestore.runTransaction { transaction ->
-                    val queueControl = transaction.get(queueControlRef)
-                    val currentRevision = queueControl.getLong("revision") ?: 0L
-                    if (currentRevision != observedQueueRevision) {
-                        throw IllegalStateException(
-                            "Nagbago ang pila habang kinakansela. I-refresh at subukan muli."
+                    val target = queueSnapshot.documents
+                        .firstOrNull { it.id == vehicleId }
+                        ?: throw IllegalStateException(
+                            "Hindi makita ang sasakyan sa pila."
                         )
-                    }
-                    val freshEntry = transaction.get(target.reference)
 
-                    if (!freshEntry.exists() ||
-                        !isActiveStatus(freshEntry.getString("status")) ||
-                        freshEntry.getBoolean("isCancelled") == true
+                    if (!isActiveStatus(target.getString("status")) ||
+                        target.getBoolean("isCancelled") == true
                     ) {
                         throw IllegalStateException(
                             "Ang entry na ito ay wala na sa aktibong pila o nakansela na."
                         )
                     }
 
-                    // Fresh same-route list computed inside the transaction.
-                    val remaining = queueReferencesById
-                        .filterKeys { it != vehicleId }
-                        .values
-                        .map { transaction.get(it) }
-                        .filter {
-                            it.exists() &&
+                    val queueReferencesById =
+                        queueSnapshot.documents.associate { it.id to it.reference }
+
+                    firestore.runTransaction { transaction ->
+                        val queueControl = transaction.get(queueControlRef)
+                        val currentRevision = queueControl.getLong("revision") ?: 0L
+                        if (currentRevision != observedQueueRevision) {
+                            throw IllegalStateException(
+                                "Nagbago ang pila mula sa ibang device. I-refresh at subukan muli."
+                            )
+                        }
+                        val freshEntry = transaction.get(target.reference)
+
+                        if (!freshEntry.exists() ||
+                            !isActiveStatus(freshEntry.getString("status")) ||
+                            freshEntry.getBoolean("isCancelled") == true
+                        ) {
+                            throw IllegalStateException(
+                                "Ang entry na ito ay wala na sa aktibong pila o nakansela na."
+                            )
+                        }
+
+                        val remaining = queueReferencesById
+                            .filterKeys { it != vehicleId }
+                            .values
+                            .map { transaction.get(it) }
+                            .filter {
+                                it.exists() &&
                                     isActiveStatus(it.getString("status")) &&
                                     sameRoute(
                                         it.getString("route"),
                                         freshEntry.getString("route")
                                     )
-                        }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                if (it.getBoolean("isCancelled") == true) 1 else 0
-                            }.thenBy {
-                                it.getLong("position") ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.safeTimestamp("createdAt")?.seconds
-                                    ?: Long.MAX_VALUE
                             }
-                        )
+                            .sortedWith(
+                                compareBy<DocumentSnapshot> {
+                                    if (it.getBoolean("isCancelled") == true) 1 else 0
+                                }.thenBy {
+                                    it.getLong("position") ?: Long.MAX_VALUE
+                                }.thenBy {
+                                    it.safeTimestamp("createdAt")?.seconds
+                                        ?: Long.MAX_VALUE
+                                }
+                            )
 
-                    // The cancelled entry stays in the queue at the bottom.
-                    transaction.update(
-                        target.reference,
-                        mapOf(
-                            "isCancelled" to true,
-                            "position" to remaining.size + 1,
-                            "cancelledAt" to FieldValue.serverTimestamp(),
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    )
-
-                    // The remaining entries keep (or move up) their
-                    // positions above the cancelled entry.
-                    remaining.forEachIndexed { index, document ->
                         transaction.update(
-                            document.reference,
+                            target.reference,
                             mapOf(
-                                "position" to index + 1,
+                                "isCancelled" to true,
+                                "position" to remaining.size + 1,
+                                "cancelledAt" to FieldValue.serverTimestamp(),
                                 "updatedAt" to FieldValue.serverTimestamp()
                             )
                         )
-                    }
 
-                    transaction.set(
-                        queueControlRef,
-                        mapOf(
-                            "revision" to currentRevision + 1L,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                    true
-                }.await()
+                        remaining.forEachIndexed { index, document ->
+                            transaction.update(
+                                document.reference,
+                                mapOf(
+                                    "position" to index + 1,
+                                    "updatedAt" to FieldValue.serverTimestamp()
+                                )
+                            )
+                        }
+
+                        transaction.set(
+                            queueControlRef,
+                            mapOf(
+                                "revision" to currentRevision + 1L,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        )
+                        true
+                    }.await()
+                }
 
                 ActivityLogger.log(
                     firestore,
                     userSession,
                     "Kanselahin sa Pila",
-                    target.getString("plateNumber").orEmpty()
+                    vehicleId
                 )
 
-                ToastFeedback.show(
-                    "Nakansela ang " +
-                            target.getString("plateNumber").orEmpty() +
-                            ". Inilipat ito sa pinakadulo ng pila."
-                )
+                ToastFeedback.show("Nakansela ang sasakyan at nailipat sa pinakadulo ng pila.")
             } catch (e: Exception) {
                 ToastFeedback.show(
                     e.message ?: "Hindi makansela ang sasakyan."
@@ -959,124 +954,114 @@ class QueueViewModel @Inject constructor(
         setBusyAction(busyKey, true)
         viewModelScope.launch {
             try {
-                val queueControlRef = queueControlReference()
-                val observedQueueRevision = queueControlRef.get().await()
-                    .getLong("revision") ?: 0L
-                val queueSnapshot = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .get()
-                    .await()
+                queueMutationMutex.withLock {
+                    val queueControlRef = queueControlReference()
+                    val observedQueueRevision = queueControlRef.get().await()
+                        .getLong("revision") ?: 0L
+                    val queueSnapshot = firestore
+                        .collection(FirestoreCollections.QUEUE)
+                        .get()
+                        .await()
 
-                val target = queueSnapshot.documents
-                    .firstOrNull { it.id == vehicleId }
-                    ?: throw IllegalStateException(
-                        "Hindi makita ang sasakyan sa pila."
-                    )
-
-                if (!isActiveStatus(target.getString("status")) ||
-                    target.getBoolean("isCancelled") != true
-                ) {
-                    throw IllegalStateException(
-                        "Hindi nakansela o wala na sa aktibong pila ang entry."
-                    )
-                }
-
-                /*
-                 * Lahat ng reference - ang FRESH na listahan ay binabasa
-                 * SA LOOB ng transaction (pareho ng QueueRotation).
-                 */
-                val queueReferencesById =
-                    queueSnapshot.documents.associate { it.id to it.reference }
-
-                firestore.runTransaction { transaction ->
-                    val queueControl = transaction.get(queueControlRef)
-                    val currentRevision = queueControl.getLong("revision") ?: 0L
-                    if (currentRevision != observedQueueRevision) {
-                        throw IllegalStateException(
-                            "Nagbago ang pila habang ibinabalik ang entry. I-refresh at subukan muli."
+                    val target = queueSnapshot.documents
+                        .firstOrNull { it.id == vehicleId }
+                        ?: throw IllegalStateException(
+                            "Hindi makita ang sasakyan sa pila."
                         )
-                    }
-                    val freshEntry = transaction.get(target.reference)
 
-                    if (!freshEntry.exists() ||
-                        !isActiveStatus(freshEntry.getString("status")) ||
-                        freshEntry.getBoolean("isCancelled") != true
+                    if (!isActiveStatus(target.getString("status")) ||
+                        target.getBoolean("isCancelled") != true
                     ) {
                         throw IllegalStateException(
-                            "Hindi na nakansela o wala na sa aktibong pila ang entry."
+                            "Hindi nakansela o wala na sa aktibong pila ang entry."
                         )
                     }
 
-                    // Fresh same-route list computed inside the transaction.
-                    val remaining = queueReferencesById
-                        .filterKeys { it != vehicleId }
-                        .values
-                        .map { transaction.get(it) }
-                        .filter {
-                            it.exists() &&
+                    val queueReferencesById =
+                        queueSnapshot.documents.associate { it.id to it.reference }
+
+                    firestore.runTransaction { transaction ->
+                        val queueControl = transaction.get(queueControlRef)
+                        val currentRevision = queueControl.getLong("revision") ?: 0L
+                        if (currentRevision != observedQueueRevision) {
+                            throw IllegalStateException(
+                                "Nagbago ang pila mula sa ibang device. I-refresh at subukan muli."
+                            )
+                        }
+                        val freshEntry = transaction.get(target.reference)
+
+                        if (!freshEntry.exists() ||
+                            !isActiveStatus(freshEntry.getString("status")) ||
+                            freshEntry.getBoolean("isCancelled") != true
+                        ) {
+                            throw IllegalStateException(
+                                "Hindi na nakansela o wala na sa aktibong pila ang entry."
+                            )
+                        }
+
+                        val remaining = queueReferencesById
+                            .filterKeys { it != vehicleId }
+                            .values
+                            .map { transaction.get(it) }
+                            .filter {
+                                it.exists() &&
                                     isActiveStatus(it.getString("status")) &&
                                     sameRoute(
                                         it.getString("route"),
                                         freshEntry.getString("route")
                                     )
-                        }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                if (it.getBoolean("isCancelled") == true) 1 else 0
-                            }.thenBy {
-                                it.getLong("position") ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.safeTimestamp("createdAt")?.seconds
-                                    ?: Long.MAX_VALUE
                             }
-                        )
+                            .sortedWith(
+                                compareBy<DocumentSnapshot> {
+                                    if (it.getBoolean("isCancelled") == true) 1 else 0
+                                }.thenBy {
+                                    it.getLong("position") ?: Long.MAX_VALUE
+                                }.thenBy {
+                                    it.safeTimestamp("createdAt")?.seconds
+                                        ?: Long.MAX_VALUE
+                                }
+                            )
 
-                    /*
-                     * The restored entry joins the END of the normal
-                     * (non-cancelled) group, before any cancelled entries.
-                     */
-                    val ordered = remaining.filter {
-                        it.getBoolean("isCancelled") != true
-                    } + listOf(freshEntry) + remaining.filter {
-                        it.getBoolean("isCancelled") == true
-                    }
-
-                    ordered.forEachIndexed { index, document ->
-                        val update = mutableMapOf<String, Any>(
-                            "position" to index + 1,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-
-                        if (document.id == vehicleId) {
-                            update["isCancelled"] = false
-                            update["cancelledAt"] = FieldValue.delete()
+                        val ordered = remaining.filter {
+                            it.getBoolean("isCancelled") != true
+                        } + listOf(freshEntry) + remaining.filter {
+                            it.getBoolean("isCancelled") == true
                         }
 
-                        transaction.update(document.reference, update)
-                    }
+                        ordered.forEachIndexed { index, document ->
+                            val update = mutableMapOf<String, Any>(
+                                "position" to index + 1,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
 
-                    transaction.set(
-                        queueControlRef,
-                        mapOf(
-                            "revision" to currentRevision + 1L,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                    true
-                }.await()
+                            if (document.id == vehicleId) {
+                                update["isCancelled"] = false
+                                update["cancelledAt"] = FieldValue.delete()
+                            }
+
+                            transaction.update(document.reference, update)
+                        }
+
+                        transaction.set(
+                            queueControlRef,
+                            mapOf(
+                                "revision" to currentRevision + 1L,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        )
+                        true
+                    }.await()
+                }
 
                 ActivityLogger.log(
                     firestore,
                     userSession,
                     "Ibalik sa Pila",
-                    target.getString("plateNumber").orEmpty()
+                    vehicleId
                 )
 
-                ToastFeedback.show(
-                    "Ibinalik sa pila ang " +
-                            target.getString("plateNumber").orEmpty() + "."
-                )
+                ToastFeedback.show("Ibinalik sa pila ang sasakyan.")
             } catch (e: Exception) {
                 ToastFeedback.show(
                     e.message ?: "Hindi maibalik ang sasakyan sa pila."
@@ -1089,80 +1074,113 @@ class QueueViewModel @Inject constructor(
 
     fun updateVehiclePosition(
         vehicleId: String,
-        newPosition: Int
+        positionDelta: Int
     ) {
+        if (positionDelta == 0) return
         if (!canManageQueueEntryOrNotify(vehicleId)) return
-        val currentState = _uiState.value as? QueueUiState.Success ?: return
-        val targetVehicle = currentState.activeQueue.firstOrNull { it.id == vehicleId } ?: return
-        val busyKey = "position:$vehicleId"
+        val busyKey = if (positionDelta < 0) {
+            "position-up:$vehicleId"
+        } else {
+            "position-down:$vehicleId"
+        }
         if (busyKey in _busyActions.value) return
         setBusyAction(busyKey, true)
 
         viewModelScope.launch {
             try {
-                val queueControlRef = queueControlReference()
-                val observedRevision = queueControlRef.get().await()
-                    .getLong("revision") ?: 0L
-                val queueSnapshot = firestore
-                    .collection(FirestoreCollections.QUEUE)
-                    .get()
-                    .await()
-                val references = queueSnapshot.documents.associate { it.id to it.reference }
-
-                firestore.runTransaction { transaction ->
-                    val control = transaction.get(queueControlRef)
-                    val currentRevision = control.getLong("revision") ?: 0L
-                    if (currentRevision != observedRevision) {
-                        throw IllegalStateException(
-                            "Nagbago ang pila. I-refresh bago baguhin ang posisyon."
-                        )
+                queueMutationMutex.withLock {
+                    val queueControlRef = queueControlReference()
+                    val observedRevision = queueControlRef.get().await()
+                        .getLong("revision") ?: 0L
+                    val queueSnapshot = firestore
+                        .collection(FirestoreCollections.QUEUE)
+                        .get()
+                        .await()
+                    val references = queueSnapshot.documents.associate {
+                        it.id to it.reference
                     }
+                    val targetReference = references[vehicleId]
+                        ?: throw IllegalStateException("Hindi makita ang sasakyan sa pila.")
 
-                    val freshDocs = references.values
-                        .map { transaction.get(it) }
-                        .filter {
-                            it.exists() &&
-                                isActiveStatus(it.getString("status")) &&
-                                sameRoute(it.getString("route"), targetVehicle.route)
-                        }
-                        .sortedWith(
-                            compareBy<DocumentSnapshot> {
-                                if (it.getBoolean("isCancelled") == true) 1 else 0
-                            }.thenBy {
-                                it.getLong("position") ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.safeTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
-                            }
-                        )
-                        .toMutableList()
-
-                    val fromIndex = freshDocs.indexOfFirst { it.id == vehicleId }
-                    if (fromIndex < 0) {
-                        throw IllegalStateException("Wala na sa aktibong pila ang entry.")
-                    }
-                    val safePosition = newPosition.coerceIn(1, freshDocs.size)
-                    val item = freshDocs.removeAt(fromIndex)
-                    freshDocs.add(safePosition - 1, item)
-
-                    freshDocs.forEachIndexed { index, document ->
-                        transaction.update(
-                            document.reference,
-                            mapOf(
-                                "position" to index + 1,
-                                "updatedAt" to FieldValue.serverTimestamp()
+                    firestore.runTransaction { transaction ->
+                        val control = transaction.get(queueControlRef)
+                        val currentRevision = control.getLong("revision") ?: 0L
+                        if (currentRevision != observedRevision) {
+                            throw IllegalStateException(
+                                "Nagbago ang pila mula sa ibang device. I-refresh at subukan muli."
                             )
+                        }
+
+                        val freshTarget = transaction.get(targetReference)
+                        if (!freshTarget.exists() ||
+                            !isActiveStatus(freshTarget.getString("status")) ||
+                            freshTarget.getBoolean("isCancelled") == true
+                        ) {
+                            throw IllegalStateException(
+                                "Hindi na maaaring baguhin ang posisyon ng entry na ito."
+                            )
+                        }
+                        val route = freshTarget.getString("route").orEmpty()
+
+                        val freshDocs = references.values
+                            .map { transaction.get(it) }
+                            .filter {
+                                it.exists() &&
+                                    isActiveStatus(it.getString("status")) &&
+                                    sameRoute(it.getString("route"), route)
+                            }
+                            .sortedWith(
+                                compareBy<DocumentSnapshot> {
+                                    if (it.getBoolean("isCancelled") == true) 1 else 0
+                                }.thenBy {
+                                    it.getLong("position") ?: Long.MAX_VALUE
+                                }.thenBy {
+                                    it.safeTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
+                                }
+                            )
+
+                        val movingQueue = freshDocs.filter {
+                            it.getBoolean("isCancelled") != true
+                        }.toMutableList()
+                        val cancelledQueue = freshDocs.filter {
+                            it.getBoolean("isCancelled") == true
+                        }
+
+                        val fromIndex = movingQueue.indexOfFirst {
+                            it.id == vehicleId
+                        }
+                        if (fromIndex < 0) {
+                            throw IllegalStateException("Wala na sa aktibong pila ang entry.")
+                        }
+
+                        val destinationIndex = (fromIndex + positionDelta)
+                            .coerceIn(0, movingQueue.lastIndex)
+                        val movingEntry = movingQueue.removeAt(fromIndex)
+                        movingQueue.add(destinationIndex, movingEntry)
+
+                        // Keep all cancelled entries at the bottom regardless
+                        // of how several up/down actions are tapped in succession.
+                        (movingQueue + cancelledQueue).forEachIndexed { index, document ->
+                            transaction.update(
+                                document.reference,
+                                mapOf(
+                                    "position" to index + 1,
+                                    "updatedAt" to FieldValue.serverTimestamp()
+                                )
+                            )
+                        }
+
+                        transaction.set(
+                            queueControlRef,
+                            mapOf(
+                                "revision" to currentRevision + 1L,
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
                         )
-                    }
-                    transaction.set(
-                        queueControlRef,
-                        mapOf(
-                            "revision" to currentRevision + 1L,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
-                    true
-                }.await()
+                        true
+                    }.await()
+                }
             } catch (e: Exception) {
                 ToastFeedback.show(e.message ?: "Hindi ma-update ang posisyon")
             } finally {
