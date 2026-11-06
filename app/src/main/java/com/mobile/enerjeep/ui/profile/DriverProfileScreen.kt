@@ -652,7 +652,7 @@ fun DriverSecurityContent(
                 Alignment.CenterVertically,
             modifier =
                 Modifier.clickable(role = Role.Button) {
-                    onCancel()
+                    if (!isSubmitting) onCancel()
                 }
         ) {
             Icon(
