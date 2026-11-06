@@ -282,21 +282,6 @@ exports.dailyQueueReset = onSchedule(
 
       const rotationCursorUpdates = {};
 
-      const accountCreationMillis = (document) => {
-        const storedQueueTimestamp = document.get("accountCreatedAt");
-        if (storedQueueTimestamp && typeof storedQueueTimestamp.toMillis === "function") {
-          return storedQueueTimestamp.toMillis();
-        }
-        const originalAccountTimestamp = accountCreatedAtByDriver.get(
-          String(document.get("driverId") || "")
-        );
-        if (Number.isFinite(originalAccountTimestamp)) return originalAccountTimestamp;
-        const queueCreatedAt = document.get("createdAt");
-        return queueCreatedAt && typeof queueCreatedAt.toMillis === "function"
-          ? queueCreatedAt.toMillis()
-          : Number.MAX_SAFE_INTEGER;
-      };
-
       [1, 0].forEach((key) => {
         const active = docs
           .filter((d) => isQueueActive(d.data()) && routeKey(d.data().route) === key)
@@ -390,7 +375,7 @@ exports.dailyQueueReset = onSchedule(
     });
 
     if (rotated) {
-      console.log("dailyQueueReset: ibinalik ang pila sa fixed account-creation order");
+      console.log("dailyQueueReset: inusog ang unang driver sa susunod na account sa permanenteng creation order");
     }
   }
 );
