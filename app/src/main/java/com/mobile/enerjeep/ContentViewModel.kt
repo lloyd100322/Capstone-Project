@@ -84,7 +84,7 @@ class ContentViewModel @Inject constructor(
                     val result = QueueRotation.rotateOnce(firestore)
                     if (result.rotated) {
                         ToastFeedback.show(
-                            "Naibalik ang pila sa pagkakasunod ng petsa ng paggawa ng account."
+                            "Inikot ang pila: ang dating #1 ay nasa hulihan na at ang dating #2 ang bagong #1."
                         )
                     }
                     result.cutoffHour
