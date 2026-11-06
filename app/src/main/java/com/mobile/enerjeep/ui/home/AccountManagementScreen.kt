@@ -342,63 +342,73 @@ fun AccountCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = account.name,
-                    // Keep the role badge directly beside the name.
-                    // fill = false lets short names use only their natural width;
-                    // long names are constrained and truncated before the badge.
-                    modifier = Modifier.weight(1f, fill = false),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Surface(
-                    color = roleBackground,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(22.dp)
+                // Keep the driver's full name and role together as one group.
+                // Long names can wrap to a second line instead of being forced
+                // into a narrow single-line slot.
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                    Text(
+                        text = account.name,
+                        modifier = Modifier.weight(1f, fill = false),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Surface(
+                        color = roleBackground,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(22.dp)
                     ) {
-                        Text(
-                            text = account.role,
-                            color = roleForeground,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Text(
+                                text = account.role,
+                                color = roleForeground,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
-
-                Surface(
-                    color = statusBackground,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(22.dp)
+                // Keep status and delete at the trailing edge, without
+                // inserting a spacer between the name and the role badge.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                    Surface(
+                        color = statusBackground,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(22.dp)
                     ) {
-                        Text(
-                            text = statusLabel,
-                            color = statusForeground,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Text(
+                                text = statusLabel,
+                                color = statusForeground,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
-                }
 
                 if (canDelete) {
                     IconButton(
@@ -419,6 +429,7 @@ fun AccountCard(
                             modifier = Modifier.size(20.dp)
                         )
                     }
+                }
                 }
             }
 
