@@ -133,10 +133,9 @@ class NotificationCenterViewModel @Inject constructor(
 
     fun markAllRead() {
         val phone = activePhone ?: return
-        val unread = _uiState.value.notifications.filterNot { it.read }
-        if (unread.isEmpty() || _uiState.value.markingRead) return
+        if (_uiState.value.markingRead) return
 
-        // Clear the unread state immediately when the bell is opened.
+        // Remove the unread state immediately when the bell is opened.
         _uiState.value = _uiState.value.copy(
             notifications = _uiState.value.notifications.map { it.copy(read = true) },
             markingRead = true,
@@ -145,16 +144,20 @@ class NotificationCenterViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                unread.chunked(450).forEach { chunk ->
+                val notifications = firestore
+                    .collection(FirestoreCollections.USERS)
+                    .document(phone)
+                    .collection(FirestoreCollections.NOTIFICATIONS)
+
+                // Read every notification, not only the latest 50 displayed in the sheet.
+                val unreadDocuments = notifications.get().await().documents
+                    .filter { it.getBoolean("read") != true }
+
+                unreadDocuments.chunked(450).forEach { chunk ->
                     val batch = firestore.batch()
                     chunk.forEach { item ->
-                        val reference = firestore
-                            .collection(FirestoreCollections.USERS)
-                            .document(phone)
-                            .collection(FirestoreCollections.NOTIFICATIONS)
-                            .document(item.id)
                         batch.update(
-                            reference,
+                            notifications.document(item.id),
                             mapOf(
                                 "read" to true,
                                 "readAt" to FieldValue.serverTimestamp()
