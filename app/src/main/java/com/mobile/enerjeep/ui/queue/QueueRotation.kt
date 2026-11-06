@@ -139,6 +139,16 @@ object QueueRotation {
                     }.minOrNull()
                 }
 
+            fun accountCreationMillis(document: DocumentSnapshot): Long =
+                document.getTimestamp("accountCreatedAt")?.toDate()?.time
+                    ?: accountCreatedAtByDriver[
+                        document.getString("driverId").orEmpty()
+                    ]
+                    ?: document.getTimestamp("createdAt")?.toDate()?.time
+                    ?: Long.MAX_VALUE
+
+            val rotationCursorUpdates = mutableMapOf<String, Any>()
+
             listOf(QueueViewModel.ROUTE_MA, QueueViewModel.ROUTE_AM)
                 .forEach { route ->
                     val active = queueDocs
@@ -151,24 +161,68 @@ object QueueRotation {
                                     )
                         }
                         .sortedWith(
-                            compareBy<DocumentSnapshot> { document ->
-                                document.getTimestamp("accountCreatedAt")
-                                    ?.toDate()?.time
-                                    ?: accountCreatedAtByDriver[
-                                        document.getString("driverId").orEmpty()
-                                    ]
-                                    ?: document.getTimestamp("createdAt")
-                                        ?.toDate()?.time
-                                    ?: Long.MAX_VALUE
-                            }.thenBy {
-                                it.getString("driverId").orEmpty()
-                            }.thenBy {
-                                it.id
-                            }
+                            compareBy<DocumentSnapshot> { accountCreationMillis(it) }
+                                .thenBy {
+                                    it.getString("driverId").orEmpty().ifBlank { it.id }
+                                }
                         )
 
-                    // Restore the permanent master roster order each operating day.
-                    active.forEachIndexed { index, document ->
+                    val routeName = if (route == QueueViewModel.ROUTE_MA) {
+                        "Marilao"
+                    } else {
+                        "Monumento"
+                    }
+                    val cursorDriverField = "rotationStart${routeName}DriverId"
+                    val cursorCreatedAtField =
+                        "rotationStart${routeName}CreatedAtMillis"
+                    val previousLeaderId = meta.getString(cursorDriverField)
+                    val previousLeaderCreatedAt =
+                        meta.getLong(cursorCreatedAtField)
+
+                    // The saved cursor is yesterday's #1. Advance to the next
+                    // active account in permanent creation order, wrapping around.
+                    val startIndex = when {
+                        active.size <= 1 -> 0
+                        !previousLeaderId.isNullOrBlank() -> {
+                            val previousIndex = active.indexOfFirst {
+                                it.getString("driverId").orEmpty()
+                                    .ifBlank { it.id } == previousLeaderId
+                            }
+                            if (previousIndex >= 0) {
+                                (previousIndex + 1) % active.size
+                            } else if (previousLeaderCreatedAt != null) {
+                                val nextIndex = active.indexOfFirst { document ->
+                                    val createdAt = accountCreationMillis(document)
+                                    val driverId = document.getString("driverId")
+                                        .orEmpty().ifBlank { document.id }
+                                    createdAt > previousLeaderCreatedAt ||
+                                            (createdAt == previousLeaderCreatedAt &&
+                                                    driverId > previousLeaderId)
+                                }
+                                if (nextIndex >= 0) nextIndex else 0
+                            } else {
+                                1
+                            }
+                        }
+                        previousLeaderCreatedAt != null -> {
+                            val nextIndex = active.indexOfFirst { document ->
+                                val createdAt = accountCreationMillis(document)
+                                val driverId = document.getString("driverId")
+                                    .orEmpty().ifBlank { document.id }
+                                createdAt > previousLeaderCreatedAt ||
+                                        (createdAt == previousLeaderCreatedAt &&
+                                                driverId > previousLeaderId.orEmpty())
+                            }
+                            if (nextIndex >= 0) nextIndex else 0
+                        }
+                        // First reset after this change: move permanent #1
+                        // to the end so permanent #2 becomes the new #1.
+                        else -> 1
+                    }
+
+                    val rotated = active.drop(startIndex) + active.take(startIndex)
+
+                    rotated.forEachIndexed { index, document ->
                         transaction.update(
                             document.reference,
                             mapOf(
@@ -177,14 +231,24 @@ object QueueRotation {
                             )
                         )
                     }
+
+                    rotated.firstOrNull()?.let { newLeader ->
+                        rotationCursorUpdates[cursorDriverField] =
+                            newLeader.getString("driverId").orEmpty()
+                                .ifBlank { newLeader.id }
+                        rotationCursorUpdates[cursorCreatedAtField] =
+                            accountCreationMillis(newLeader)
+                    }
                 }
 
+            val resetMetaUpdates = mutableMapOf<String, Any>(
+                "lastQueueDay" to today,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            resetMetaUpdates.putAll(rotationCursorUpdates)
             transaction.set(
                 metaReference,
-                mapOf(
-                    "lastQueueDay" to today,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                ),
+                resetMetaUpdates,
                 SetOptions.merge()
             )
             transaction.set(
