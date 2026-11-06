@@ -246,6 +246,7 @@ fun HomeScreen(
 
                             // Stats are the quick access: tap = open tab.
                             onSalesClick = {
+                                reportStartScreen = "income"
                                 selectedTab = HomeTab.MgaUlat
                             },
 
@@ -254,13 +255,14 @@ fun HomeScreen(
                             },
 
                             onIncidentClick = {
-                                selectedTab = HomeTab.Insidente
+                                reportStartScreen = "incidents"
+                                selectedTab = HomeTab.MgaUlat
                             },
 
-                            // Donasyon stat = straight to the Donasyon
-                            // section of the Mga Ulat screen.
+                            // Each dashboard summary opens its matching
+                            // report and locks the Reports content to that section.
                             onDonasyonClick = {
-                                reportStartScreen = "donasyon"
+                                reportStartScreen = "donations"
                                 selectedTab = HomeTab.MgaUlat
                             },
 
