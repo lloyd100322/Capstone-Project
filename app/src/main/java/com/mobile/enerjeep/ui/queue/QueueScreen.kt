@@ -644,74 +644,98 @@ fun QueueItem(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(itemGap))
                 Column(modifier = Modifier.weight(1f)) {
+                    /*
+                     * The plate takes only the space left after the status chip.
+                     * Both are single-line items, so the status label cannot wrap
+                     * its final character onto a new line on narrower phones.
+                     */
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         WorldIcon(modifier = Modifier.size(16.dp), color = Color.Black)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = vehicle.plateNumber,
+                            modifier = Modifier.weight(1f),
                             fontWeight = FontWeight.Bold,
-                            fontSize = if (compact) 13.sp else 16.sp
+                            fontSize = if (compact) 13.sp else 16.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.width(smallGap))
                         StatusBadge(
                             text = if (vehicle.isCancelled) "Nakansela" else vehicle.status,
                             backgroundColor = statusBg,
                             textColor = statusColor
                         )
                     }
+
                     Text(
                         text = vehicle.driverName,
                         fontSize = if (compact) 12.sp else 14.sp,
-                        color = TextSecondary
+                        color = TextSecondary,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (!compact) {
-                        Text(text = vehicle.route, fontSize = 12.sp, color = TextSecondary)
+                        Text(
+                            text = vehicle.route,
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
 
-                    /*
-                     * Posisyon = the big NUMBER badge on the left only.
-                     * The old "Posisyon" button / tap-to-edit is gone;
-                     * reordering is done with the big up/down arrows.
-                     */
-                    Text(
-                        text = "Sumali: ${vehicle.time}",
-                        fontSize = if (compact) 11.sp else 12.sp,
-                        color = TextSecondary
+                    QueueJoinedTime(
+                        time = vehicle.time,
+                        fontSize = if (compact) 10.sp else 11.sp
                     )
+
+                    /*
+                     * Restore moves below the vehicle details on cancelled
+                     * entries. This gives the plate and "Nakansela" badge
+                     * their full measured width on compact devices.
+                     */
+                    if (canManage && vehicle.isCancelled) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = onRestoreClick,
+                                contentPadding = PaddingValues(
+                                    horizontal = smallGap,
+                                    vertical = 0.dp
+                                )
+                            ) {
+                                Text(
+                                    text = "Ibalik sa Pila",
+                                    fontSize = 11.sp,
+                                    color = SuccessGreen,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
                 }
 
-                /*
-                 * Upper-right corner: an X button for "Kanselahin" (with
-                 * the confirm dialog), or "Ibalik sa Pila" for cancelled
-                 * rows. No more text button in the middle of the row.
-                 */
-                if (canManage) {
-                    if (vehicle.isCancelled) {
-                        TextButton(
-                            onClick = onRestoreClick,
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(
-                                text = "Ibalik",
-                                fontSize = 11.sp,
-                                color = SuccessGreen,
-                                maxLines = 1
-                            )
-                        }
-                    } else {
-                        IconButton(
-                            onClick = { showCancelConfirm = true },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Kanselahin",
-                                tint = ErrorRed,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                // Only active entries need the compact cancel icon in the header.
+                if (canManage && !vehicle.isCancelled) {
+                    IconButton(
+                        onClick = { showCancelConfirm = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Kanselahin",
+                            tint = ErrorRed,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
@@ -791,6 +815,75 @@ fun QueueItem(
     }
 }
 
+/**
+ * Keeps date and time as complete visual units. On narrow cards the clock
+ * moves to its own line instead of allowing "AM"/"PM" to wrap by itself.
+ */
+@Composable
+private fun QueueJoinedTime(
+    time: String,
+    fontSize: androidx.compose.ui.unit.TextUnit
+) {
+    val parts = time.split(" • ", limit = 2)
+    val datePart = parts.firstOrNull().orEmpty()
+    val clockPart = parts.getOrNull(1).orEmpty()
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (clockPart.isBlank()) {
+            Text(
+                text = "Sumali: $datePart",
+                fontSize = fontSize,
+                color = TextSecondary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else if (maxWidth < 240.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Sumali: $datePart",
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = clockPart,
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sumali: $datePart",
+                    modifier = Modifier.weight(1f),
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = clockPart,
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun HistoryItem(history: HistoryVehicle) {
     val cardInset = dimensionResource(SdpR.dimen._13sdp)
@@ -820,7 +913,7 @@ fun HistoryItem(history: HistoryVehicle) {
                 }
                 Text(text = history.driverName, fontSize = 12.sp, color = TextSecondary)
                 Text(text = history.route, fontSize = 11.sp, color = TextSecondary)
-                Text(text = "Sumali: ${history.time}", fontSize = 11.sp, color = TextSecondary)
+                QueueJoinedTime(time = history.time, fontSize = 11.sp)
             }
             StatusBadge(text = history.status, backgroundColor = statusBg, textColor = statusColor)
         }
@@ -833,10 +926,16 @@ fun StatusBadge(text: String, backgroundColor: Color, textColor: Color) {
     Surface(color = backgroundColor, shape = RoundedCornerShape(8.dp)) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+            modifier = Modifier.padding(
+                horizontal = dimensionResource(SdpR.dimen._8sdp),
+                vertical = 3.dp
+            ),
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = textColor
+            color = textColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
