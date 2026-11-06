@@ -607,7 +607,7 @@ class ReportViewModel @Inject constructor(
     val isSavingDonation = _isSavingDonation.asStateFlow()
 
     fun addDonasyon(
-        donasyon: DonasionItem,
+        donasyon: DonasyonItem,
         onComplete: (Boolean) -> Unit = {}
     ) {
         if (_isSavingDonation.value) return
