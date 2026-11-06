@@ -769,6 +769,9 @@ exports.dispatchQueueVehicle = onCall(
 
         const currentRoute = String(target.get("route") || "");
         const currentStation = queueRouteStation(currentRoute);
+        const oppositeRoute = currentStation === "marilao"
+          ? "Monumento – Marilao"
+          : "Marilao – Monumento";
         if (!currentStation || !canManageQueueRoute(transactionCaller, currentRoute)) {
           throw new HttpsError("permission-denied", "Sa terminal na nakatalaga lamang maaaring mag-dispatch.");
         }
@@ -877,9 +880,6 @@ exports.dispatchQueueVehicle = onCall(
         });
 
         if (shouldRequeue) {
-          const oppositeRoute = currentStation === "marilao"
-            ? "Monumento – Marilao"
-            : "Marilao – Monumento";
           const requeueId = "queue_" + driverId + "_after_" + entryId;
           tx.set(queueCollection.doc(requeueId), {
             id: requeueId,
