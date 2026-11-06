@@ -825,7 +825,12 @@ exports.dispatchQueueVehicle = onCall(
           );
         }
 
-        const driverName = String(target.get("driverName") || "");
+        const driverName = String(
+          target.get("driverName") || [
+            String(driver.get("firstName") || "").trim(),
+            String(driver.get("lastName") || "").trim(),
+          ].filter(Boolean).join(" ") || "Driver"
+        );
         const plateNumber = String(target.get("plateNumber") || "").trim().toUpperCase();
         const netAmount = income - otherFees;
         const seater = Math.max(0, Math.trunc(Number(driver.get("seater") || 0)));
@@ -941,7 +946,11 @@ exports.dispatchQueueVehicle = onCall(
           actorPhone: caller.phone,
           actorRole: currentCallerRole === "superadmin" ? "Superadmin" : "Admin",
           action: "Dispatch",
-          detail: plateNumber + " — " + driverName + " • " + oppositeRoute,
+          driverId,
+          driverName,
+          plateNumber,
+          route: oppositeRoute,
+          detail: plateNumber + " — " + oppositeRoute,
           createdAt: FieldValue.serverTimestamp(),
           dispatchSequence: nextQueueRevision,
         });
