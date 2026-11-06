@@ -57,6 +57,7 @@ fun QueueScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cutoffHourLabel by viewModel.cutoffLabel.collectAsStateWithLifecycle()
     val busyActions by viewModel.busyActions.collectAsStateWithLifecycle()
+    val queueActionInProgress = busyActions.isNotEmpty()
 
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
@@ -388,7 +389,8 @@ fun QueueScreen(
                                                 if (canManageSelectedRoute &&
                                                     compactView &&
                                                     searchQuery.isBlank() &&
-                                                    !vehicle.isCancelled
+                                                    !vehicle.isCancelled &&
+                                                    !queueActionInProgress
                                                 ) {
                                                     Modifier.pointerInput(vehicle.id) {
                                                         detectDragGesturesAfterLongPress(
@@ -438,6 +440,7 @@ fun QueueScreen(
                                             isRestoring = "restore:${vehicle.id}" in busyActions,
                                             isMovingUp = "position-up:${vehicle.id}" in busyActions,
                                             isMovingDown = "position-down:${vehicle.id}" in busyActions,
+                                            isAnyQueueActionRunning = queueActionInProgress,
                                             onDispatchClick = {
                                                 if (canManageSelectedRoute) vehicleToDispatch = vehicle
                                             },
@@ -587,6 +590,7 @@ fun QueueItem(
     isRestoring: Boolean = false,
     isMovingUp: Boolean = false,
     isMovingDown: Boolean = false,
+    isAnyQueueActionRunning: Boolean = false,
     onDispatchClick: () -> Unit,
     onMoveBy: (Int) -> Unit,
     onCancelClick: () -> Unit,
@@ -728,7 +732,7 @@ fun QueueItem(
                 if (canManage && vehicle.isCancelled) {
                     TextButton(
                         onClick = onRestoreClick,
-                        enabled = !isRestoring,
+                        enabled = !isRestoring && !isAnyQueueActionRunning,
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                     ) {
                         if (isRestoring) {
@@ -750,7 +754,7 @@ fun QueueItem(
                 } else if (canManage && !vehicle.isCancelled) {
                     IconButton(
                         onClick = { showCancelConfirm = true },
-                        enabled = !isCancelling,
+                        enabled = !isCancelling && !isAnyQueueActionRunning,
                         modifier = Modifier.size(36.dp)
                     ) {
                         if (isCancelling) {
@@ -792,6 +796,7 @@ fun QueueItem(
             if (canDispatch) {
                 Button(
                     onClick = onDispatchClick,
+                    enabled = !isAnyQueueActionRunning,
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
                     shape = RoundedCornerShape(16.dp)
@@ -810,7 +815,7 @@ fun QueueItem(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            if (!isMovingUp && displayPosition > 1) onMoveBy(-1)
+                            if (!isAnyQueueActionRunning && displayPosition > 1) onMoveBy(-1)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -818,7 +823,7 @@ fun QueueItem(
                             .semantics {
                                 contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
                             },
-                        enabled = !isMovingUp && displayPosition > 1,
+                        enabled = !isAnyQueueActionRunning && displayPosition > 1,
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)
@@ -838,7 +843,7 @@ fun QueueItem(
 
                     OutlinedButton(
                         onClick = {
-                            if (!isMovingDown) onMoveBy(1)
+                            if (!isAnyQueueActionRunning) onMoveBy(1)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -846,7 +851,7 @@ fun QueueItem(
                             .semantics {
                                 contentDescription = "Ibaba si ${vehicle.plateNumber} sa pila"
                             },
-                        enabled = !isMovingDown,
+                        enabled = !isAnyQueueActionRunning,
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)
