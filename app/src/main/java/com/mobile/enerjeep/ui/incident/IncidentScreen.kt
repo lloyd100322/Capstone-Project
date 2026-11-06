@@ -348,7 +348,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
             { if (!isReporting) description = it },
             modifier = Modifier.fillMaxWidth().height(120.dp),
             placeholder = { Text("Ilarawan ang nangyari...") },
-            enabled = !submitted && !isReporting
+            enabled = !isReporting
         )
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
