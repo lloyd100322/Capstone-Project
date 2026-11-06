@@ -822,6 +822,7 @@ class QueueViewModel @Inject constructor(
         val busyKey = "cancel:$vehicleId"
         if (busyKey in _busyActions.value) return
         setBusyAction(busyKey, true)
+        var targetPlateNumber = ""
         viewModelScope.launch {
             try {
                 queueMutationMutex.withLock {
@@ -838,6 +839,7 @@ class QueueViewModel @Inject constructor(
                         ?: throw IllegalStateException(
                             "Hindi makita ang sasakyan sa pila."
                         )
+                    targetPlateNumber = target.getString("plateNumber").orEmpty()
 
                     if (!isActiveStatus(target.getString("status")) ||
                         target.getBoolean("isCancelled") == true
@@ -928,10 +930,13 @@ class QueueViewModel @Inject constructor(
                     firestore,
                     userSession,
                     "Kanselahin sa Pila",
-                    vehicleId
+                    targetPlateNumber
                 )
 
-                ToastFeedback.show("Nakansela ang sasakyan at nailipat sa pinakadulo ng pila.")
+                ToastFeedback.show(
+                    "Nakansela ang " + targetPlateNumber +
+                        " at nailipat sa pinakadulo ng pila."
+                )
             } catch (e: Exception) {
                 ToastFeedback.show(
                     e.message ?: "Hindi makansela ang sasakyan."
@@ -952,6 +957,7 @@ class QueueViewModel @Inject constructor(
         val busyKey = "restore:$vehicleId"
         if (busyKey in _busyActions.value) return
         setBusyAction(busyKey, true)
+        var targetPlateNumber = ""
         viewModelScope.launch {
             try {
                 queueMutationMutex.withLock {
@@ -968,6 +974,7 @@ class QueueViewModel @Inject constructor(
                         ?: throw IllegalStateException(
                             "Hindi makita ang sasakyan sa pila."
                         )
+                    targetPlateNumber = target.getString("plateNumber").orEmpty()
 
                     if (!isActiveStatus(target.getString("status")) ||
                         target.getBoolean("isCancelled") != true
@@ -1058,10 +1065,10 @@ class QueueViewModel @Inject constructor(
                     firestore,
                     userSession,
                     "Ibalik sa Pila",
-                    vehicleId
+                    targetPlateNumber
                 )
 
-                ToastFeedback.show("Ibinalik sa pila ang sasakyan.")
+                ToastFeedback.show("Ibinalik sa pila ang " + targetPlateNumber + ".")
             } catch (e: Exception) {
                 ToastFeedback.show(
                     e.message ?: "Hindi maibalik ang sasakyan sa pila."
