@@ -422,12 +422,20 @@ fun AccountCard(
                                     shape = RoundedCornerShape(12.dp)
                                 )
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Burahin ang account ni ${account.name}",
-                                tint = Color.Red,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            if (isBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color.Red,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Burahin ang account ni ${account.name}",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
