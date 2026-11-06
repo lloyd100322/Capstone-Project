@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.incident
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,7 +61,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         { it.createdAtMillis.takeIf { millis -> millis > 0 } }
     ) else uiState.filteredIncidents
 
-    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).imePadding().padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
+    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).imePadding().padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep App Logo", modifier = Modifier.size(60.dp))
@@ -67,7 +69,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             Text("Enerjeep", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
         Spacer(Modifier.height(32.dp))
-        Text("Insidente", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text("Insidente", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth()) {
             IncidentSummaryCard(Modifier.weight(1f), uiState.openCount, "Di-naayos", WarningOrange, WarningOrange) { Icon(Icons.Default.Warning, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(24.dp)) }
