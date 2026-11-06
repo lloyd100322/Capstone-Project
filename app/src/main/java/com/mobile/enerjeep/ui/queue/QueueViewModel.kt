@@ -666,11 +666,31 @@ class QueueViewModel @Inject constructor(
     private val _busyActions = MutableStateFlow<Set<String>>(emptySet())
     val busyActions = _busyActions.asStateFlow()
 
-    private fun setBusyAction(key: String, busy: Boolean) {
-        _busyActions.value = if (busy) {
-            _busyActions.value + key
-        } else {
-            _busyActions.value - key
+    private val queueActionStateLock = Any()
+
+    /**
+     * Only one queue-changing action is accepted at a time on this device.
+     * The active action key remains in busyActions so its own control can
+     * display a spinner while every other queue control is disabled.
+     */
+    private fun beginQueueAction(key: String): Boolean =
+        synchronized(queueActionStateLock) {
+            if (_busyActions.value.isNotEmpty()) {
+                ToastFeedback.show(
+                    "May kasalukuyang aksyon sa pila. Hintaying matapos ito bago gumawa ng panibago."
+                )
+                false
+            } else {
+                _busyActions.value = setOf(key)
+                true
+            }
+        }
+
+    private fun finishQueueAction(key: String) {
+        synchronized(queueActionStateLock) {
+            if (key in _busyActions.value) {
+                _busyActions.value = _busyActions.value - key
+            }
         }
     }
 
@@ -763,7 +783,10 @@ class QueueViewModel @Inject constructor(
             }
 
         val busyKey = "dispatch:$vehicleId"
-        setBusyAction(busyKey, true)
+        if (!beginQueueAction(busyKey)) {
+            dispatchingIds.remove(vehicleId)
+            return
+        }
 
         viewModelScope.launch {
             var completed = false
@@ -804,7 +827,7 @@ class QueueViewModel @Inject constructor(
                 ToastFeedback.show(e.message ?: "Hindi ma-dispatch ang sasakyan")
             } finally {
                 dispatchingIds.remove(vehicleId)
-                setBusyAction(busyKey, false)
+                finishQueueAction(busyKey)
                 onComplete(completed)
             }
         }
@@ -820,8 +843,7 @@ class QueueViewModel @Inject constructor(
     fun cancelQueueEntry(vehicleId: String) {
         if (!canManageQueueEntryOrNotify(vehicleId)) return
         val busyKey = "cancel:$vehicleId"
-        if (busyKey in _busyActions.value) return
-        setBusyAction(busyKey, true)
+        if (!beginQueueAction(busyKey)) return
         var targetPlateNumber = ""
         viewModelScope.launch {
             try {
@@ -942,7 +964,7 @@ class QueueViewModel @Inject constructor(
                     e.message ?: "Hindi makansela ang sasakyan."
                 )
             } finally {
-                setBusyAction(busyKey, false)
+                finishQueueAction(busyKey)
             }
         }
     }
@@ -955,8 +977,7 @@ class QueueViewModel @Inject constructor(
     fun restoreQueueEntry(vehicleId: String) {
         if (!canManageQueueEntryOrNotify(vehicleId)) return
         val busyKey = "restore:$vehicleId"
-        if (busyKey in _busyActions.value) return
-        setBusyAction(busyKey, true)
+        if (!beginQueueAction(busyKey)) return
         var targetPlateNumber = ""
         viewModelScope.launch {
             try {
@@ -1074,7 +1095,7 @@ class QueueViewModel @Inject constructor(
                     e.message ?: "Hindi maibalik ang sasakyan sa pila."
                 )
             } finally {
-                setBusyAction(busyKey, false)
+                finishQueueAction(busyKey)
             }
         }
     }
@@ -1090,8 +1111,7 @@ class QueueViewModel @Inject constructor(
         } else {
             "position-down:$vehicleId"
         }
-        if (busyKey in _busyActions.value) return
-        setBusyAction(busyKey, true)
+        if (!beginQueueAction(busyKey)) return
 
         viewModelScope.launch {
             try {
@@ -1191,7 +1211,7 @@ class QueueViewModel @Inject constructor(
             } catch (e: Exception) {
                 ToastFeedback.show(e.message ?: "Hindi ma-update ang posisyon")
             } finally {
-                setBusyAction(busyKey, false)
+                finishQueueAction(busyKey)
             }
         }
     }
