@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.profile
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -121,7 +123,7 @@ fun DriverProfileMainContent(
             .verticalScroll(
                 rememberScrollState()
             )
-            .padding(24.dp)
+            .padding(responsivePageHorizontalPadding())
     ) {
         Spacer(
             modifier = Modifier.height(24.dp)
@@ -159,7 +161,7 @@ fun DriverProfileMainContent(
 
         Text(
             text = "Profile",
-            fontSize = 28.sp,
+            fontSize = responsivePageTitleSize(),
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )
