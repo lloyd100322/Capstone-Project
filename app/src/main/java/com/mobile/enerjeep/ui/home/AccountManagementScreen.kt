@@ -410,26 +410,26 @@ fun AccountCard(
                         }
                     }
 
-                if (canDelete) {
-                            IconButton(
-                                onClick = onDelete,
-                                enabled = !isBusy,
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .border(
-                                        width = 1.dp,
-                                        color = ErrorRedLight,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Burahin ang account ni ${account.name}",
-                                    tint = Color.Red,
-                                    modifier = Modifier.size(20.dp)
+                    if (canDelete) {
+                        IconButton(
+                            onClick = onDelete,
+                            enabled = !isBusy,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = ErrorRedLight,
+                                    shape = RoundedCornerShape(12.dp)
                                 )
-                            }
-                }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Burahin ang account ni ${account.name}",
+                                tint = Color.Red,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
 
