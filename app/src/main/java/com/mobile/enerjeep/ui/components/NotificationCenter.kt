@@ -136,7 +136,10 @@ class NotificationCenterViewModel @Inject constructor(
         unreadCountListener = notifications
             .whereEqualTo("read", false)
             .addSnapshotListener { snapshot, error ->
-                if (activePhone != phone || error != null) return@addSnapshotListener
+                if (activePhone != phone ||
+                    error != null ||
+                    _uiState.value.markingRead
+                ) return@addSnapshotListener
                 _uiState.value = _uiState.value.copy(
                     unreadCount = snapshot?.size() ?: 0
                 )
