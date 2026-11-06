@@ -84,12 +84,13 @@ object QueueRotation {
      */
     suspend fun rotateOnce(firestore: FirebaseFirestore): Result {
         val queueCollection = firestore.collection(FirestoreCollections.QUEUE)
+        val usersCollection = firestore.collection(FirestoreCollections.USERS)
 
         /*
-         * Kolektahin muna ang mga ID ng pila (isang simpleng basa). Ang
-         * bawat dokumento ay binabasa SA LOOB ng transaction gamit ang
-         * transaction.get(document) - per document ang basa dahil walang
-         * transaction.get(query) ang mobile SDK.
+         * Kuhanin ang IDs bago ang transaction; sariwang dokumento naman ang
+         * babasahin sa loob nito. Superadmin-only ang rotation, kaya puwedeng
+         * basahin ang buong driver roster nang hindi binibigyan ng list access
+         * ang mga driver account.
          */
         val queueControlReference = firestore
             .collection(FirestoreCollections.SETTINGS)
@@ -101,6 +102,12 @@ object QueueRotation {
             .await()
             .documents
             .map { it.id }
+        val driverAccountIds = usersCollection
+            .whereEqualTo("role", "driver")
+            .get()
+            .await()
+            .documents
+            .map { it.id }
 
         return firestore.runTransaction { transaction ->
             val queueControl = transaction.get(queueControlReference)
@@ -108,30 +115,34 @@ object QueueRotation {
             if (currentRevision != observedQueueRevision) {
                 throw IllegalStateException("Nagbago ang pila habang nagre-reset. Ulitin ang rotation.")
             }
+
             val metaReference = metaReference(firestore)
             val meta = transaction.get(metaReference)
             val lastReset = meta.getString("lastQueueDay")
-
-            // Ang cut-off hour ay settable ng superadmin (default 21 = 9 PM).
             val hour = (meta.getLong("cutoffHour")?.toInt()
-                ?: QueueViewModel.CUTOFF_HOUR)
-                .coerceIn(0, 23)
-
+                ?: QueueViewModel.CUTOFF_HOUR).coerceIn(0, 23)
             val today = queueDayId(Date(), hour)
-
             if (lastReset == today) {
                 return@runTransaction Result(false, hour)
             }
 
-            // Basahin ang bawat entry SA LOOB ng transaction (laging sariwa).
+            // Fresh queue and driver reads are part of this transaction.
             val queueDocs = queueIds.map { id ->
                 transaction.get(queueCollection.document(id))
             }.filter { it.exists() }
+            val driverAccounts = driverAccountIds.map { id ->
+                transaction.get(usersCollection.document(id))
+            }.filter {
+                it.exists() &&
+                        it.getString("role")?.equals("driver", ignoreCase = true) == true &&
+                        (it.getString("status").isNullOrBlank() ||
+                                it.getString("status")?.equals("active", ignoreCase = true) == true)
+            }
 
-            // The first queue record is created with the driver account.
-            // Keeping this mapping within queue history avoids requiring drivers
-            // to list /users (which Firestore rules deliberately prohibit).
-            val accountCreatedAtByDriver = queueDocs
+            // The cycle is built from ALL active driver accounts, not just
+            // today's active queue rows. A dispatched/completed driver may be
+            // absent from /queue temporarily; that must not shorten the cycle.
+            val earliestQueueCreatedAtByDriver = queueDocs
                 .filter { !it.getString("driverId").isNullOrBlank() }
                 .groupBy { it.getString("driverId").orEmpty() }
                 .mapValues { (_, entries) ->
@@ -141,18 +152,81 @@ object QueueRotation {
                     }.minOrNull()
                 }
 
-            fun accountCreationMillis(document: DocumentSnapshot): Long =
-                document.getTimestamp("accountCreatedAt")?.toDate()?.time
-                    ?: accountCreatedAtByDriver[
-                        document.getString("driverId").orEmpty()
-                    ]
-                    ?: document.getTimestamp("createdAt")?.toDate()?.time
+            data class PermanentDriver(
+                val driverId: String,
+                val createdAtMillis: Long
+            )
+
+            val permanentDrivers = driverAccounts.map { account ->
+                val driverId = account.getString("userId").orEmpty().ifBlank { account.id }
+                val createdAtMillis = account.getTimestamp("createdAt")?.toDate()?.time
+                    ?: earliestQueueCreatedAtByDriver[driverId]
                     ?: Long.MAX_VALUE
+                PermanentDriver(driverId, createdAtMillis)
+            }.ifEmpty {
+                // Legacy-only fallback for orphaned queue history when no
+                // driver account documents are available.
+                earliestQueueCreatedAtByDriver.map { (driverId, createdAtMillis) ->
+                    PermanentDriver(driverId, createdAtMillis ?: Long.MAX_VALUE)
+                }
+            }.sortedWith(
+                compareBy<PermanentDriver> { it.createdAtMillis }
+                    .thenBy { it.driverId }
+            )
 
             val rotationCursorUpdates = mutableMapOf<String, Any>()
 
             listOf(QueueViewModel.ROUTE_MA, QueueViewModel.ROUTE_AM)
                 .forEach { route ->
+                    val routeName = if (route == QueueViewModel.ROUTE_MA) {
+                        "Marilao"
+                    } else {
+                        "Monumento"
+                    }
+                    val cursorDriverField = "rotationStart${routeName}DriverId"
+                    val cursorCreatedAtField =
+                        "rotationStart${routeName}CreatedAtMillis"
+                    val previousLeaderId = meta.getString(cursorDriverField).orEmpty()
+                    val previousLeaderCreatedAt = meta.getLong(cursorCreatedAtField)
+
+                    // Advance against the FULL permanent roster. Never use
+                    // active.size here: that would wrap to A prematurely if
+                    // some drivers are dispatched/completed and absent today.
+                    val startIndex = when {
+                        permanentDrivers.size <= 1 -> 0
+                        previousLeaderId.isNotBlank() -> {
+                            val previousIndex = permanentDrivers.indexOfFirst {
+                                it.driverId == previousLeaderId
+                            }
+                            if (previousIndex >= 0) {
+                                (previousIndex + 1) % permanentDrivers.size
+                            } else if (previousLeaderCreatedAt != null) {
+                                val nextIndex = permanentDrivers.indexOfFirst { driver ->
+                                    driver.createdAtMillis > previousLeaderCreatedAt ||
+                                            (driver.createdAtMillis == previousLeaderCreatedAt &&
+                                                    driver.driverId > previousLeaderId)
+                                }
+                                if (nextIndex >= 0) nextIndex else 0
+                            } else {
+                                1
+                            }
+                        }
+                        previousLeaderCreatedAt != null -> {
+                            val nextIndex = permanentDrivers.indexOfFirst { driver ->
+                                driver.createdAtMillis > previousLeaderCreatedAt
+                            }
+                            if (nextIndex >= 0) nextIndex else 0
+                        }
+                        // First reset: permanent #1 goes to the end and #2 leads.
+                        else -> 1
+                    }
+
+                    val rotatedDrivers = permanentDrivers.drop(startIndex) +
+                            permanentDrivers.take(startIndex)
+                    val permanentOrder = rotatedDrivers
+                        .mapIndexed { index, driver -> driver.driverId to index }
+                        .toMap()
+
                     val active = queueDocs
                         .filter {
                             QueueViewModel.isActiveStatus(it.getString("status")) &&
@@ -163,68 +237,18 @@ object QueueRotation {
                                     )
                         }
                         .sortedWith(
-                            compareBy<DocumentSnapshot> { accountCreationMillis(it) }
-                                .thenBy {
-                                    it.getString("driverId").orEmpty().ifBlank { it.id }
-                                }
+                            compareBy<DocumentSnapshot> {
+                                val driverId = it.getString("driverId")
+                                    .orEmpty().ifBlank { it.id }
+                                permanentOrder[driverId] ?: Int.MAX_VALUE
+                            }.thenBy {
+                                it.getLong("position") ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.safeTimestamp("createdAt")?.seconds ?: Long.MAX_VALUE
+                            }
                         )
 
-                    val routeName = if (route == QueueViewModel.ROUTE_MA) {
-                        "Marilao"
-                    } else {
-                        "Monumento"
-                    }
-                    val cursorDriverField = "rotationStart${routeName}DriverId"
-                    val cursorCreatedAtField =
-                        "rotationStart${routeName}CreatedAtMillis"
-                    val previousLeaderId = meta.getString(cursorDriverField)
-                    val previousLeaderCreatedAt =
-                        meta.getLong(cursorCreatedAtField)
-
-                    // The saved cursor is yesterday's #1. Advance to the next
-                    // active account in permanent creation order, wrapping around.
-                    val startIndex = when {
-                        active.size <= 1 -> 0
-                        !previousLeaderId.isNullOrBlank() -> {
-                            val previousIndex = active.indexOfFirst {
-                                it.getString("driverId").orEmpty()
-                                    .ifBlank { it.id } == previousLeaderId
-                            }
-                            if (previousIndex >= 0) {
-                                (previousIndex + 1) % active.size
-                            } else if (previousLeaderCreatedAt != null) {
-                                val nextIndex = active.indexOfFirst { document ->
-                                    val createdAt = accountCreationMillis(document)
-                                    val driverId = document.getString("driverId")
-                                        .orEmpty().ifBlank { document.id }
-                                    createdAt > previousLeaderCreatedAt ||
-                                            (createdAt == previousLeaderCreatedAt &&
-                                                    driverId > previousLeaderId.orEmpty())
-                                }
-                                if (nextIndex >= 0) nextIndex else 0
-                            } else {
-                                1
-                            }
-                        }
-                        previousLeaderCreatedAt != null -> {
-                            val nextIndex = active.indexOfFirst { document ->
-                                val createdAt = accountCreationMillis(document)
-                                val driverId = document.getString("driverId")
-                                    .orEmpty().ifBlank { document.id }
-                                createdAt > previousLeaderCreatedAt ||
-                                        (createdAt == previousLeaderCreatedAt &&
-                                                driverId > previousLeaderId.orEmpty())
-                            }
-                            if (nextIndex >= 0) nextIndex else 0
-                        }
-                        // First reset after this change: move permanent #1
-                        // to the end so permanent #2 becomes the new #1.
-                        else -> 1
-                    }
-
-                    val rotated = active.drop(startIndex) + active.take(startIndex)
-
-                    rotated.forEachIndexed { index, document ->
+                    active.forEachIndexed { index, document ->
                         transaction.update(
                             document.reference,
                             mapOf(
@@ -234,12 +258,13 @@ object QueueRotation {
                         )
                     }
 
-                    rotated.firstOrNull()?.let { newLeader ->
-                        rotationCursorUpdates[cursorDriverField] =
-                            newLeader.getString("driverId").orEmpty()
-                                .ifBlank { newLeader.id }
+                    // Save the next leader from the FULL roster even when that
+                    // driver has no active queue row today. This preserves the
+                    // entire A -> B -> ... -> last driver -> A cycle.
+                    rotatedDrivers.firstOrNull()?.let { newLeader ->
+                        rotationCursorUpdates[cursorDriverField] = newLeader.driverId
                         rotationCursorUpdates[cursorCreatedAtField] =
-                            accountCreationMillis(newLeader)
+                            newLeader.createdAtMillis
                     }
                 }
 
