@@ -161,7 +161,7 @@ fun AccountManagementScreen(
             SearchField(
                 value = uiState.searchQuery,
                 onValueChange = viewModel::updateSearchQuery,
-                placeholder = "Hanapin ayon sa pangalan o numero",
+                placeholder = "Hanapin: pangalan / numero",
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
