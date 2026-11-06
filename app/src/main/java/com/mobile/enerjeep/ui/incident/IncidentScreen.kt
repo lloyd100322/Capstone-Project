@@ -40,6 +40,8 @@ import com.mobile.enerjeep.ui.components.ToastFeedback
 @Composable
 fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val resolvingIncidentIds by viewModel.resolvingIncidentIds.collectAsStateWithLifecycle()
+    val sendingIncidentIds by viewModel.sendingIncidentIds.collectAsStateWithLifecycle()
     /* Ang "Talaan" tab ay tinanggal: dito na sa Insidente ang pag-record
      * ng bayad ng multa ("may incident -> nagbayad"). */
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
@@ -125,9 +127,12 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         ) {
                             incidents.forEach { incident ->
                                 IncidentItemCard(
-                                    incident,
+                                    incident = incident,
+                                    isResolving = incident.id in resolvingIncidentIds,
                                     onViewClick = { selectedIncident = incident },
-                                    onMarkResolvedClick = { viewModel.resolveIncident(incident.id) }
+                                    onMarkResolvedClick = {
+                                        viewModel.resolveIncident(incident.id)
+                                    }
                                 )
                             }
                         }
@@ -170,10 +175,17 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
         IncidentDetailsContent(
             incident,
             onCancel = { selectedIncident = null },
-            onResolve = { viewModel.resolveIncident(incident.id); selectedIncident = null },
+            onResolve = {
+                viewModel.resolveIncident(incident.id) { success ->
+                    if (success) selectedIncident = null
+                }
+            },
+            isResolving = incident.id in resolvingIncidentIds,
+            isSending = incident.id in sendingIncidentIds,
             onSendToDriver = {
-                viewModel.sendIncidentToDriver(incident.id)
-                selectedIncident = null
+                viewModel.sendIncidentToDriver(incident.id) { success ->
+                    if (success) selectedIncident = null
+                }
             },
             onRecordPayment = {
                 multaPrefillPlate = incident.plateNumber
@@ -400,12 +412,37 @@ fun IncidentStatCard(modifier: Modifier = Modifier, title: String, value: String
 }
 
 @Composable
-fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkResolvedClick: () -> Unit) {
+fun IncidentItemCard(
+    incident: IncidentItem,
+    isResolving: Boolean = false,
+    onViewClick: () -> Unit,
+    onMarkResolvedClick: () -> Unit
+) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
         Column(Modifier.padding(20.dp)) {
             Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.location, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth()) { Button(onClick = onMarkResolvedClick, modifier = Modifier.weight(1f)) { Text("Ayusin", maxLines = 1) }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) { Text("Tingnan", maxLines = 1) } }
+            Row(Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onMarkResolvedClick,
+                    enabled = !isResolving,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (isResolving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Ayusin", maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) {
+                    Text("Tingnan", maxLines = 1)
+                }
+            }
         }
     }
 }
@@ -430,6 +467,8 @@ fun IncidentDetailsContent(
     incident: IncidentItem,
     onCancel: () -> Unit,
     onResolve: () -> Unit,
+    isResolving: Boolean = false,
+    isSending: Boolean = false,
     onSendToDriver: () -> Unit = {},
     onRecordPayment: (() -> Unit)? = null,
     onCallDriver: (() -> Unit)? = null
@@ -485,11 +524,37 @@ fun IncidentDetailsContent(
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onSendToDriver,
+                enabled = !isSending,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
-            ) { Text("Ipadala", maxLines = 1) }
+            ) {
+                if (isSending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ipadala", maxLines = 1)
+                }
+            }
         }
-        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara", maxLines = 1) }; Spacer(Modifier.width(12.dp)); Button(onClick = onResolve, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Ayusin", maxLines = 1) } }
+        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara", maxLines = 1) }; Spacer(Modifier.width(12.dp)); Button(
+            onClick = onResolve,
+            enabled = !isResolving,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+        ) {
+            if (isResolving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White
+                )
+            } else {
+                Text("Ayusin", maxLines = 1)
+            }
+        } }
     }
 }
 
