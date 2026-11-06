@@ -27,6 +27,7 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.ErrorRedLight
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.theme.WarningOrangeLight
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,35 +158,11 @@ fun AccountManagementScreen(
                 }
 
                 else -> {
-            OutlinedTextField(
+            SearchField(
                 value = uiState.searchQuery,
-                onValueChange = {
-                    viewModel.updateSearchQuery(it)
-                },
-                placeholder = {
-                    Text(
-                        "Hanapin ayon sa pangalan o numero",
-                        color = TextSecondary
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "Hanapin",
-                        tint = TextSecondary
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = FieldBorderColor,
-                    focusedBorderColor = Color(0xFF1B49B5),
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White
-                ),
-                singleLine = true
+                onValueChange = viewModel::updateSearchQuery,
+                placeholder = "Hanapin ayon sa pangalan o numero",
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
             uiState.errorMessage?.let { message ->
