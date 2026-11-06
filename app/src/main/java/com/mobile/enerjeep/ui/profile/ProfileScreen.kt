@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.ui.profile
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -306,7 +307,7 @@ fun ProfileMainContent(
                 .verticalScroll(
                     rememberScrollState()
                 )
-                .padding(24.dp)
+                .padding(responsivePageHorizontalPadding())
     ) {
 
         Row(
