@@ -1,6 +1,7 @@
 
 package com.mobile.enerjeep.ui.login
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -135,7 +136,7 @@ fun LoginScreen(
                 .consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(24.dp),
+                .padding(responsivePageHorizontalPadding()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
