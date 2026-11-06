@@ -410,7 +410,7 @@ fun QueueScreen(
                                                                 if (steps != 0) {
                                                                     viewModel.updateVehiclePosition(
                                                                         vehicle.id,
-                                                                        vehicle.position + steps
+                                                                        steps
                                                                     )
                                                                 }
                                                                 dragIndex = null
@@ -436,13 +436,14 @@ fun QueueScreen(
                                             canManage = canManageSelectedRoute,
                                             isCancelling = "cancel:${vehicle.id}" in busyActions,
                                             isRestoring = "restore:${vehicle.id}" in busyActions,
-                                            isReordering = "position:${vehicle.id}" in busyActions,
+                                            isMovingUp = "position-up:${vehicle.id}" in busyActions,
+                                            isMovingDown = "position-down:${vehicle.id}" in busyActions,
                                             onDispatchClick = {
                                                 if (canManageSelectedRoute) vehicleToDispatch = vehicle
                                             },
-                                            onPositionUpdate = { newPosition ->
+                                            onMoveBy = { positionDelta ->
                                                 if (canManageSelectedRoute) {
-                                                    viewModel.updateVehiclePosition(vehicle.id, newPosition)
+                                                    viewModel.updateVehiclePosition(vehicle.id, positionDelta)
                                                 }
                                             },
                                             onCancelClick = {
@@ -584,9 +585,10 @@ fun QueueItem(
     canManage: Boolean = true,
     isCancelling: Boolean = false,
     isRestoring: Boolean = false,
-    isReordering: Boolean = false,
+    isMovingUp: Boolean = false,
+    isMovingDown: Boolean = false,
     onDispatchClick: () -> Unit,
-    onPositionUpdate: (Int) -> Unit,
+    onMoveBy: (Int) -> Unit,
     onCancelClick: () -> Unit,
     onRestoreClick: () -> Unit = {}
 ) {
@@ -808,9 +810,7 @@ fun QueueItem(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            if (!isReordering && displayPosition > 1) {
-                                onPositionUpdate(displayPosition - 1)
-                            }
+                            if (!isMovingUp && displayPosition > 1) onMoveBy(-1)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -818,12 +818,12 @@ fun QueueItem(
                             .semantics {
                                 contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
                             },
-                        enabled = !isReordering && displayPosition > 1,
+                        enabled = !isMovingUp && displayPosition > 1,
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        if (isReordering) {
+                        if (isMovingUp) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp
@@ -838,7 +838,7 @@ fun QueueItem(
 
                     OutlinedButton(
                         onClick = {
-                            if (!isReordering) onPositionUpdate(displayPosition + 1)
+                            if (!isMovingDown) onMoveBy(1)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -846,12 +846,12 @@ fun QueueItem(
                             .semantics {
                                 contentDescription = "Ibaba si ${vehicle.plateNumber} sa pila"
                             },
-                        enabled = !isReordering,
+                        enabled = !isMovingDown,
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        if (isReordering) {
+                        if (isMovingDown) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp
