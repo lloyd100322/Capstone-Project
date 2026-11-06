@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.ui.queue
 
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -16,7 +17,7 @@ import java.util.TimeZone
  *
  * PANGUNAHIN: isang NAKA-SCHEDULE na Cloud Function (functions/index.js
  * - dailyQueueReset, bawat oras, Asia/Manila) ang nagre-reset ng pila
- * kahit SARADO ang app. Pareho ng logic nito.
+ * ayon sa permanenteng account-creation order kahit SARADO ang app.
  *
  * PANTULONG (fallback) sa Android - dalawang lugar ang tumatawag:
  *   1. ContentViewModel - AGAD sa pag-login (kahit anong screen ang
