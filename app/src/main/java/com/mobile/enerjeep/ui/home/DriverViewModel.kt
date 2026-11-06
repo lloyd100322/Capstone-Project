@@ -56,11 +56,6 @@ data class DriverDashboardUiState(
     val openIncidentCount: Int = 0,
     // Fase 4B: posisyon BUKAS (rotation: #1 -> hulihan, iba -> bawas 1).
     val posisyonBukas: Int = 0,
-    // Sino ang #1 at sino ang kasunod sa pila ng ruta ng driver.
-    val queueLeadName: String = "",
-    val queueLeadPlate: String = "",
-    val queueNextName: String = "",
-    val queueNextPlate: String = "",
     // The doc id of the driver's own active queue entry ("Tapos Na").
     val activeQueueDocId: String = "",
     val isCancelledInQueue: Boolean = false,
@@ -178,9 +173,6 @@ class DriverViewModel @Inject constructor(
                     QueueViewModel.sameRoute(it.getString("route"), ownRoute)
         }.sortedBy { it.getLong("position") ?: Int.MAX_VALUE.toLong() }
 
-        val lead = routeFront.getOrNull(0)
-        val next = routeFront.getOrNull(1)
-
         // Display a continuous rank from the live route list. The temporary
         // client fallback cannot rewrite the other drivers' stored positions.
         val position = routeFront.indexOfFirst { it.id == own?.id }
@@ -208,10 +200,6 @@ class DriverViewModel @Inject constructor(
             queueStatus = own?.getString("status").orEmpty(),
             route = ownRoute,
             posisyonBukas = bukas,
-            queueLeadName = lead?.getString("driverName").orEmpty(),
-            queueLeadPlate = lead?.getString("plateNumber").orEmpty(),
-            queueNextName = next?.getString("driverName").orEmpty(),
-            queueNextPlate = next?.getString("plateNumber").orEmpty(),
             activeQueueDocId = own?.id.orEmpty(),
             isCancelledInQueue = own?.getBoolean("isCancelled") == true
         )
