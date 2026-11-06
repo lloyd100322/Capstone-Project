@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.report
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -101,7 +103,7 @@ fun ReportScreen(
 
         is ReportUiState.Error -> {
             Column(
-                modifier = Modifier.fillMaxSize().background(LightGrayBackground).padding(24.dp),
+                modifier = Modifier.fillMaxSize().background(LightGrayBackground).padding(responsivePageHorizontalPadding()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -128,13 +130,13 @@ fun ReportScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 24.dp, top = 20.dp, end = 24.dp, bottom = 12.dp)
+                        .padding(start = responsivePageHorizontalPadding(), top = 20.dp, end = responsivePageHorizontalPadding(), bottom = 12.dp)
                 ) {
                     HeaderRow()
                     Spacer(Modifier.height(20.dp))
                     Text(
                         "Mga Ulat",
-                        fontSize = 28.sp,
+                        fontSize = responsivePageTitleSize(),
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.Black
                     )
