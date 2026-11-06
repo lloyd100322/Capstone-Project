@@ -49,7 +49,8 @@ data class DriverIncidentUiState(
     val errorMessage: String? = null,
     // Fase 6: tel: button - numero ng opisina (emergency list ng superadmin).
     val officePhone: String = "",
-    val officeName: String = ""
+    val officeName: String = "",
+    val lookingUpDriverPhoneIds: Set<String> = emptySet()
 )
 
 @HiltViewModel
@@ -73,6 +74,9 @@ class DriverIncidentViewModel @Inject constructor(
         onResult: (String?) -> Unit
     ) {
         if (!contactLookups.add(incidentId)) return
+        _uiState.value = _uiState.value.copy(
+            lookingUpDriverPhoneIds = _uiState.value.lookingUpDriverPhoneIds + incidentId
+        )
 
         viewModelScope.launch {
             try {
@@ -92,6 +96,9 @@ class DriverIncidentViewModel @Inject constructor(
                 onResult(null)
             } finally {
                 contactLookups.remove(incidentId)
+                _uiState.value = _uiState.value.copy(
+                    lookingUpDriverPhoneIds = _uiState.value.lookingUpDriverPhoneIds - incidentId
+                )
             }
         }
     }
