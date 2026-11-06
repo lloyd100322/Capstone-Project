@@ -25,9 +25,9 @@ import com.mobile.enerjeep.ui.theme.*
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /*
- * The SUPERADMIN toolbox screens. Only the superadmin can open these
- * (the caller checks the user level): the emergency list of "available
- * admin" contacts, the accountability log and the app settings.
+ * Superadmin-only utility screens: emergency contacts and app settings.
+ * ActivityLogView is retained as a reusable report component and is now
+ * presented inside the Reports tab instead of the account-management area.
  */
 
 @OptIn(ExperimentalMaterial3Api::class)
