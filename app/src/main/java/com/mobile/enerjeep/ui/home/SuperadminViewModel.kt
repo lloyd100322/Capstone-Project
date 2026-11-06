@@ -96,6 +96,11 @@ class SuperadminViewModel @Inject constructor(
 
     private val _isSavingSettings = MutableStateFlow(false)
     val isSavingSettings = _isSavingSettings.asStateFlow()
+    private val _isAddingEmergencyContact = MutableStateFlow(false)
+    val isAddingEmergencyContact = _isAddingEmergencyContact.asStateFlow()
+
+    private val _removingEmergencyContactIds = MutableStateFlow<Set<String>>(emptySet())
+    val removingEmergencyContactIds = _removingEmergencyContactIds.asStateFlow()
 
     private val listeners = mutableListOf<ListenerRegistration>()
 
@@ -272,6 +277,9 @@ class SuperadminViewModel @Inject constructor(
             return
         }
 
+        if (_isAddingEmergencyContact.value) return
+        _isAddingEmergencyContact.value = true
+
         viewModelScope.launch {
             try {
                 val reference = firestore
@@ -300,11 +308,17 @@ class SuperadminViewModel @Inject constructor(
             } catch (e: Exception) {
                 _message.value =
                     e.message ?: "Hindi maidagdag ang kontak."
+            } finally {
+                _isAddingEmergencyContact.value = false
             }
         }
     }
 
     fun removeEmergencyContact(item: EmergencyContactItem) {
+        if (item.id in _removingEmergencyContactIds.value) return
+        _removingEmergencyContactIds.value =
+            _removingEmergencyContactIds.value + item.id
+
         viewModelScope.launch {
             try {
                 firestore
@@ -323,6 +337,9 @@ class SuperadminViewModel @Inject constructor(
             } catch (e: Exception) {
                 _message.value =
                     e.message ?: "Hindi maalis ang kontak."
+            } finally {
+                _removingEmergencyContactIds.value =
+                    _removingEmergencyContactIds.value - item.id
             }
         }
     }
