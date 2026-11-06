@@ -543,6 +543,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
     val tiers by viewModel.tiers.collectAsStateWithLifecycle()
     val cutoffHour by viewModel.cutoffHour.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val isSavingSettings by viewModel.isSavingSettings.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -697,11 +698,22 @@ fun SettingsView(viewModel: SuperadminViewModel) {
 
         Button(
             onClick = { viewModel.saveSettings() },
+            enabled = !isSavingSettings,
             colors = ButtonDefaults.buttonColors(
                 containerColor = EnerjeepBlue
             ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) { Text("I-save", maxLines = 1) }
+        ) {
+            if (isSavingSettings) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White
+                )
+            } else {
+                Text("I-save", maxLines = 1)
+            }
+        }
     }
 }
