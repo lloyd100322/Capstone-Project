@@ -64,6 +64,9 @@ class DriverProfileViewModel @Inject constructor(
     private val _isSavingPassword = MutableStateFlow(false)
     val isSavingPassword = _isSavingPassword.asStateFlow()
 
+    private val _isSigningOut = MutableStateFlow(false)
+    val isSigningOut = _isSigningOut.asStateFlow()
+
     private var listener:
             ListenerRegistration? = null
 
@@ -482,7 +485,9 @@ class DriverProfileViewModel @Inject constructor(
      * so Android Back cannot return to the previous driver dashboard.
      */
     fun signOut() {
+        if (_isSigningOut.value) return
         val phone = userSession.userProfile?.phoneNumber.orEmpty()
+        _isSigningOut.value = true
 
         viewModelScope.launch {
             try {
@@ -491,6 +496,7 @@ class DriverProfileViewModel @Inject constructor(
                 // Remove the optional pre-OTP verifier for this account too.
                 SecureLoginCache.clear(phone)
                 userSession.clear()
+                _isSigningOut.value = false
             }
         }
     }
