@@ -210,10 +210,6 @@ fun DriverContent(
                         activeIncidentPlate = uiState.activeIncidentPlate,
                         openIncidentCount = uiState.openIncidentCount,
                         posisyonBukas = uiState.posisyonBukas,
-                        queueLeadName = uiState.queueLeadName,
-                        queueLeadPlate = uiState.queueLeadPlate,
-                        queueNextName = uiState.queueNextName,
-                        queueNextPlate = uiState.queueNextPlate,
                         isInQueue = uiState.activeQueueDocId.isNotBlank() &&
                                 !uiState.isCancelledInQueue,
                         travelEnded = uiState.travelEndedToday,
@@ -270,10 +266,6 @@ fun DriverDashboardContent(
     activeIncidentPlate: String?,
     openIncidentCount: Int,
     posisyonBukas: Int = 0,
-    queueLeadName: String = "",
-    queueLeadPlate: String = "",
-    queueNextName: String = "",
-    queueNextPlate: String = "",
     isInQueue: Boolean = false,
     travelEnded: Boolean = false,
     dailyEarnings: Double? = null,
@@ -490,100 +482,6 @@ fun DriverDashboardContent(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        /*
-         * Fase 4B: sino ang #1 at sino ang kasunod sa pila ng ruta -
-         * para alam ng driver kung sino ang mauuna at sino ang sumusunod.
-         */
-        if (queueLeadName.isNotBlank() || queueLeadPlate.isNotBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = if (route.isNotBlank()) {
-                            "Pila Ngayon ($route)"
-                        } else {
-                            "Pila Ngayon"
-                        },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = Color.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            color = EnerjeepBlue,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(
-                                text = "#1",
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp,
-                                    vertical = 4.dp
-                                ),
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = listOf(
-                                queueLeadName,
-                                queueLeadPlate
-                            ).filter { it.isNotBlank() }
-                                .joinToString(" • "),
-                            fontSize = 14.sp,
-                            color = Color.Black,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (queueNextName.isNotBlank() ||
-                        queueNextPlate.isNotBlank()
-                    ) {
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = Color(0xFFECEFF3),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text(
-                                    text = "Kasunod",
-                                    modifier = Modifier.padding(
-                                        horizontal = 10.dp,
-                                        vertical = 4.dp
-                                    ),
-                                    color = Color(0xFF5A6472),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = listOf(
-                                    queueNextName,
-                                    queueNextPlate
-                                ).filter { it.isNotBlank() }
-                                    .joinToString(" • "),
-                                fontSize = 14.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
