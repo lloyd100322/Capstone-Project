@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
 import com.mobile.enerjeep.ui.theme.TextSecondary
@@ -320,6 +321,7 @@ fun ActivityLogView(
      * "Ngayon" ang default, pareho ng ibang history list sa app).
      */
     var selectedAction by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember {
         mutableStateOf(HistoryFilterState())
     }
@@ -333,12 +335,18 @@ fun ActivityLogView(
     }
 
     val visible = remember(
-        logs, selectedAction, historyFilter
+        logs, selectedAction, historyFilter, searchQuery
     ) {
+        val filteredBySearch = logs.filter { log ->
+            searchQuery.isBlank() ||
+                log.plateNumber.contains(searchQuery, ignoreCase = true) ||
+                log.driverName.contains(searchQuery, ignoreCase = true) ||
+                log.detail.contains(searchQuery, ignoreCase = true)
+        }
         val byAction = if (selectedAction.isBlank()) {
-            logs
+            filteredBySearch
         } else {
-            logs.filter { it.action == selectedAction }
+            filteredBySearch.filter { it.action == selectedAction }
         }
         filterHistoryRecords(
             byAction,
@@ -359,8 +367,8 @@ fun ActivityLogView(
             )
             .imePadding()
             .padding(
-                start = if (embeddedInReport) 0.dp else 24.dp,
-                end = if (embeddedInReport) 0.dp else 24.dp,
+                start = 24.dp,
+                end = 24.dp,
                 top = 8.dp,
                 bottom = 32.dp
             )
@@ -371,7 +379,13 @@ fun ActivityLogView(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
+        SearchField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = "Hanapin ayon sa plaka o pangalan"
+        )
+        Spacer(Modifier.height(12.dp))
 
         /*
          * Filter ng uri ng aksyon (hal. "Settings", "Dispatch"). Mula sa
