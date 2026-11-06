@@ -38,6 +38,8 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
     val adminAccounts by viewModel.adminAccounts.collectAsStateWithLifecycle()
     val contactsError by viewModel.emergencyContactsError.collectAsStateWithLifecycle()
     val adminAccountsError by viewModel.adminAccountsError.collectAsStateWithLifecycle()
+    val contactsLoading by viewModel.emergencyContactsLoading.collectAsStateWithLifecycle()
+    val adminAccountsLoading by viewModel.adminAccountsLoading.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val isAddingEmergencyContact by viewModel.isAddingEmergencyContact.collectAsStateWithLifecycle()
     val removingEmergencyContactIds by viewModel.removingEmergencyContactIds.collectAsStateWithLifecycle()
@@ -90,9 +92,30 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                             fontSize = 12.sp,
                             color = ErrorRed
                         )
-                        OutlinedButton(onClick = viewModel::retryListeners) {
-                            Text("Subukang muli", maxLines = 1)
+                        OutlinedButton(
+                            onClick = viewModel::retryListeners,
+                            enabled = !adminAccountsLoading
+                        ) {
+                            if (adminAccountsLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Subukang muli", maxLines = 1)
+                            }
                         }
+                    }
+                } else if (adminAccountsLoading && adminAccounts.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = EnerjeepBlue
+                        )
                     }
                 } else if (adminAccounts.isEmpty()) {
                     Text(
@@ -268,10 +291,30 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                 )
                 Button(
                     onClick = viewModel::retryListeners,
+                    enabled = !contactsLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
                 ) {
-                    Text("Subukang muli", maxLines = 1)
+                    if (contactsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Subukang muli", maxLines = 1)
+                    }
                 }
+            }
+        } else if (contactsLoading && contacts.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = EnerjeepBlue
+                )
             }
         } else if (contacts.isEmpty()) {
             Text("Walang laman ang listahan.", color = TextSecondary)
@@ -343,6 +386,7 @@ fun ActivityLogView(
 ) {
     val logs by viewModel.activityLogs.collectAsStateWithLifecycle()
     val logsError by viewModel.activityLogsError.collectAsStateWithLifecycle()
+    val logsLoading by viewModel.activityLogsLoading.collectAsStateWithLifecycle()
 
     /*
      * Mga filter ng talaan: uri ng aksyon at petsa (HistoryDateFilterBar -
@@ -489,10 +533,30 @@ fun ActivityLogView(
                 )
                 Button(
                     onClick = viewModel::retryListeners,
+                    enabled = !logsLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
                 ) {
-                    Text("Subukang muli", maxLines = 1)
+                    if (logsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Subukang muli", maxLines = 1)
+                    }
                 }
+            }
+        } else if (logsLoading && logs.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = EnerjeepBlue
+                )
             }
         } else if (logs.isEmpty()) {
             Text("Wala pang naitatalang aktibidad.", color = TextSecondary)
