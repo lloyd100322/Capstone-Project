@@ -427,6 +427,7 @@ class CreateAccountViewModel @Inject constructor(
                                 "hh:mm a",
                                 Locale.US
                             ).format(Date()),
+                            "accountCreatedAt" to FieldValue.serverTimestamp(),
                             "createdAt" to FieldValue.serverTimestamp()
                         )
 
