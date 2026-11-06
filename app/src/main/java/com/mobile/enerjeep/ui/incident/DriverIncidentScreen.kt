@@ -78,7 +78,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         SearchField(
             value = uiState.searchQuery,
             onValueChange = viewModel::onSearchQueryChanged,
-            placeholder = "Hanapin ayon sa uri, plaka, o lokasyon"
+            placeholder = "Hanapin: uri / plaka / lugar"
         )
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
