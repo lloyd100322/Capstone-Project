@@ -731,7 +731,7 @@ class QueueViewModel @Inject constructor(
         vehicleId: String,
         income: Double,
         otherFees: Double,
-        onComplete: () -> Unit = {}
+        onComplete: (Boolean) -> Unit = {}
     ) {
         if (income < 0.0) {
             ToastFeedback.show("Hindi maaaring negatibo ang kita")
@@ -761,6 +761,7 @@ class QueueViewModel @Inject constructor(
         setBusyAction(busyKey, true)
 
         viewModelScope.launch {
+            var completed = false
             try {
                 FirebaseFunctions.getInstance("us-central1")
                     .getHttpsCallable("dispatchQueueVehicle")
@@ -772,6 +773,7 @@ class QueueViewModel @Inject constructor(
                         )
                     )
                     .await()
+                completed = true
 
                 val dispatchedLabel = listOf(vehicle.plateNumber, vehicle.driverName)
                     .filter { it.isNotBlank() }
@@ -794,7 +796,7 @@ class QueueViewModel @Inject constructor(
             } finally {
                 dispatchingIds.remove(vehicleId)
                 setBusyAction(busyKey, false)
-                onComplete()
+                onComplete(completed)
             }
         }
     }
