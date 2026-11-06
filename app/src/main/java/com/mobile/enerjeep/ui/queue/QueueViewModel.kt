@@ -101,6 +101,7 @@ class QueueViewModel @Inject constructor(
      * cut-off.
      */
     private var rotationWatch: Job? = null
+    private var rotationSettingsListener: ListenerRegistration? = null
 
     companion object {
         /*
@@ -195,6 +196,7 @@ class QueueViewModel @Inject constructor(
         healActiveRoster()
         normalizeQueueRoutes()
         maybeRotateQueue()
+        observeRotationSettings()
         startRotationWatch()
     }
 
@@ -279,8 +281,26 @@ class QueueViewModel @Inject constructor(
         }
     }
 
+    private fun observeRotationSettings() {
+        rotationSettingsListener?.remove()
+        rotationSettingsListener = rotationMetaReference()
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                val latestHour = (snapshot.getLong("cutoffHour")?.toInt()
+                    ?: CUTOFF_HOUR).coerceIn(0, 23)
+                val changed = latestHour != cutoffHour
+                cutoffHour = latestHour
+                _cutoffLabel.value = formatCutoffHour(latestHour)
+
+                // Restart the timer immediately when Settings changes the reset hour.
+                if (changed && userSession.isSuperadmin()) {
+                    startRotationWatch()
+                }
+            }
+    }
+
     private fun startRotationWatch() {
-        // The daily rotation affects both terminals.
+        // The daily reset affects both terminals and follows the latest saved cutoff.
         if (!userSession.isSuperadmin()) return
         rotationWatch?.cancel()
         rotationWatch = viewModelScope.launch {
@@ -308,7 +328,7 @@ class QueueViewModel @Inject constructor(
             "Automatic (${_cutoffLabel.value})"
         )
         ToastFeedback.show(
-            "Na-reset na ang pila: ang dating #1 ay nasa huli na."
+            "Naibalik ang pila sa pagkakasunod ng petsa ng paggawa ng account."
         )
     }
 
@@ -466,6 +486,10 @@ class QueueViewModel @Inject constructor(
                                 "hh:mm a",
                                 Locale.getDefault()
                             ).format(Date()),
+                            "accountCreatedAt" to (
+                                user.getTimestamp("createdAt")
+                                    ?: FieldValue.serverTimestamp()
+                            ),
                             "createdAt" to FieldValue.serverTimestamp()
                         )
                     )
@@ -1314,6 +1338,8 @@ class QueueViewModel @Inject constructor(
 
     override fun onCleared() {
         rotationWatch?.cancel()
+        rotationSettingsListener?.remove()
+        rotationSettingsListener = null
         queueListener?.remove()
         super.onCleared()
     }
