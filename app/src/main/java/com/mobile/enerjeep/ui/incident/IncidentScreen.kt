@@ -248,6 +248,7 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
 @Composable
 fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
     val driverOptions by viewModel.driverOptions.collectAsStateWithLifecycle()
+    val isReporting by viewModel.isReporting.collectAsStateWithLifecycle()
     var expandedDriver by remember { mutableStateOf(false) }
     var selectedDriver by remember(driverOptions) { mutableStateOf(driverOptions.firstOrNull()) }
     var incidentType by remember { mutableStateOf("") }
@@ -255,15 +256,48 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
     var penalty by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var submitted by remember { mutableStateOf(false) }
-    var savedSentToDriver by remember { mutableStateOf(true) }
-    var showSendPrompt by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }; Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
-        Spacer(Modifier.height(24.dp)); Text("Plaka", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
-        ExposedDropdownMenuBox(expanded = expandedDriver, onExpandedChange = { if (!submitted && driverOptions.isNotEmpty()) expandedDriver = !expandedDriver }) {
-            OutlinedTextField(value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" } ?: "Walang dispatched na jeep", onValueChange = {}, readOnly = true, enabled = !submitted && driverOptions.isNotEmpty(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) }, modifier = Modifier.fillMaxWidth().menuAnchor())
-            ExposedDropdownMenu(expanded = expandedDriver, onDismissRequest = { expandedDriver = false }) { driverOptions.forEach { driver -> DropdownMenuItem(text = { Text("${driver.plateNumber} — ${driver.driverName}") }, onClick = { selectedDriver = driver; expandedDriver = false }) } }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, enabled = !isReporting) {
+                Icon(Icons.Default.ArrowBack, "Back")
+            }
+            Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Plaka", fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(
+            expanded = expandedDriver,
+            onExpandedChange = {
+                if (!submitted && !isReporting && driverOptions.isNotEmpty()) {
+                    expandedDriver = !expandedDriver
+                }
+            }
+        ) {
+            OutlinedTextField(
+                value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" }
+                    ?: "Walang dispatched na jeep",
+                onValueChange = {},
+                readOnly = true,
+                enabled = !submitted && !isReporting && driverOptions.isNotEmpty(),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) },
+                modifier = Modifier.fillMaxWidth().menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedDriver,
+                onDismissRequest = { expandedDriver = false }
+            ) {
+                driverOptions.forEach { driver ->
+                    DropdownMenuItem(
+                        text = { Text("${driver.plateNumber} — ${driver.driverName}") },
+                        onClick = {
+                            selectedDriver = driver
+                            expandedDriver = false
+                        }
+                    )
+                }
+            }
         }
         if (driverOptions.isEmpty()) {
             Text(
@@ -272,97 +306,91 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                 fontSize = 12.sp
             )
         }
-        if (driverOptions.isEmpty()) Text("Walang driver account na may plaka.", color = Color.Red, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
-        IncidentFormTextField("Uri ng Insidente", incidentType, { if (!submitted) incidentType = it }, "Ilagay ang uri ng insidente")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Lokasyon", location, { if (!submitted) location = it }, "Ilagay ang lokasyon")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(size = 18.dp, color = TextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        Spacer(Modifier.height(16.dp)); Text("Paglalarawan", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
-        OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
+        IncidentFormTextField(
+            "Uri ng Insidente",
+            incidentType,
+            { if (!submitted && !isReporting) incidentType = it },
+            "Ilagay ang uri ng insidente"
+        )
+        Spacer(Modifier.height(16.dp))
+        IncidentFormTextField(
+            "Lokasyon",
+            location,
+            { if (!submitted && !isReporting) location = it },
+            "Ilagay ang lokasyon"
+        )
+        Spacer(Modifier.height(16.dp))
+        IncidentFormTextField(
+            "Multa",
+            penalty,
+            { if (!submitted && !isReporting && (it.isEmpty() || it.all(Char::isDigit))) penalty = it },
+            "0",
+            leadingIcon = { PesoIcon(size = 18.dp, color = TextSecondary) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("Paglalarawan", fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            description,
+            { if (!submitted && !isReporting) description = it },
+            modifier = Modifier.fillMaxWidth().height(120.dp),
+            placeholder = { Text("Ilarawan ang nangyari...") },
+            enabled = !submitted && !isReporting
+        )
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin") }; Spacer(Modifier.width(16.dp))
-            Button(onClick = { if (!submitted && selectedDriver != null) { showSendPrompt = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
+            OutlinedButton(
+                onClick = onBack,
+                enabled = !isReporting,
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Kanselahin")
+            }
+            Spacer(Modifier.width(16.dp))
+            Button(
+                onClick = {
+                    if (submitted) {
+                        onBack()
+                    } else if (!isReporting && selectedDriver != null) {
+                        viewModel.reportIncident(
+                            selectedDriver!!.plateNumber,
+                            incidentType,
+                            location,
+                            penalty,
+                            description,
+                            sendToDriver = true
+                        ) { success ->
+                            if (success) submitted = true
+                        }
+                    }
+                },
+                enabled = submitted || (selectedDriver != null && driverOptions.isNotEmpty() && !isReporting),
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) {
+                if (isReporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(if (submitted) "Tapos" else "Ipasa")
+                }
+            }
         }
         if (submitted) {
             Spacer(Modifier.height(16.dp))
             Text(
-                if (savedSentToDriver) {
-                    "Na-save at naipadala na sa mga driver ang report. Maaari mo nang isara ang form."
-                } else {
-                    "Na-save ang report nang hindi ipinapadala. Makikita mo ito sa Detalye kung nais mo itong ipadala."
-                },
+                "Na-save at naipadala na sa mga driver ang report. Maaari mo nang isara ang form.",
                 color = SuccessGreen,
                 fontWeight = FontWeight.Medium
             )
         }
-    }
-
-    /*
-     * Hindi "ipasa" agad - nagtatanong muna kung ipapadala ba sa mga
-     * driver ang insidente o i-save lamang muna (admin-only draft).
-     */
-    if (showSendPrompt) {
-        AlertDialog(
-            onDismissRequest = { showSendPrompt = false },
-            title = { Text("Ipadala sa mga driver ang insidente?") },
-            text = {
-                Text(
-                    "Ipapakita ang insidente sa app ng mga driver. " +
-                            "Pwede mo rin itong i-save muna nang hindi " +
-                            "ipinapadala."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showSendPrompt = false
-                        selectedDriver?.let {
-                            viewModel.reportIncident(
-                                it.plateNumber,
-                                incidentType,
-                                location,
-                                penalty,
-                                description,
-                                sendToDriver = true
-                            )
-                            savedSentToDriver = true
-                            submitted = true
-                        }
-                    }
-                ) {
-                    Text("Ipadala", color = EnerjeepBlue, maxLines = 1)
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
-                        onClick = {
-                            showSendPrompt = false
-                            selectedDriver?.let {
-                                viewModel.reportIncident(
-                                    it.plateNumber,
-                                    incidentType,
-                                    location,
-                                    penalty,
-                                    description,
-                                    sendToDriver = false
-                                )
-                                savedSentToDriver = false
-                                submitted = true
-                            }
-                        }
-                    ) {
-                        Text("I-save", maxLines = 1)
-                    }
-                    TextButton(
-                        onClick = { showSendPrompt = false }
-                    ) {
-                        Text("Kanselahin", color = TextSecondary)
-                    }
-                }
-            }
-        )
     }
 }
 
