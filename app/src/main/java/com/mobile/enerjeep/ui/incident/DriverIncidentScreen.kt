@@ -117,6 +117,8 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
                 visibleIncidents.forEach { incident ->
                     DriverIncidentCard(
                         incident = incident,
+                        isLookingUpDriverPhone =
+                            incident.id in uiState.lookingUpDriverPhoneIds,
                         onCallDriver = {
                             viewModel.lookupIncidentDriverPhone(incident.id) { phone ->
                                 val number = phone ?: uiState.officePhone
@@ -168,6 +170,7 @@ fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boo
 @Composable
 fun DriverIncidentCard(
     incident: DriverIncident,
+    isLookingUpDriverPhone: Boolean = false,
     onCallDriver: () -> Unit
 ) {
     // Contact details are resolved only when the user taps the call action.
@@ -199,13 +202,28 @@ fun DriverIncidentCard(
              */
             OutlinedButton(
                 onClick = onCallDriver,
+                enabled = !isLookingUpDriverPhone,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
             ) {
-                Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                if (isLookingUpDriverPhone) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = SuccessGreen
+                    )
+                } else {
+                    Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                }
                 Spacer(Modifier.width(8.dp))
-                Text("Tawagan", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    if (isLookingUpDriverPhone) "Kinukuha ang numero..." else "Tawagan",
+                    color = SuccessGreen,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
             }
         }
     }
