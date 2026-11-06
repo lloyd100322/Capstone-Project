@@ -308,7 +308,10 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ActivityLogView(viewModel: SuperadminViewModel) {
+fun ActivityLogView(
+    viewModel: SuperadminViewModel,
+    embeddedInReport: Boolean = false
+) {
     val logs by viewModel.activityLogs.collectAsStateWithLifecycle()
     val logsError by viewModel.activityLogsError.collectAsStateWithLifecycle()
 
@@ -346,10 +349,18 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fillMaxWidth()
+            .then(
+                if (embeddedInReport) Modifier
+                else Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            )
             .imePadding()
-            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
+            .padding(
+                start = if (embeddedInReport) 0.dp else 24.dp,
+                end = if (embeddedInReport) 0.dp else 24.dp,
+                top = 8.dp,
+                bottom = 32.dp
+            )
     ) {
         Text(
             "Talaan ng Aktibidad",
