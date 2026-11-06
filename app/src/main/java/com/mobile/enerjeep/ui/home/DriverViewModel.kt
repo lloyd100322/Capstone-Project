@@ -106,6 +106,9 @@ class DriverViewModel @Inject constructor(
     private var profileListener: ListenerRegistration? = null
     private var queueListener: ListenerRegistration? = null
     private var incidentListener: ListenerRegistration? = null
+    private var driversListener: ListenerRegistration? = null
+    private var latestQueueDocuments: List<DocumentSnapshot> = emptyList()
+    private var accountCreatedAtByDriver: Map<String, Long> = emptyMap()
 
     init {
         attachListeners()
@@ -125,8 +128,23 @@ class DriverViewModel @Inject constructor(
         queueListener = firestore.collection(FirestoreCollections.QUEUE)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
+                latestQueueDocuments = snapshot.documents
                 updateQueueState(snapshot.documents)
                 checkDispatchAlerts(snapshot.documents)
+            }
+
+        driversListener = firestore.collection(FirestoreCollections.USERS)
+            .whereEqualTo("role", "driver")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                accountCreatedAtByDriver = snapshot.documents.associate { driver ->
+                    val driverId = driver.getString("userId").orEmpty().ifBlank { driver.id }
+                    driverId to (
+                        driver.safeTimestamp("createdAt")?.toDate()?.time
+                            ?: Long.MAX_VALUE
+                        )
+                }
+                updateQueueState(latestQueueDocuments)
             }
 
         incidentListener = firestore.collection(FirestoreCollections.INCIDENTS)
@@ -181,17 +199,21 @@ class DriverViewModel @Inject constructor(
             ?: 0
         val total = routeFront.size
 
-        /*
-         * Posisyon BUKAS: sa rotation ng cut-off, ang #1 ngayon ay
-         * mapupunta sa hulihan at ang lahat ay uusad ng isa. Kaya kung
-         * #1 ka ngayon -> hulihan ka bukas; kung hindi -> bawas 1.
-         */
-        val bukas = when {
-            own == null || own.getBoolean("isCancelled") == true -> 0
-            total <= 1 -> 1
-            position == 1 -> total
-            position > 1 -> position - 1
-            else -> 0
+        // Forecast the next-day position from the fixed account-creation roster.
+        val fixedRosterOrder = routeFront.sortedWith(
+            compareBy<DocumentSnapshot> { entry ->
+                entry.safeTimestamp("accountCreatedAt")?.toDate()?.time
+                    ?: accountCreatedAtByDriver[entry.getString("driverId").orEmpty()]
+                    ?: entry.safeTimestamp("createdAt")?.toDate()?.time
+                    ?: Long.MAX_VALUE
+            }.thenBy { it.getString("driverId").orEmpty() }.thenBy { it.id }
+        )
+        val bukas = if (own == null || own.getBoolean("isCancelled") == true) {
+            0
+        } else {
+            fixedRosterOrder.indexOfFirst { it.id == own.id }
+                .takeIf { it >= 0 }
+                ?.plus(1) ?: 0
         }
 
         _uiState.value = _uiState.value.copy(
@@ -521,6 +543,7 @@ class DriverViewModel @Inject constructor(
         profileListener?.remove()
         queueListener?.remove()
         incidentListener?.remove()
+        driversListener?.remove()
         super.onCleared()
     }
 }
