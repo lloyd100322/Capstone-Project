@@ -134,7 +134,7 @@ fun QueueScreen(
             SearchField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = "Hanapin ayon sa plaka"
+                placeholder = "Hanapin ang plaka"
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -259,31 +259,27 @@ fun QueueScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    /*
-                     * Zoom: PINCH gestures na lang ang gamit (walang
-                     * button). Pinch IN = maliit na box (zoom out),
-                     * pinch OUT = normal na laki.
-                     */
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (canManageSelectedRoute) {
-                                "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon."
-                            } else {
-                                "Pinch para mag-zoom."
-                            },
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
+                    if (selectedTab != 2) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (canManageSelectedRoute) {
+                                    "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon."
+                                } else {
+                                    "Pinch para mag-zoom."
+                                },
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
 
                     // Dynamic Lists (filtered by the search bar: plaka o driver)
                     val searchMatches = { plate: String, driver: String ->
