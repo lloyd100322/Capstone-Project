@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -595,6 +596,7 @@ fun QueueItem(
     val compactGap = dimensionResource(SdpR.dimen._7sdp)
     val standardGap = dimensionResource(SdpR.dimen._17sdp)
     val itemGap = dimensionResource(SdpR.dimen._10sdp)
+    val smallGap = dimensionResource(SdpR.dimen._4sdp)
 
     var showCancelConfirm by remember { mutableStateOf(false) }
 
