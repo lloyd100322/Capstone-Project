@@ -102,6 +102,7 @@ class QueueViewModel @Inject constructor(
      */
     private var rotationWatch: Job? = null
     private var rotationSettingsListener: ListenerRegistration? = null
+    private val queueRotationMutex = Mutex()
 
     companion object {
         /*
@@ -190,6 +191,19 @@ class QueueViewModel @Inject constructor(
         MutableStateFlow(formatCutoffHour(CUTOFF_HOUR))
 
     val cutoffLabel: StateFlow<String> = _cutoffLabel.asStateFlow()
+
+    private val _isResettingQueue = MutableStateFlow(false)
+    val isResettingQueue: StateFlow<Boolean> = _isResettingQueue.asStateFlow()
+
+    private suspend fun rotateQueueWithProgress(): QueueRotation.Result =
+        queueRotationMutex.withLock {
+            _isResettingQueue.value = true
+            try {
+                QueueRotation.rotateOnce(firestore)
+            } finally {
+                _isResettingQueue.value = false
+            }
+        }
 
     init {
         startQueueListener()
@@ -306,7 +320,7 @@ class QueueViewModel @Inject constructor(
         rotationWatch = viewModelScope.launch {
             while (isActive) {
                 try {
-                    val result = QueueRotation.rotateOnce(firestore)
+                    val result = rotateQueueWithProgress()
                     cutoffHour = result.cutoffHour
                     _cutoffLabel.value = formatCutoffHour(result.cutoffHour)
                     if (result.rotated) {
@@ -1264,7 +1278,7 @@ class QueueViewModel @Inject constructor(
         if (!userSession.isSuperadmin()) return
         viewModelScope.launch {
             try {
-                val result = QueueRotation.rotateOnce(firestore)
+                val result = rotateQueueWithProgress()
                 cutoffHour = result.cutoffHour
                 _cutoffLabel.value = formatCutoffHour(result.cutoffHour)
                 if (result.rotated) {
