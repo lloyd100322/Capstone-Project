@@ -223,22 +223,14 @@ exports.dailyQueueReset = onSchedule(
   { schedule: "0 * * * *", timeZone: "Asia/Manila", region: "us-central1" },
   async () => {
     const metaRef = db.collection("settings").doc("queueRotation");
-
-    // Simple read muna para makuha ang mga id (walang query sa loob ng
-    // transaction sa mobile/admin SDK - pareho ng QueueRotation).
     const queueControlRef = db.collection("settings").doc("queueControl");
+    const queueCollection = db.collection("queue");
+    const usersCollection = db.collection("users");
+
     const observedRevision = (await queueControlRef.get()).get("revision") || 0;
-    const queueIds = (await db.collection("queue").get()).docs.map((d) => d.id);
-    const driverAccounts = await db.collection("users")
-      .where("role", "==", "driver")
-      .get();
-    const accountCreatedAtByDriver = new Map(driverAccounts.docs.map((user) => {
-      const rawCreatedAt = user.get("createdAt");
-      const createdAtMillis = rawCreatedAt && typeof rawCreatedAt.toMillis === "function"
-        ? rawCreatedAt.toMillis()
-        : null;
-      return [String(user.get("userId") || user.id), createdAtMillis];
-    }));
+    const queueIds = (await queueCollection.get()).docs.map((document) => document.id);
+    const driverIds = (await usersCollection.where("role", "==", "driver").get())
+      .docs.map((document) => document.id);
 
     const rotated = await db.runTransaction(async (tx) => {
       const queueControl = await tx.get(queueControlRef);
@@ -246,50 +238,88 @@ exports.dailyQueueReset = onSchedule(
       if (currentRevision !== observedRevision) {
         throw new Error("Queue changed during scheduled reset; retry on next schedule.");
       }
+
       const meta = await tx.get(metaRef);
       const rawHour = meta.get("cutoffHour");
       const cutoffHour =
         typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23
           ? rawHour
           : 21;
-
       const today = queueDayIdManila(new Date(), cutoffHour);
       if (meta.get("lastQueueDay") === today) {
-        return false; // na-ikot na ang araw na ito
+        return false;
       }
 
-      // Basahin ang bawat entry SA LOOB ng transaction (laging sariwa).
+      // Fresh queue and account reads are part of the same transaction.
       const docs = [];
       for (const id of queueIds) {
-        const snap = await tx.get(db.collection("queue").doc(id));
-        if (snap.exists) docs.push(snap);
+        const snapshot = await tx.get(queueCollection.doc(id));
+        if (snapshot.exists) docs.push(snapshot);
+      }
+      const driverAccounts = [];
+      for (const id of driverIds) {
+        const snapshot = await tx.get(usersCollection.doc(id));
+        if (snapshot.exists &&
+            String(snapshot.get("role") || "").toLowerCase() === "driver" &&
+            String(snapshot.get("status") || "active").toLowerCase() === "active") {
+          driverAccounts.push(snapshot);
+        }
       }
 
-      const accountCreationMillis = (document) => {
-        const storedQueueTimestamp = document.get("accountCreatedAt");
-        if (storedQueueTimestamp && typeof storedQueueTimestamp.toMillis === "function") {
-          return storedQueueTimestamp.toMillis();
+      // The permanent cycle is based on ALL active driver accounts, not
+      // today's active queue rows. A driver may be dispatched/completed and
+      // temporarily absent from /queue; that must not shorten the cycle.
+      const earliestQueueCreatedAtByDriver = new Map();
+      for (const document of docs) {
+        const driverId = String(document.get("driverId") || "");
+        if (!driverId) continue;
+        const stored = document.get("accountCreatedAt");
+        const legacy = document.get("createdAt");
+        const timestamp = stored && typeof stored.toMillis === "function"
+          ? stored
+          : legacy;
+        if (!timestamp || typeof timestamp.toMillis !== "function") continue;
+        const millis = timestamp.toMillis();
+        const previous = earliestQueueCreatedAtByDriver.get(driverId);
+        if (previous === undefined || millis < previous) {
+          earliestQueueCreatedAtByDriver.set(driverId, millis);
         }
-        const originalAccountTimestamp = accountCreatedAtByDriver.get(
-          String(document.get("driverId") || "")
+      }
+
+      const permanentDrivers = driverAccounts.map((account) => {
+        const driverId = String(account.get("userId") || account.id);
+        const createdAt = account.get("createdAt");
+        const createdAtMillis = createdAt && typeof createdAt.toMillis === "function"
+          ? createdAt.toMillis()
+          : (earliestQueueCreatedAtByDriver.get(driverId) ?? Number.MAX_SAFE_INTEGER);
+        return { driverId, createdAtMillis };
+      }).sort((left, right) =>
+        left.createdAtMillis - right.createdAtMillis ||
+        left.driverId.localeCompare(right.driverId)
+      );
+
+      // Legacy orphaned queue data is a last-resort roster source only when
+      // there are no readable driver accounts at all.
+      if (permanentDrivers.length === 0) {
+        const legacyDrivers = new Map();
+        for (const document of docs) {
+          const driverId = String(document.get("driverId") || "");
+          if (!driverId || legacyDrivers.has(driverId)) continue;
+          legacyDrivers.set(driverId, {
+            driverId,
+            createdAtMillis:
+              earliestQueueCreatedAtByDriver.get(driverId) ?? Number.MAX_SAFE_INTEGER,
+          });
+        }
+        permanentDrivers.push(...legacyDrivers.values());
+        permanentDrivers.sort((left, right) =>
+          left.createdAtMillis - right.createdAtMillis ||
+          left.driverId.localeCompare(right.driverId)
         );
-        if (Number.isFinite(originalAccountTimestamp)) return originalAccountTimestamp;
-        const queueCreatedAt = document.get("createdAt");
-        return queueCreatedAt && typeof queueCreatedAt.toMillis === "function"
-          ? queueCreatedAt.toMillis()
-          : Number.MAX_SAFE_INTEGER;
-      };
+      }
 
       const rotationCursorUpdates = {};
-
       [1, 0].forEach((key) => {
-        const active = docs
-          .filter((d) => isQueueActive(d.data()) && routeKey(d.data().route) === key)
-          .sort((a, b) =>
-            accountCreationMillis(a) - accountCreationMillis(b) ||
-            String(a.get("driverId") || a.id).localeCompare(String(b.get("driverId") || b.id))
-          );
-
         const routeName = key === 1 ? "Marilao" : "Monumento";
         const cursorDriverField = `rotationStart${routeName}DriverId`;
         const cursorCreatedAtField = `rotationStart${routeName}CreatedAtMillis`;
@@ -301,59 +331,70 @@ exports.dailyQueueReset = onSchedule(
             ? previousLeaderCreatedAtRaw
             : null;
 
-        // The saved cursor is yesterday's #1. Advance to the next active
-        // account in permanent creation order, wrapping around.
+        // Advance against the FULL permanent driver roster. Do not modulo by
+        // the smaller active queue size: that would return to A too early.
         let startIndex = 0;
-        if (active.length > 1) {
+        if (permanentDrivers.length > 1) {
           if (previousLeaderId) {
-            const previousIndex = active.findIndex(
-              (document) =>
-                String(document.get("driverId") || document.id) === previousLeaderId
+            const previousIndex = permanentDrivers.findIndex(
+              (driver) => driver.driverId === previousLeaderId
             );
             if (previousIndex >= 0) {
-              startIndex = (previousIndex + 1) % active.length;
+              startIndex = (previousIndex + 1) % permanentDrivers.length;
             } else if (previousLeaderCreatedAt !== null) {
-              const nextIndex = active.findIndex((document) => {
-                const createdAt = accountCreationMillis(document);
-                const driverId = String(document.get("driverId") || document.id);
-                return createdAt > previousLeaderCreatedAt ||
-                  (createdAt === previousLeaderCreatedAt &&
-                    driverId.localeCompare(previousLeaderId) > 0);
-              });
+              const nextIndex = permanentDrivers.findIndex((driver) =>
+                driver.createdAtMillis > previousLeaderCreatedAt ||
+                (driver.createdAtMillis === previousLeaderCreatedAt &&
+                  driver.driverId.localeCompare(previousLeaderId) > 0)
+              );
               startIndex = nextIndex >= 0 ? nextIndex : 0;
             } else {
               startIndex = 1;
             }
           } else if (previousLeaderCreatedAt !== null) {
-            const nextIndex = active.findIndex((document) => {
-              const createdAt = accountCreationMillis(document);
-              const driverId = String(document.get("driverId") || document.id);
-              return createdAt > previousLeaderCreatedAt ||
-                (createdAt === previousLeaderCreatedAt &&
-                  driverId.localeCompare(previousLeaderId) > 0);
-            });
+            const nextIndex = permanentDrivers.findIndex((driver) =>
+              driver.createdAtMillis > previousLeaderCreatedAt
+            );
             startIndex = nextIndex >= 0 ? nextIndex : 0;
           } else {
-            // First reset after this change: move permanent #1 to the end
-            // so permanent #2 becomes the new #1.
+            // First reset: A goes to the end and B becomes the new #1.
             startIndex = 1;
           }
         }
 
-        const rotated = active.slice(startIndex).concat(active.slice(0, startIndex));
-        rotated.forEach((document, index) => {
+        const rotatedDrivers = permanentDrivers
+          .slice(startIndex)
+          .concat(permanentDrivers.slice(0, startIndex));
+        const permanentOrder = new Map(
+          rotatedDrivers.map((driver, index) => [driver.driverId, index])
+        );
+
+        const active = docs
+          .filter((document) =>
+            isQueueActive(document.data()) && routeKey(document.get("route")) === key
+          )
+          .sort((left, right) => {
+            const leftId = String(left.get("driverId") || left.id);
+            const rightId = String(right.get("driverId") || right.id);
+            const leftIndex = permanentOrder.get(leftId) ?? Number.MAX_SAFE_INTEGER;
+            const rightIndex = permanentOrder.get(rightId) ?? Number.MAX_SAFE_INTEGER;
+            if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+            return compareQueueEntries(left, right);
+          });
+
+        active.forEach((document, index) => {
           tx.update(document.ref, {
             position: index + 1,
             updatedAt: FieldValue.serverTimestamp(),
           });
         });
 
-        if (rotated.length > 0) {
-          const newLeader = rotated[0];
-          rotationCursorUpdates[cursorDriverField] =
-            String(newLeader.get("driverId") || newLeader.id);
-          rotationCursorUpdates[cursorCreatedAtField] =
-            accountCreationMillis(newLeader);
+        // Save the next head from the FULL roster even when that driver has
+        // no active queue document today. This preserves the complete cycle.
+        if (rotatedDrivers.length > 0) {
+          const newLeader = rotatedDrivers[0];
+          rotationCursorUpdates[cursorDriverField] = newLeader.driverId;
+          rotationCursorUpdates[cursorCreatedAtField] = newLeader.createdAtMillis;
         }
       });
 
@@ -375,11 +416,10 @@ exports.dailyQueueReset = onSchedule(
     });
 
     if (rotated) {
-      console.log("dailyQueueReset: inusog ang unang driver sa susunod na account sa permanenteng creation order");
+      console.log("dailyQueueReset: advanced the permanent full-driver cycle by one account");
     }
   }
 );
-
 /**
  * PUSH NOTIFICATION sa dispatch.
  *
