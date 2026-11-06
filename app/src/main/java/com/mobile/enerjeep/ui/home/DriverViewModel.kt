@@ -190,7 +190,7 @@ class DriverViewModel @Inject constructor(
                 entries.mapNotNull { entry ->
                     entry.safeTimestamp("accountCreatedAt")?.toDate()?.time
                         ?: entry.safeTimestamp("createdAt")?.toDate()?.time
-                }.minOrNull() ?: Long.MAX_VALUE
+                }.minOrNull()
             }
 
         // Forecast the next-day position from the permanent roster order.
