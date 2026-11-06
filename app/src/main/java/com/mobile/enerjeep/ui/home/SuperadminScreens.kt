@@ -351,7 +351,11 @@ fun ActivityLogView(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                if (embeddedInReport) {
+                    Modifier.fillMaxHeight().verticalScroll(rememberScrollState())
+                } else {
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                }
             )
             .imePadding()
             .padding(
