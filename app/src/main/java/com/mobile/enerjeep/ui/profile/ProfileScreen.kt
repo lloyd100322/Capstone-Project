@@ -176,11 +176,6 @@ fun ProfileScreen(
                                         "Settings"
                                     viewModel.clearMessage()
                                 },
-                                onTalaanClick = {
-                                    currentView =
-                                        "Talaan"
-                                    viewModel.clearMessage()
-                                }
                             )
                         }
 
@@ -283,49 +278,6 @@ fun ProfileScreen(
                             }
                         }
 
-                        "Talaan" -> {
-
-                            val superadminViewModel:
-                                    com.mobile.enerjeep.ui.home.SuperadminViewModel =
-                                hiltViewModel()
-
-                            Column(
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                            ) {
-
-                                Row(
-                                    verticalAlignment =
-                                        Alignment.CenterVertically
-                                ) {
-
-                                    IconButton(
-                                        onClick = {
-                                            currentView =
-                                                "Main"
-                                        }
-                                    ) {
-                                        Icon(
-                                            Icons.Default
-                                                .ArrowBack,
-                                            contentDescription =
-                                                "Bumalik"
-                                        )
-                                    }
-
-                                    Text(
-                                        "Bumalik sa Profile",
-                                        fontSize = 12.sp
-                                    )
-                                }
-
-                                com.mobile.enerjeep.ui.home
-                                    .ActivityLogView(
-                                        superadminViewModel
-                                    )
-                            }
-                        }
                     }
                 }
             }
@@ -341,8 +293,7 @@ fun ProfileMainContent(
     onSecurityClick: () -> Unit,
     onSignOutClick: () -> Unit,
     isSuperadmin: Boolean = false,
-    onSettingsClick: () -> Unit = {},
-    onTalaanClick: () -> Unit = {}
+    onSettingsClick: () -> Unit = {}
 ) {
 
     Column(
@@ -577,9 +528,8 @@ fun ProfileMainContent(
                 )
 
                 /*
-                 * Superadmin lang: ang Settings (oras ng reset, bawas
-                 * kada upuan) at ang Talaan ng Aktibidad (audit log) ay
-                 * nasa ilalim ng "Seguridad" sa Profile tab.
+                 * Superadmin-only app settings remain in Profile.
+                 * The Activity Log is now grouped with operational reports.
                  */
                 if (isSuperadmin) {
 
