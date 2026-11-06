@@ -348,7 +348,7 @@ fun UlatNgKitaContent(monthlyData: List<MonthlyIncome>, yearlyData: List<YearlyI
     Column(Modifier.fillMaxWidth()) {
         Text("Kasaysayan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Spacer(Modifier.height(12.dp))
-        SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka o driver")
+        SearchField(searchQuery, { searchQuery = it }, "Hanapin: plaka / driver")
         Spacer(Modifier.height(8.dp))
         HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth())
         val filteredPlates = historyData.filter {
@@ -415,7 +415,7 @@ fun UlatNgInsidenteContent(currentIncidents: List<ReportIncidentItem>, allIncide
             barColor = WarningOrange,
             isMoney = false // Bilang ito, hindi pera - walang peso sign.
         )
-        Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa uri, plaka, o lokasyon")
+        Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin: uri / plaka / lugar")
         Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
@@ -462,7 +462,7 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
             bars = multiyaBars,
             barColor = ErrorRed
         )
-        Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa plaka"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
+        Spacer(Modifier.height(24.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ang plaka"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
         // "Kasaysayan" is the complete list, so a fine that was made today
@@ -547,7 +547,7 @@ fun DonasyonContent(
             bars = sourceBars,
             barColor = HeartPink
         )
-        Spacer(Modifier.height(16.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin ayon sa donor o source"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
+        Spacer(Modifier.height(16.dp)); SearchField(searchQuery, { searchQuery = it }, "Hanapin: donor / source"); Spacer(Modifier.height(20.dp)); ReportTabs(selectedTab) { selectedTab = it }
         if (selectedTab == 1) HistoryDateFilterBar(historyFilter, { historyFilter = it }, Modifier.fillMaxWidth().padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
         // "Kasaysayan" is the complete list, so a donation that was made
