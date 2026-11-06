@@ -29,6 +29,7 @@ data class EmergencyContactItem(
 data class ActivityLogItem(
     val id: String = "",
     val actorName: String = "",
+    val driverName: String = "",
     val actorRole: String = "",
     val action: String = "",
     val detail: String = "",
@@ -156,6 +157,8 @@ class SuperadminViewModel @Inject constructor(
                             id = document.id,
                             actorName = document
                                 .getString("actorName").orEmpty(),
+                            driverName = document
+                                .getString("driverName").orEmpty(),
                             actorRole = document
                                 .getString("actorRole").orEmpty(),
                             action = document
