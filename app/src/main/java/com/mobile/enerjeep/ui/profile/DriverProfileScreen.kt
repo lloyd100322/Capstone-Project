@@ -55,6 +55,7 @@ fun DriverProfileScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isSavingProfile by viewModel.isSavingProfile.collectAsStateWithLifecycle()
     val isSavingPassword by viewModel.isSavingPassword.collectAsStateWithLifecycle()
+    val isSigningOut by viewModel.isSigningOut.collectAsStateWithLifecycle()
 
     when (uiState.currentView) {
 
@@ -73,7 +74,8 @@ fun DriverProfileScreen(
                 },
                 onSignOut = {
                     viewModel.signOut()
-                }
+                },
+                isSigningOut = isSigningOut
             )
 
         ProfileSubView.EDIT_PROFILE ->
@@ -107,7 +109,8 @@ fun DriverProfileMainContent(
     uiState: DriverProfileUiState,
     onNavigateEdit: () -> Unit,
     onNavigateSecurity: () -> Unit,
-    onSignOut: () -> Unit
+    onSignOut: () -> Unit,
+    isSigningOut: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -385,30 +388,38 @@ fun DriverProfileMainContent(
 
         OutlinedButton(
             onClick = onSignOut,
+            enabled = !isSigningOut,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             shape = RoundedCornerShape(24.dp),
-            border =
-                androidx.compose.foundation
-                    .BorderStroke(
-                        1.dp,
-                        ErrorRed.copy(
-                            alpha = 0.5f
-                        )
-                    ),
-            colors =
-                ButtonDefaults
-                    .outlinedButtonColors(
-                        contentColor =
-                            ErrorRed
-                    )
-        ) {
-            Text(
-                text = "Mag-sign Out",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                ErrorRed.copy(alpha = 0.5f)
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = ErrorRed
             )
+        ) {
+            if (isSigningOut) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp,
+                    color = ErrorRed
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Nagsa-sign out...",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            } else {
+                Text(
+                    text = "Mag-sign Out",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
         }
 
         Spacer(
