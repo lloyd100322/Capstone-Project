@@ -1,5 +1,6 @@
 package com.mobile.enerjeep.ui.home
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -104,7 +105,7 @@ fun CreateAccountScreen(
                 .consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(24.dp),
+                .padding(responsivePageHorizontalPadding()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Card(
