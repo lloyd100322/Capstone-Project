@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
@@ -549,21 +548,6 @@ fun ProfileMainContent(
                             onSettingsClick
                     )
 
-                    HorizontalDivider(
-                        color =
-                            ProfileBorder
-                    )
-
-                    MenuRow(
-                        icon =
-                            Icons.Default.History,
-                        title =
-                            "Talaan ng Aktibidad",
-                        subtitle =
-                            "Sino ang gumawa ng bawat aksyon at kailan",
-                        onClick =
-                            onTalaanClick
-                    )
                 }
             }
         }
