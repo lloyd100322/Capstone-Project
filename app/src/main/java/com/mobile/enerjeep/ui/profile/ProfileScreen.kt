@@ -57,6 +57,9 @@ fun ProfileScreen(
     viewModel.uiState
         .collectAsStateWithLifecycle()
 
+    val isUpdatingProfile by viewModel.isUpdatingProfile.collectAsStateWithLifecycle()
+    val isUpdatingPassword by viewModel.isUpdatingPassword.collectAsStateWithLifecycle()
+
     var currentView by
     remember {
         mutableStateOf("Main")
@@ -181,11 +184,10 @@ fun ProfileScreen(
                         "Edit" -> {
 
                             EditProfileContent(
-                                profile =
-                                    state.profile,
+                                profile = state.profile,
+                                isSubmitting = isUpdatingProfile,
                                 onBack = {
-                                    currentView =
-                                        "Main"
+                                    if (!isUpdatingProfile) currentView = "Main"
                                 },
                                 onSave = {
                                         first,
@@ -200,10 +202,9 @@ fun ProfileScreen(
                                         phone,
                                         contactName,
                                         contactNumber
-                                    )
-
-                                    currentView =
-                                        "Main"
+                                    ) { success ->
+                                        if (success) currentView = "Main"
+                                    }
                                 }
                             )
                         }
@@ -211,9 +212,9 @@ fun ProfileScreen(
                         "Security" -> {
 
                             SecurityContent(
+                                isSubmitting = isUpdatingPassword,
                                 onBack = {
-                                    currentView =
-                                        "Main"
+                                    if (!isUpdatingPassword) currentView = "Main"
                                 },
                                 onSave = {
                                         old,
@@ -607,6 +608,7 @@ fun ProfileMainContent(
 @Composable
 fun EditProfileContent(
     profile: ProfileData,
+    isSubmitting: Boolean = false,
     onBack: () -> Unit,
     onSave: (
         String,
@@ -790,12 +792,9 @@ fun EditProfileContent(
                 ) {
 
                     OutlinedButton(
-                        onClick =
-                            onBack,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(56.dp)
+                        onClick = onBack,
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(56.dp)
                     ) {
                         Text("Kanselahin")
                     }
@@ -815,18 +814,19 @@ fun EditProfileContent(
                                 emergencyContactNumber
                             )
                         },
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                        colors =
-                            ButtonDefaults
-                                .buttonColors(
-                                    containerColor =
-                                        ProfileBlue
-                                )
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ProfileBlue)
                     ) {
-                        Text("I-save")
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Text("I-save")
+                        }
                     }
                 }
             }
@@ -837,6 +837,7 @@ fun EditProfileContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SecurityContent(
+    isSubmitting: Boolean = false,
     onBack: () -> Unit,
     onSave: (
         String,
@@ -952,12 +953,9 @@ fun SecurityContent(
                 ) {
 
                     OutlinedButton(
-                        onClick =
-                            onBack,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(56.dp)
+                        onClick = onBack,
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(56.dp)
                     ) {
                         Text("Kanselahin")
                     }
@@ -969,24 +967,21 @@ fun SecurityContent(
 
                     Button(
                         onClick = {
-                            onSave(
-                                oldPass,
-                                newPass,
-                                confirmPass
-                            )
+                            onSave(oldPass, newPass, confirmPass)
                         },
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                        colors =
-                            ButtonDefaults
-                                .buttonColors(
-                                    containerColor =
-                                        ProfileBlue
-                                )
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ProfileBlue)
                     ) {
-                        Text("I-save")
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Text("I-save")
+                        }
                     }
                 }
             }
