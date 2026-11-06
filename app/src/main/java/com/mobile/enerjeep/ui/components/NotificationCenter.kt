@@ -248,20 +248,12 @@ fun NotificationCenterBell(
                 showSheet = true
             }
         ) {
-            if (state.markingRead) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    strokeWidth = 2.dp,
-                    color = EnerjeepBlue
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Mga Abiso",
-                    tint = EnerjeepBlue,
-                    modifier = Modifier.size(27.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = "Mga Abiso",
+                tint = EnerjeepBlue,
+                modifier = Modifier.size(27.dp)
+            )
         }
         }
     }
