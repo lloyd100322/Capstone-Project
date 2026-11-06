@@ -61,6 +61,7 @@ fun DriverContent(
 
     // Fase 7: dispatch alert (banner + bell + sound)
     val dispatchAlert by viewModel.dispatchAlert.collectAsStateWithLifecycle()
+    val isEndingTravel by viewModel.isEndingTravel.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     /*
@@ -213,6 +214,7 @@ fun DriverContent(
                         isInQueue = uiState.activeQueueDocId.isNotBlank() &&
                                 !uiState.isCancelledInQueue,
                         travelEnded = uiState.travelEndedToday,
+                        isEndingTravel = isEndingTravel,
                         dailyEarnings = uiState.dailyEarnings,
                         dispatchAlert = dispatchAlert,
                         dispatchSecondsLeft = alertSecondsLeft,
@@ -268,6 +270,7 @@ fun DriverDashboardContent(
     posisyonBukas: Int = 0,
     isInQueue: Boolean = false,
     travelEnded: Boolean = false,
+    isEndingTravel: Boolean = false,
     dailyEarnings: Double? = null,
     dispatchAlert: DriverDispatchAlert? = null,
     dispatchSecondsLeft: Int = 5,
@@ -634,26 +637,41 @@ fun DriverDashboardContent(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = !doneToday,
+                enabled = !doneToday && !isEndingTravel,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = SuccessGreen,
                     disabledContainerColor = ErrorRed,
                     disabledContentColor = Color.White
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Tapos Na Bumyahe",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isEndingTravel) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Pinoproseso...",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tapos Na Bumyahe",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             /*
