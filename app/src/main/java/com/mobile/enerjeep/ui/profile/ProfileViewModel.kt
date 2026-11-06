@@ -68,6 +68,12 @@ class ProfileViewModel @Inject constructor(
 
     val uiState = _uiState.asStateFlow()
 
+    private val _isUpdatingProfile = MutableStateFlow(false)
+    val isUpdatingProfile = _isUpdatingProfile.asStateFlow()
+
+    private val _isUpdatingPassword = MutableStateFlow(false)
+    val isUpdatingPassword = _isUpdatingPassword.asStateFlow()
+
     private var listener: ListenerRegistration? = null
 
     init {
@@ -135,7 +141,8 @@ class ProfileViewModel @Inject constructor(
         lastName: String,
         phoneNumber: String,
         emergencyContactName: String? = null,
-        emergencyContactNumber: String? = null
+        emergencyContactNumber: String? = null,
+        onComplete: (Boolean) -> Unit = {}
     ) {
 
         val oldProfile =
@@ -217,8 +224,11 @@ class ProfileViewModel @Inject constructor(
                     oldProfile.lastName
                 }
 
-        viewModelScope.launch {
+        if (_isUpdatingProfile.value) return
+        _isUpdatingProfile.value = true
 
+        viewModelScope.launch {
+            var succeeded = false
             try {
 
                 val updates = mutableMapOf<String, Any>(
@@ -293,13 +303,14 @@ class ProfileViewModel @Inject constructor(
                     adminStation = oldProfile.adminStation
                 )
 
+                succeeded = true
             } catch (e: Exception) {
-
-                _uiState.value =
-                    ProfileUiState.Error(
-                        e.message
-                            ?: "Hindi ma-update ang profile"
-                    )
+                _uiState.value = ProfileUiState.Error(
+                    e.message ?: "Hindi ma-update ang profile"
+                )
+            } finally {
+                _isUpdatingProfile.value = false
+                onComplete(succeeded)
             }
         }
     }
@@ -334,6 +345,9 @@ class ProfileViewModel @Inject constructor(
             ?.phoneNumber
             ?.trim()
             ?: return
+
+        if (_isUpdatingPassword.value) return
+        _isUpdatingPassword.value = true
 
         viewModelScope.launch {
             try {
@@ -375,6 +389,8 @@ class ProfileViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang password. Subukan muli."
                 )
+            } finally {
+                _isUpdatingPassword.value = false
             }
         }
     }
