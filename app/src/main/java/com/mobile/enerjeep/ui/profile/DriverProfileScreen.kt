@@ -53,6 +53,8 @@ fun DriverProfileScreen(
     viewModel: DriverProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isSavingProfile by viewModel.isSavingProfile.collectAsStateWithLifecycle()
+    val isSavingPassword by viewModel.isSavingPassword.collectAsStateWithLifecycle()
 
     when (uiState.currentView) {
 
@@ -78,6 +80,7 @@ fun DriverProfileScreen(
             DriverEditProfileContent(
                 uiState = uiState,
                 viewModel = viewModel,
+                isSubmitting = isSavingProfile,
                 onCancel = {
                     viewModel.setView(
                         ProfileSubView.MAIN
@@ -89,6 +92,7 @@ fun DriverProfileScreen(
             DriverSecurityContent(
                 uiState = uiState,
                 viewModel = viewModel,
+                isSubmitting = isSavingPassword,
                 onCancel = {
                     viewModel.setView(
                         ProfileSubView.MAIN
@@ -430,6 +434,7 @@ fun DriverProfileMainContent(
 fun DriverEditProfileContent(
     uiState: DriverProfileUiState,
     viewModel: DriverProfileViewModel,
+    isSubmitting: Boolean = false,
     onCancel: () -> Unit
 ) {
     Column(
@@ -449,7 +454,7 @@ fun DriverEditProfileContent(
                 Alignment.CenterVertically,
             modifier =
                 Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
-                    onCancel()
+                    if (!isSubmitting) onCancel()
                 }
         ) {
             Icon(
@@ -589,12 +594,9 @@ fun DriverEditProfileContent(
                 ) {
                     OutlinedButton(
                         onClick = onCancel,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                        shape =
-                            RoundedCornerShape(24.dp)
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(24.dp)
                     ) {
                         Text(
                             text = "Kanselahin",
@@ -603,26 +605,21 @@ fun DriverEditProfileContent(
                     }
 
                     Button(
-                        onClick = {
-                            viewModel.saveProfile()
-                        },
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                        shape =
-                            RoundedCornerShape(24.dp),
-                        colors =
-                            ButtonDefaults
-                                .buttonColors(
-                                    containerColor =
-                                        EnerjeepBlue
-                                )
+                        onClick = { viewModel.saveProfile() },
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
                     ) {
-                        Text(
-                            text = "I-save",
-                            color = Color.White
-                        )
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Text("I-save", color = Color.White)
+                        }
                     }
                 }
             }
@@ -635,6 +632,7 @@ fun DriverEditProfileContent(
 fun DriverSecurityContent(
     uiState: DriverProfileUiState,
     viewModel: DriverProfileViewModel,
+    isSubmitting: Boolean = false,
     onCancel: () -> Unit
 ) {
     Column(
@@ -759,12 +757,9 @@ fun DriverSecurityContent(
                 ) {
                     OutlinedButton(
                         onClick = onCancel,
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                        shape =
-                            RoundedCornerShape(24.dp)
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(24.dp)
                     ) {
                         Text(
                             text = "Kanselahin",
@@ -773,26 +768,21 @@ fun DriverSecurityContent(
                     }
 
                     Button(
-                        onClick = {
-                            viewModel.savePassword()
-                        },
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                        shape =
-                            RoundedCornerShape(24.dp),
-                        colors =
-                            ButtonDefaults
-                                .buttonColors(
-                                    containerColor =
-                                        EnerjeepBlue
-                                )
+                        onClick = { viewModel.savePassword() },
+                        enabled = !isSubmitting,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
                     ) {
-                        Text(
-                            text = "I-save",
-                            color = Color.White
-                        )
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Text("I-save", color = Color.White)
+                        }
                     }
                 }
             }
