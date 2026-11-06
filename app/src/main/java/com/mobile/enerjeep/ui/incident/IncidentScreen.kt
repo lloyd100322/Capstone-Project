@@ -23,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
@@ -103,7 +104,11 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         IncidentStatCard(Modifier.weight(1f), "Naayos", state.resolvedCount.toString()) { Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen) }
                     }
                     Spacer(Modifier.height(24.dp))
-                    OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+                    SearchField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = "Hanapin ayon sa uri, plaka, o lokasyon"
+                    )
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth().height(48.dp)) {
                         IncidentTabButton(Modifier.weight(1f), "Di-naayos", selectedTab == 0) { selectedTab = 0 }
