@@ -94,6 +94,9 @@ class SuperadminViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
+    private val _isSavingSettings = MutableStateFlow(false)
+    val isSavingSettings = _isSavingSettings.asStateFlow()
+
     private val listeners = mutableListOf<ListenerRegistration>()
 
     init {
@@ -349,6 +352,8 @@ class SuperadminViewModel @Inject constructor(
     }
 
     fun saveSettings() {
+        if (_isSavingSettings.value) return
+
         val tierMap = mutableMapOf<String, Any>()
         _tiers.value.forEach { tier ->
             val seater = tier.seater.trim().toIntOrNull()
@@ -364,43 +369,46 @@ class SuperadminViewModel @Inject constructor(
             return
         }
         _cutoffHour.value = cutoff.toString()
+        _isSavingSettings.value = true
 
         viewModelScope.launch {
             try {
-                firestore
-                    .collection(FirestoreCollections.SETTINGS)
-                    .document("deductionTiers")
-                    .set(tierMap)
-                    .await()
-
-                firestore
-                    .collection(FirestoreCollections.SETTINGS)
-                    .document("queueRotation")
-                    .set(
-                        mapOf(
-                            "cutoffHour" to cutoff,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        SetOptions.merge()
-                    )
-                    .await()
+                // Save the deduction tiers and reset hour together. This avoids
+                // reporting success when only one part of the settings changed.
+                val batch = firestore.batch()
+                batch.set(
+                    firestore.collection(FirestoreCollections.SETTINGS)
+                        .document("deductionTiers"),
+                    tierMap
+                )
+                batch.set(
+                    firestore.collection(FirestoreCollections.SETTINGS)
+                        .document("queueRotation"),
+                    mapOf(
+                        "cutoffHour" to cutoff,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                batch.commit().await()
 
                 ActivityLogger.log(
                     firestore, userSession,
                     "Settings",
                     "Oras ng reset: " +
-                            com.mobile.enerjeep.ui.queue.QueueViewModel
-                                .formatCutoffHour(cutoff) +
-                            " | Bawas kada upuan: " +
-                            tierMap.entries.joinToString(", ") {
-                                "${it.key}=${it.value}"
-                            }
+                        com.mobile.enerjeep.ui.queue.QueueViewModel
+                            .formatCutoffHour(cutoff) +
+                        " | Bawas kada upuan: " +
+                        tierMap.entries.joinToString(", ") {
+                            "${it.key}=${it.value}"
+                        }
                 )
 
                 _message.value = "Na-save ang settings."
             } catch (e: Exception) {
-                _message.value =
-                    e.message ?: "Hindi ma-save ang settings."
+                _message.value = e.message ?: "Hindi ma-save ang settings."
+            } finally {
+                _isSavingSettings.value = false
             }
         }
     }
