@@ -455,7 +455,7 @@ fun ActivityLogView(
         SearchField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = "Hanapin ayon sa plaka o pangalan"
+            placeholder = "Hanapin: plaka / pangalan"
         )
         Spacer(Modifier.height(12.dp))
 
