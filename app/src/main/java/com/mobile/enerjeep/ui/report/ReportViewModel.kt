@@ -603,54 +603,33 @@ class ReportViewModel @Inject constructor(
     /** Ang donasyon (dagdag/gamit) ay superadmin lang ang humahawak. */
     fun isSuperadmin(): Boolean = userSession.isSuperadmin()
 
+    private val _isSavingDonation = MutableStateFlow(false)
+    val isSavingDonation = _isSavingDonation.asStateFlow()
+
     fun addDonasyon(
-        donasyon: DonasyonItem
+        donasyon: DonasionItem,
+        onComplete: (Boolean) -> Unit = {}
     ) {
+        if (_isSavingDonation.value) return
+        _isSavingDonation.value = true
 
-        val id =
-            FirestoreIds.donation()
-
-        val data =
-            mapOf(
-
-                "id" to
-                        id,
-
-                "donor" to
-                        donasyon
-                            .donor
-                            .trim(),
-
-                "amount" to
-                        donasyon.amount,
-
-                "date" to
-                        donasyon.date,
-
-                "source" to
-                        donasyon.source,
-
-                "note" to
-                        donasyon.note,
-
-                "type" to
-                        if (donasyon.type == "gamit") "gamit"
-                        else "donate",
-
-                "createdAt" to
-                        FieldValue
-                            .serverTimestamp()
-            )
+        val id = FirestoreIds.donation()
+        val data = mapOf(
+            "id" to id,
+            "donor" to donasyon.donor.trim(),
+            "amount" to donasyon.amount,
+            "date" to donasyon.date,
+            "source" to donasyon.source,
+            "note" to donasyon.note,
+            "type" to if (donasyon.type == "gamit") "gamit" else "donate",
+            "createdAt" to FieldValue.serverTimestamp()
+        )
 
         viewModelScope.launch {
-
+            var succeeded = false
             try {
-
                 firestore
-                    .collection(
-                        FirestoreCollections
-                            .DONATIONS
-                    )
+                    .collection(FirestoreCollections.DONATIONS)
                     .document(id)
                     .set(data)
                     .await()
@@ -661,20 +640,14 @@ class ReportViewModel @Inject constructor(
                     if (donasyon.type == "gamit") "Gamit ng Donasyon" else "Donasyon",
                     "₱" + donasyon.amount.toString()
                 )
-
-                /*
-                 * Ang donasyon ay HIWALAY sa kita - boluntaryo ito at
-                 * hindi kailanman binabawas sa kita ng sinuman (lalo na
-                 * ng driver). Walang katumbas na record sa "kita".
-                 */
-
+                succeeded = true
             } catch (e: Exception) {
-
-                _uiState.value =
-                    ReportUiState.Error(
-                        e.message
-                            ?: "Hindi ma-save ang donasyon"
-                    )
+                com.mobile.enerjeep.ui.components.ToastFeedback.show(
+                    e.message ?: "Hindi ma-save ang donasyon."
+                )
+            } finally {
+                _isSavingDonation.value = false
+                onComplete(succeeded)
             }
         }
     }
