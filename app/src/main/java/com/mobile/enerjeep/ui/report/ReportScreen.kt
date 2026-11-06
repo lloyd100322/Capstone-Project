@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.report
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,117 +52,223 @@ import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.TextSecondary
 import com.mobile.enerjeep.ui.theme.WarningOrange
 import com.mobile.enerjeep.ui.theme.WarningOrangeLight
+import com.mobile.enerjeep.ui.home.ActivityLogView
+import com.mobile.enerjeep.ui.home.SuperadminViewModel
 
 
 fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
 
-private object ReportSectionListIndex {
-    const val OVERVIEW = 0
-    const val INCOME = 1
-    const val INCIDENTS = 2
-    const val PENALTIES = 3
-    const val DONATIONS = 4
+private fun normalizeReportSection(section: String, isSuperadmin: Boolean): String {
+    return when (section.trim().lowercase()) {
+        "income", "kita" -> "income"
+        "incidents", "incident", "insidente" -> "incidents"
+        "penalties", "penalty", "multa" -> "penalties"
+        "donations", "donation", "donasyon" -> "donations"
+        "activity", "activities", "talaan", "talaan ng aktibidad" ->
+            if (isSuperadmin) "activity" else "income"
+        else -> "income"
+    }
 }
 
 @Composable
 fun ReportScreen(
     viewModel: ReportViewModel = hiltViewModel(),
-    /*
-     * ISANG buong screen na ang Mga Ulat: naka-stack ang lahat ng
-     * statistic na chart (Kita, Insidente, Multa, Donasyon) - walang
-     * choices/buttons na pipindutin pa. "donasyon" = dumidiretso sa
-     * Donasyon na seksyon (galing sa Donasyon stat ng dashboard).
-     */
-    initialSection: String = "top"
+    initialSection: String = "income"
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isSuperadmin = viewModel.isSuperadmin()
+    val superadminViewModel: SuperadminViewModel? =
+        if (isSuperadmin) hiltViewModel() else null
+
+    var selectedSection by remember {
+        mutableStateOf(normalizeReportSection(initialSection, isSuperadmin))
+    }
+
+    LaunchedEffect(initialSection, isSuperadmin) {
+        selectedSection = normalizeReportSection(initialSection, isSuperadmin)
+    }
+
     when (val state = uiState) {
-        is ReportUiState.Loading -> Box(Modifier.fillMaxSize().background(LightGrayBackground), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = EnerjeepBlue) }
-        is ReportUiState.Error -> Column(
-            modifier = Modifier.fillMaxSize().background(LightGrayBackground).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(state.message, color = ErrorRed)
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = viewModel::retryLoading,
-                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
-            ) { Text("Subukang muli") }
-        }
-        is ReportUiState.Success -> {
-            val listState = rememberLazyListState()
-            val sectionScope = rememberCoroutineScope()
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().background(LightGrayBackground).imePadding(),
-                contentPadding = PaddingValues(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 48.dp)
+        is ReportUiState.Loading -> {
+            Box(
+                Modifier.fillMaxSize().background(LightGrayBackground),
+                contentAlignment = Alignment.Center
             ) {
-                item(key = "report-overview") {
-                    HeaderRow()
-                    Spacer(Modifier.height(28.dp))
-                    Text("Mga Ulat", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
-                    Spacer(Modifier.height(16.dp))
-                    /*
-                     * Mabilis na lipat sa bawat seksyon - hindi na kailangang
-                     * i-scroll ang buong page para makarating sa Donasyon.
-                     */
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SectionChip("Kita") {
-                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.INCOME) }
-                        }
-                        SectionChip("Insidente") {
-                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.INCIDENTS) }
-                        }
-                        SectionChip("Multa") {
-                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.PENALTIES) }
-                        }
-                        SectionChip("Donasyon") {
-                            sectionScope.launch { listState.scrollToItem(ReportSectionListIndex.DONATIONS) }
-                        }
-                    }
-                    Spacer(Modifier.height(20.dp))
-                }
-                item(key = "report-income") {
-                    ReportSectionHeader(Icons.Default.AccountBalanceWallet, EnerjeepBlue, EnerjeepBlueLight, "Ulat ng Kita")
-                    Spacer(Modifier.height(16.dp))
-                    UlatNgKitaContent(state.monthlyData, state.yearlyData, state.historyData)
-                    Spacer(Modifier.height(20.dp))
-                    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-                    Spacer(Modifier.height(20.dp))
-                }
-                item(key = "report-incidents") {
-                    ReportSectionHeader(Icons.Default.Warning, WarningOrange, WarningOrangeLight, "Ulat ng Insidente")
-                    Spacer(Modifier.height(16.dp))
-                    UlatNgInsidenteContent(state.currentIncidents, state.allIncidents, state.totalIncidentPenalty)
-                    Spacer(Modifier.height(20.dp))
-                    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-                    Spacer(Modifier.height(20.dp))
-                }
-                item(key = "report-penalties") {
-                    ReportSectionHeader(Icons.Default.PrivacyTip, ErrorRed, ErrorRedLight, "Ulat ng Multa")
-                    Spacer(Modifier.height(16.dp))
-                    UlatNgMultiyaContent(state.currentMultiya, state.allMultiya, state.multiyaNgayon, state.kabuuangMultiya)
-                    Spacer(Modifier.height(20.dp))
-                    HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
-                    Spacer(Modifier.height(20.dp))
-                }
-                item(key = "report-donations") {
-                    ReportSectionHeader(Icons.Default.FavoriteBorder, HeartPink, HeartPinkLight, "Donasyon ng Koop")
-                    Spacer(Modifier.height(16.dp))
-                    DonasyonContent(
-                        state.currentDonasyon,
-                        state.allDonasyon,
-                        state.donasyonNgayon,
-                        state.kabuuangDonasyon,
-                        isSuperadmin = viewModel.isSuperadmin(),
-                        onAddDonasyon = { viewModel.addDonasyon(it) }
-                    )
+                CircularProgressIndicator(color = EnerjeepBlue)
+            }
+        }
+
+        is ReportUiState.Error -> {
+            Column(
+                modifier = Modifier.fillMaxSize().background(LightGrayBackground).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(state.message, color = ErrorRed)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = viewModel::retryLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+                ) {
+                    Text("Subukang muli")
                 }
             }
-            LaunchedEffect(initialSection) {
-                if (initialSection == "donasyon") {
-                    listState.scrollToItem(ReportSectionListIndex.DONATIONS)
+        }
+
+        is ReportUiState.Success -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(LightGrayBackground)
+                    .imePadding()
+            ) {
+                // These report shortcuts stay pinned while the selected
+                // report's own content scrolls independently below.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, top = 20.dp, end = 24.dp, bottom = 12.dp)
+                ) {
+                    HeaderRow()
+                    Spacer(Modifier.height(20.dp))
+                    Text(
+                        "Mga Ulat",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.Black
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SectionChip("Kita", selectedSection == "income") {
+                            selectedSection = "income"
+                        }
+                        SectionChip("Insidente", selectedSection == "incidents") {
+                            selectedSection = "incidents"
+                        }
+                        SectionChip("Multa", selectedSection == "penalties") {
+                            selectedSection = "penalties"
+                        }
+                        SectionChip("Donasyon", selectedSection == "donations") {
+                            selectedSection = "donations"
+                        }
+                        if (isSuperadmin) {
+                            SectionChip("Talaan", selectedSection == "activity") {
+                                selectedSection = "activity"
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+
+                when (selectedSection) {
+                    "income" -> Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp)
+                    ) {
+                        ReportSectionHeader(
+                            Icons.Default.AccountBalanceWallet,
+                            EnerjeepBlue,
+                            EnerjeepBlueLight,
+                            "Ulat ng Kita"
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        UlatNgKitaContent(
+                            state.monthlyData,
+                            state.yearlyData,
+                            state.historyData
+                        )
+                    }
+
+                    "incidents" -> Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp)
+                    ) {
+                        ReportSectionHeader(
+                            Icons.Default.Warning,
+                            WarningOrange,
+                            WarningOrangeLight,
+                            "Ulat ng Insidente"
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        UlatNgInsidenteContent(
+                            state.currentIncidents,
+                            state.allIncidents,
+                            state.totalIncidentPenalty
+                        )
+                    }
+
+                    "penalties" -> Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp)
+                    ) {
+                        ReportSectionHeader(
+                            Icons.Default.PrivacyTip,
+                            ErrorRed,
+                            ErrorRedLight,
+                            "Ulat ng Multa"
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        UlatNgMultiyaContent(
+                            state.currentMultiya,
+                            state.allMultiya,
+                            state.multiyaNgayon,
+                            state.kabuuangMultiya
+                        )
+                    }
+
+                    "donations" -> Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(24.dp)
+                    ) {
+                        ReportSectionHeader(
+                            Icons.Default.FavoriteBorder,
+                            HeartPink,
+                            HeartPinkLight,
+                            "Donasyon ng Koop"
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        DonasyonContent(
+                            state.currentDonasyon,
+                            state.allDonasyon,
+                            state.donasyonNgayon,
+                            state.kabuuangDonasyon,
+                            isSuperadmin = isSuperadmin,
+                            onAddDonasyon = { viewModel.addDonasyon(it) }
+                        )
+                    }
+
+                    "activity" -> {
+                        if (isSuperadmin && superadminViewModel != null) {
+                            ActivityLogView(
+                                viewModel = superadminViewModel,
+                                embeddedInReport = true
+                            )
+                        } else {
+                            selectedSection = "income"
+                        }
+                    }
+
+                    else -> {
+                        selectedSection = "income"
+                    }
                 }
             }
         }
@@ -169,18 +276,28 @@ fun ReportScreen(
 }
 
 @Composable
-private fun SectionChip(label: String, onClick: () -> Unit) {
+private fun SectionChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
     Surface(
         modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
-        color = Color.White
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) EnerjeepBlue else Color.White,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (selected) EnerjeepBlue else FieldBorderColor
+        )
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = EnerjeepBlue
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) Color.White else EnerjeepBlue,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
