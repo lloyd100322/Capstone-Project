@@ -29,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
@@ -74,11 +75,10 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             IncidentSummaryCard(Modifier.weight(1f), uiState.resolvedCount, "Naayos", SuccessGreen, SuccessGreen) { Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(24.dp)) }
         }
         Spacer(Modifier.height(24.dp))
-        OutlinedTextField(
-            value = uiState.searchQuery, onValueChange = viewModel::onSearchQueryChanged, modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon", color = TextSecondary, fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) }, shape = RoundedCornerShape(24.dp), singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue)
+        SearchField(
+            value = uiState.searchQuery,
+            onValueChange = viewModel::onSearchQueryChanged,
+            placeholder = "Hanapin ayon sa uri, plaka, o lokasyon"
         )
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
