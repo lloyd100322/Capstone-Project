@@ -106,9 +106,6 @@ class DriverViewModel @Inject constructor(
     private var profileListener: ListenerRegistration? = null
     private var queueListener: ListenerRegistration? = null
     private var incidentListener: ListenerRegistration? = null
-    private var driversListener: ListenerRegistration? = null
-    private var latestQueueDocuments: List<DocumentSnapshot> = emptyList()
-    private var accountCreatedAtByDriver: Map<String, Long> = emptyMap()
 
     init {
         attachListeners()
@@ -128,23 +125,8 @@ class DriverViewModel @Inject constructor(
         queueListener = firestore.collection(FirestoreCollections.QUEUE)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
-                latestQueueDocuments = snapshot.documents
                 updateQueueState(snapshot.documents)
                 checkDispatchAlerts(snapshot.documents)
-            }
-
-        driversListener = firestore.collection(FirestoreCollections.USERS)
-            .whereEqualTo("role", "driver")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
-                accountCreatedAtByDriver = snapshot.documents.associate { driver ->
-                    val driverId = driver.getString("userId").orEmpty().ifBlank { driver.id }
-                    driverId to (
-                        driver.safeTimestamp("createdAt")?.toDate()?.time
-                            ?: Long.MAX_VALUE
-                        )
-                }
-                updateQueueState(latestQueueDocuments)
             }
 
         incidentListener = firestore.collection(FirestoreCollections.INCIDENTS)
@@ -199,7 +181,19 @@ class DriverViewModel @Inject constructor(
             ?: 0
         val total = routeFront.size
 
-        // Forecast the next-day position from the fixed account-creation roster.
+        // The earliest retained queue record is the fallback for older
+        // drivers whose queue entries predate the accountCreatedAt field.
+        val accountCreatedAtByDriver = documents
+            .filter { !it.getString("driverId").isNullOrBlank() }
+            .groupBy { it.getString("driverId").orEmpty() }
+            .mapValues { (_, entries) ->
+                entries.mapNotNull { entry ->
+                    entry.safeTimestamp("accountCreatedAt")?.toDate()?.time
+                        ?: entry.safeTimestamp("createdAt")?.toDate()?.time
+                }.minOrNull() ?: Long.MAX_VALUE
+            }
+
+        // Forecast the next-day position from the permanent roster order.
         val fixedRosterOrder = routeFront.sortedWith(
             compareBy<DocumentSnapshot> { entry ->
                 entry.safeTimestamp("accountCreatedAt")?.toDate()?.time
@@ -314,6 +308,8 @@ class DriverViewModel @Inject constructor(
      * Kasaysayan) at ang nasa likod niya ay uusad.
      */
     private var endingTravel = false
+    private val _isEndingTravel = MutableStateFlow(false)
+    val isEndingTravel = _isEndingTravel.asStateFlow()
 
     /**
      * Uses the trusted server operation so ownership, queue re-numbering,
@@ -329,6 +325,7 @@ class DriverViewModel @Inject constructor(
         if (endingTravel) return
 
         endingTravel = true
+        _isEndingTravel.value = true
         viewModelScope.launch {
             try {
                 FirebaseFunctions.getInstance("us-central1")
@@ -354,6 +351,7 @@ class DriverViewModel @Inject constructor(
                 ToastFeedback.show(e.message ?: "Hindi matapos ang biyahe.")
             } finally {
                 endingTravel = false
+                _isEndingTravel.value = false
             }
         }
     }
@@ -543,7 +541,6 @@ class DriverViewModel @Inject constructor(
         profileListener?.remove()
         queueListener?.remove()
         incidentListener?.remove()
-        driversListener?.remove()
         super.onCleared()
     }
 }
