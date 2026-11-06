@@ -74,11 +74,10 @@ object QueueRotation {
     }
 
     /**
-     * Isang tseke ng araw: kung lampas na sa cut-off at hindi pa
-     * na-ikot ngayong araw, ini-ikot ang pila (#1 ng bawat ruta ay
-     * napupunta sa huli). Ang basa ng queue ay SA LOOB ng transaction
-     * kaya walang stale na listahan kahit sabay-sabay na admin ang
-     * magbukas ng app.
+     * Isang tseke ng araw: kapag lampas na sa cut-off, ibinabalik ang
+     * aktibong pila sa permanenteng roster order ayon sa account creation
+     * date (pinakamatagal na account muna). Ang basa ng queue ay SA LOOB
+     * ng transaction kaya walang stale na listahan.
      */
     suspend fun rotateOnce(firestore: FirebaseFirestore): Result {
         val queueCollection = firestore.collection(FirestoreCollections.QUEUE)
@@ -99,6 +98,18 @@ object QueueRotation {
             .await()
             .documents
             .map { it.id }
+
+        // Capture the original account creation timestamps once. Queue positions
+        // are reset from this stable roster order, not from the previous day's order.
+        val driverAccounts = firestore
+            .collection(FirestoreCollections.USERS)
+            .whereEqualTo("role", "driver")
+            .get()
+            .await()
+        val accountCreatedAtByDriver = driverAccounts.documents.associate { user ->
+            val driverId = user.getString("userId").orEmpty().ifBlank { user.id }
+            driverId to (user.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE)
+        }
 
         return firestore.runTransaction { transaction ->
             val queueControl = transaction.get(queueControlReference)
@@ -137,26 +148,32 @@ object QueueRotation {
                                         route
                                     )
                         }
-                        .sortedBy {
-                            it.getLong("position") ?: Long.MAX_VALUE
-                        }
+                        .sortedWith(
+                            compareBy<DocumentSnapshot> { document ->
+                                document.getTimestamp("accountCreatedAt")
+                                    ?.toDate()?.time
+                                    ?: accountCreatedAtByDriver[
+                                        document.getString("driverId").orEmpty()
+                                    ]
+                                    ?: document.getTimestamp("createdAt")
+                                        ?.toDate()?.time
+                                    ?: Long.MAX_VALUE
+                            }.thenBy {
+                                it.getString("driverId").orEmpty()
+                            }.thenBy {
+                                it.id
+                            }
+                        )
 
-                    if (active.size > 1) {
-                        /*
-                         * Rotation: today's first goes to the last spot,
-                         * everyone else moves up one position.
-                         */
-                        val rotated = active.drop(1) + active.first()
-                        rotated.forEachIndexed { index, document ->
-                            transaction.update(
-                                document.reference,
-                                mapOf(
-                                    "position" to index + 1,
-                                    "updatedAt" to
-                                            FieldValue.serverTimestamp()
-                                )
+                    // Restore the permanent master roster order each operating day.
+                    active.forEachIndexed { index, document ->
+                        transaction.update(
+                            document.reference,
+                            mapOf(
+                                "position" to index + 1,
+                                "updatedAt" to FieldValue.serverTimestamp()
                             )
-                        }
+                        )
                     }
                 }
 
