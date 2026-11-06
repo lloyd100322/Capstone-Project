@@ -106,7 +106,29 @@ fun TerminalFeeFormContent(
             OutlinedButton(onClick = onCancel, enabled = !isSubmitting, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin", color = Color.Black) }
             Spacer(Modifier.width(16.dp))
             val finalAmount = amount.toDoubleOrNull() ?: 0.0
-            Button(onClick = { selectedDriver?.let { if (finalAmount > 0.0) onSubmit(it, finalAmount, selectedFeeType) } }, enabled = !isSubmitting && selectedDriver != null && finalAmount > 0.0, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text(if (isSubmitting) "Sine-save..." else "Ipasa") }
+            Button(
+                onClick = {
+                    selectedDriver?.let {
+                        if (finalAmount > 0.0 && !isSubmitting) {
+                            onSubmit(it, finalAmount, selectedFeeType)
+                        }
+                    }
+                },
+                enabled = !isSubmitting && selectedDriver != null && finalAmount > 0.0,
+                modifier = Modifier.weight(1f).height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ipasa")
+                }
+            }
         }
     }
 }
