@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.home
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -345,7 +347,7 @@ fun HomeContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(responsivePageHorizontalPadding())
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -375,7 +377,7 @@ fun HomeContent(
 
         Text(
             text = "Musta, $firstName!",
-            fontSize = 28.sp,
+            fontSize = responsivePageTitleSize(),
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )
