@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.home
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -307,7 +309,7 @@ fun DriverDashboardContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(responsivePageHorizontalPadding())
     ) {
         // Dashboard header with the notification bell beside the app title.
         Row(
@@ -336,7 +338,7 @@ fun DriverDashboardContent(
         // Greeting
         Text(
             text = "Musta, $firstName!",
-            fontSize = 28.sp,
+            fontSize = responsivePageTitleSize(),
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )
