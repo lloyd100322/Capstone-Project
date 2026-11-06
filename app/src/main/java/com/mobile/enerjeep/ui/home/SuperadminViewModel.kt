@@ -33,7 +33,8 @@ data class ActivityLogItem(
     val action: String = "",
     val detail: String = "",
     val time: String = "",
-    val createdAtMillis: Long = 0L
+    val createdAtMillis: Long = 0L,
+    val dispatchSequence: Long = 0L
 )
 
 data class DeductionTier(
@@ -168,10 +169,17 @@ class SuperadminViewModel @Inject constructor(
                                 ).format(it)
                             }.orEmpty(),
                             createdAtMillis =
-                                timestamp?.toDate()?.time ?: 0L
+                                timestamp?.toDate()?.time ?: 0L,
+                            dispatchSequence =
+                                document.getLong("dispatchSequence") ?: 0L
                         )
                     }
                     .orEmpty()
+                    .sortedWith(
+                        compareByDescending<ActivityLogItem> { it.createdAtMillis }
+                            .thenByDescending { it.dispatchSequence }
+                            .thenByDescending { it.id }
+                    )
             }
 
         // Admin accounts - the superadmin adds them to the emergency list.
