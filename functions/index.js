@@ -280,6 +280,23 @@ exports.dailyQueueReset = onSchedule(
           : Number.MAX_SAFE_INTEGER;
       };
 
+      const rotationCursorUpdates = {};
+
+      const accountCreationMillis = (document) => {
+        const storedQueueTimestamp = document.get("accountCreatedAt");
+        if (storedQueueTimestamp && typeof storedQueueTimestamp.toMillis === "function") {
+          return storedQueueTimestamp.toMillis();
+        }
+        const originalAccountTimestamp = accountCreatedAtByDriver.get(
+          String(document.get("driverId") || "")
+        );
+        if (Number.isFinite(originalAccountTimestamp)) return originalAccountTimestamp;
+        const queueCreatedAt = document.get("createdAt");
+        return queueCreatedAt && typeof queueCreatedAt.toMillis === "function"
+          ? queueCreatedAt.toMillis()
+          : Number.MAX_SAFE_INTEGER;
+      };
+
       [1, 0].forEach((key) => {
         const active = docs
           .filter((d) => isQueueActive(d.data()) && routeKey(d.data().route) === key)
@@ -288,18 +305,80 @@ exports.dailyQueueReset = onSchedule(
             String(a.get("driverId") || a.id).localeCompare(String(b.get("driverId") || b.id))
           );
 
-        // Restore the fixed account-created roster order at the start of each day.
-        active.forEach((doc, index) => {
-          tx.update(doc.ref, {
+        const routeName = key === 1 ? "Marilao" : "Monumento";
+        const cursorDriverField = `rotationStart${routeName}DriverId`;
+        const cursorCreatedAtField = `rotationStart${routeName}CreatedAtMillis`;
+        const previousLeaderId = String(meta.get(cursorDriverField) || "");
+        const previousLeaderCreatedAtRaw = meta.get(cursorCreatedAtField);
+        const previousLeaderCreatedAt =
+          typeof previousLeaderCreatedAtRaw === "number" &&
+          Number.isFinite(previousLeaderCreatedAtRaw)
+            ? previousLeaderCreatedAtRaw
+            : null;
+
+        // The saved cursor is yesterday's #1. Advance to the next active
+        // account in permanent creation order, wrapping around.
+        let startIndex = 0;
+        if (active.length > 1) {
+          if (previousLeaderId) {
+            const previousIndex = active.findIndex(
+              (document) =>
+                String(document.get("driverId") || document.id) === previousLeaderId
+            );
+            if (previousIndex >= 0) {
+              startIndex = (previousIndex + 1) % active.length;
+            } else if (previousLeaderCreatedAt !== null) {
+              const nextIndex = active.findIndex((document) => {
+                const createdAt = accountCreationMillis(document);
+                const driverId = String(document.get("driverId") || document.id);
+                return createdAt > previousLeaderCreatedAt ||
+                  (createdAt === previousLeaderCreatedAt &&
+                    driverId.localeCompare(previousLeaderId) > 0);
+              });
+              startIndex = nextIndex >= 0 ? nextIndex : 0;
+            } else {
+              startIndex = 1;
+            }
+          } else if (previousLeaderCreatedAt !== null) {
+            const nextIndex = active.findIndex((document) => {
+              const createdAt = accountCreationMillis(document);
+              const driverId = String(document.get("driverId") || document.id);
+              return createdAt > previousLeaderCreatedAt ||
+                (createdAt === previousLeaderCreatedAt &&
+                  driverId.localeCompare(previousLeaderId) > 0);
+            });
+            startIndex = nextIndex >= 0 ? nextIndex : 0;
+          } else {
+            // First reset after this change: move permanent #1 to the end
+            // so permanent #2 becomes the new #1.
+            startIndex = 1;
+          }
+        }
+
+        const rotated = active.slice(startIndex).concat(active.slice(0, startIndex));
+        rotated.forEach((document, index) => {
+          tx.update(document.ref, {
             position: index + 1,
             updatedAt: FieldValue.serverTimestamp(),
           });
         });
+
+        if (rotated.length > 0) {
+          const newLeader = rotated[0];
+          rotationCursorUpdates[cursorDriverField] =
+            String(newLeader.get("driverId") || newLeader.id);
+          rotationCursorUpdates[cursorCreatedAtField] =
+            accountCreationMillis(newLeader);
+        }
       });
 
       tx.set(
         metaRef,
-        { lastQueueDay: today, updatedAt: FieldValue.serverTimestamp() },
+        {
+          lastQueueDay: today,
+          updatedAt: FieldValue.serverTimestamp(),
+          ...rotationCursorUpdates,
+        },
         { merge: true }
       );
       tx.set(
