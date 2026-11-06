@@ -410,18 +410,27 @@ fun LoginScreen(
                                         !isBusy,
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(
-                                text = if (
-                                    uiState is LoginUiState.ResendingOtp
-                                ) {
-                                    "Nagpapadala..."
-                                } else {
-                                    "Ipadala"
-                                },
-                                maxLines = 1,
-                                color = EnerjeepBlue,
-                                fontSize = 14.sp
-                            )
+                            if (uiState is LoginUiState.ResendingOtp) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = EnerjeepBlue
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Nagpapadala...",
+                                    maxLines = 1,
+                                    color = EnerjeepBlue,
+                                    fontSize = 14.sp
+                                )
+                            } else {
+                                Text(
+                                    "Ipadala",
+                                    maxLines = 1,
+                                    color = EnerjeepBlue,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
 
                         if (resendCooldownSeconds > 0) {
