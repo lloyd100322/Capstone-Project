@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.kita
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -64,7 +66,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
     // kahit ano - walang gastos, multa, o donasyon na binabawas dito.
     val total = remember(finalRecords) { KitaHistory.total(finalRecords) }
 
-    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
+    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep App Logo", modifier = Modifier.size(60.dp))
@@ -72,7 +74,7 @@ fun KitaScreen(viewModel: KitaViewModel = hiltViewModel()) {
             Text("Enerjeep", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
         Spacer(Modifier.height(32.dp))
-        Text("Aking Kita", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text("Aking Kita", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(Modifier.height(24.dp))
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
             Column(Modifier.padding(20.dp)) {
