@@ -100,18 +100,6 @@ object QueueRotation {
             .documents
             .map { it.id }
 
-        // Capture the original account creation timestamps once. Queue positions
-        // are reset from this stable roster order, not from the previous day's order.
-        val driverAccounts = firestore
-            .collection(FirestoreCollections.USERS)
-            .whereEqualTo("role", "driver")
-            .get()
-            .await()
-        val accountCreatedAtByDriver = driverAccounts.documents.associate { user ->
-            val driverId = user.getString("userId").orEmpty().ifBlank { user.id }
-            driverId to (user.getTimestamp("createdAt")?.toDate()?.time ?: Long.MAX_VALUE)
-        }
-
         return firestore.runTransaction { transaction ->
             val queueControl = transaction.get(queueControlReference)
             val currentRevision = queueControl.getLong("revision") ?: 0L
@@ -137,6 +125,19 @@ object QueueRotation {
             val queueDocs = queueIds.map { id ->
                 transaction.get(queueCollection.document(id))
             }.filter { it.exists() }
+
+            // The first queue record is created with the driver account.
+            // Keeping this mapping within queue history avoids requiring drivers
+            // to list /users (which Firestore rules deliberately prohibit).
+            val accountCreatedAtByDriver = queueDocs
+                .filter { !it.getString("driverId").isNullOrBlank() }
+                .groupBy { it.getString("driverId").orEmpty() }
+                .mapValues { (_, entries) ->
+                    entries.mapNotNull { document ->
+                        document.getTimestamp("accountCreatedAt")?.toDate()?.time
+                            ?: document.getTimestamp("createdAt")?.toDate()?.time
+                    }.minOrNull() ?: Long.MAX_VALUE
+                }
 
             listOf(QueueViewModel.ROUTE_MA, QueueViewModel.ROUTE_AM)
                 .forEach { route ->
