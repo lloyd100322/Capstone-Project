@@ -199,7 +199,7 @@ object QueueRotation {
                                         .orEmpty().ifBlank { document.id }
                                     createdAt > previousLeaderCreatedAt ||
                                             (createdAt == previousLeaderCreatedAt &&
-                                                    driverId > previousLeaderId)
+                                                    driverId > previousLeaderId.orEmpty())
                                 }
                                 if (nextIndex >= 0) nextIndex else 0
                             } else {
