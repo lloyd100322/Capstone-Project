@@ -322,11 +322,25 @@ fun PhoneInputContent(
                 EnerjeepBlue
         )
     ) {
-        Text(
-            text = "Magpatuloy",
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
+        if (uiState.isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color.White
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Nagpapadala...",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(
+                text = "Magpatuloy",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
@@ -452,7 +466,17 @@ fun OtpInputContent(
         },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Ipadala", maxLines = 1)
+        if (uiState.isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = EnerjeepBlue
+            )
+            Spacer(Modifier.width(6.dp))
+            Text("Nagpapadala...", maxLines = 1)
+        } else {
+            Text("Ipadala", maxLines = 1)
+        }
     }
 
     Button(
@@ -469,11 +493,25 @@ fun OtpInputContent(
                 EnerjeepBlue
         )
     ) {
-        Text(
-            text = "I-verify",
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
+        if (uiState.isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color.White
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Bine-verify...",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(
+                text = "I-verify",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
@@ -646,11 +684,25 @@ fun NewPasswordContent(
                 EnerjeepBlue
         )
     ) {
-        Text(
-            text = "I-reset ang Password",
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
+        if (uiState.isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = Color.White
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Ina-update...",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        } else {
+            Text(
+                text = "I-reset ang Password",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
