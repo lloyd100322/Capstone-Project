@@ -57,6 +57,7 @@ fun QueueScreen(
     // Collect Business State from ViewModel safely
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cutoffHourLabel by viewModel.cutoffLabel.collectAsStateWithLifecycle()
+    val isResettingQueue by viewModel.isResettingQueue.collectAsStateWithLifecycle()
     val busyActions by viewModel.busyActions.collectAsStateWithLifecycle()
     val queueActionInProgress = busyActions.isNotEmpty()
 
@@ -159,6 +160,24 @@ fun QueueScreen(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        if (isResettingQueue) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = EnerjeepBlue
+                                )
+                                Text(
+                                    "Nagre-reset ang pila...",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -857,7 +876,8 @@ fun QueueItem(
                         }
                     }
                 }
-            }        }
+            }
+        }
     }
 }
 
