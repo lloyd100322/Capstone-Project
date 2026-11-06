@@ -74,6 +74,9 @@ class ProfileViewModel @Inject constructor(
     private val _isUpdatingPassword = MutableStateFlow(false)
     val isUpdatingPassword = _isUpdatingPassword.asStateFlow()
 
+    private val _isSigningOut = MutableStateFlow(false)
+    val isSigningOut = _isSigningOut.asStateFlow()
+
     private var listener: ListenerRegistration? = null
 
     init {
@@ -396,7 +399,9 @@ class ProfileViewModel @Inject constructor(
     }
 
     fun signOut() {
+        if (_isSigningOut.value) return
         val phone = userSession.userProfile?.phoneNumber.orEmpty()
+        _isSigningOut.value = true
 
         viewModelScope.launch {
             try {
@@ -409,6 +414,7 @@ class ProfileViewModel @Inject constructor(
                 // The root ContentViewModel observes this and replaces the
                 // entire navigation controller with a fresh Login back stack.
                 userSession.clear()
+                _isSigningOut.value = false
             }
         }
     }
