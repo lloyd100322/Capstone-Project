@@ -30,6 +30,7 @@ data class ActivityLogItem(
     val id: String = "",
     val actorName: String = "",
     val driverName: String = "",
+    val plateNumber: String = "",
     val actorRole: String = "",
     val action: String = "",
     val detail: String = "",
@@ -159,6 +160,8 @@ class SuperadminViewModel @Inject constructor(
                                 .getString("actorName").orEmpty(),
                             driverName = document
                                 .getString("driverName").orEmpty(),
+                            plateNumber = document
+                                .getString("plateNumber").orEmpty(),
                             actorRole = document
                                 .getString("actorRole").orEmpty(),
                             action = document
