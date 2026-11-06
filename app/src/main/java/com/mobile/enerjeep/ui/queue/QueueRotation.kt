@@ -136,7 +136,7 @@ object QueueRotation {
                     entries.mapNotNull { document ->
                         document.getTimestamp("accountCreatedAt")?.toDate()?.time
                             ?: document.getTimestamp("createdAt")?.toDate()?.time
-                    }.minOrNull() ?: Long.MAX_VALUE
+                    }.minOrNull()
                 }
 
             listOf(QueueViewModel.ROUTE_MA, QueueViewModel.ROUTE_AM)
