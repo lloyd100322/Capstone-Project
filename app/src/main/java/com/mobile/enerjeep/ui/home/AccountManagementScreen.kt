@@ -43,9 +43,9 @@ fun AccountManagementScreen(
     }
 
     /*
-     * Superadmin toolbox: the emergency list, the accountability log
-     * and the settings open INSIDE this screen (no new module needed).
-     * 0 = Mga Account, 1 = Emergency List, 2 = Talaan, 3 = Settings
+     * Superadmin-only Emergency contacts remain accessible from Account
+     * Management. The Activity Log has been moved to the Reports tab so
+     * it can be treated as an operational report alongside the others.
      */
     var superadminView by remember { mutableStateOf(0) }
     val isSuperadmin = viewModel.isSuperadmin()
