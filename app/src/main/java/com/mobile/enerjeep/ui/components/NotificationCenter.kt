@@ -54,6 +54,7 @@ data class AppNotification(
 data class NotificationCenterState(
     val notifications: List<AppNotification> = emptyList(),
     val loading: Boolean = true,
+    val markingRead: Boolean = false,
     val errorMessage: String? = null
 ) {
     val unreadCount: Int
@@ -133,26 +134,42 @@ class NotificationCenterViewModel @Inject constructor(
     fun markAllRead() {
         val phone = activePhone ?: return
         val unread = _uiState.value.notifications.filterNot { it.read }
-        if (unread.isEmpty()) return
+        if (unread.isEmpty() || _uiState.value.markingRead) return
+
+        // Clear the unread state immediately when the bell is opened.
+        _uiState.value = _uiState.value.copy(
+            notifications = _uiState.value.notifications.map { it.copy(read = true) },
+            markingRead = true,
+            errorMessage = null
+        )
 
         viewModelScope.launch {
-            unread.chunked(450).forEach { chunk ->
-                val batch = firestore.batch()
-                chunk.forEach { item ->
-                    val reference = firestore
-                        .collection(FirestoreCollections.USERS)
-                        .document(phone)
-                        .collection(FirestoreCollections.NOTIFICATIONS)
-                        .document(item.id)
-                    batch.update(
-                        reference,
-                        mapOf(
-                            "read" to true,
-                            "readAt" to FieldValue.serverTimestamp()
+            try {
+                unread.chunked(450).forEach { chunk ->
+                    val batch = firestore.batch()
+                    chunk.forEach { item ->
+                        val reference = firestore
+                            .collection(FirestoreCollections.USERS)
+                            .document(phone)
+                            .collection(FirestoreCollections.NOTIFICATIONS)
+                            .document(item.id)
+                        batch.update(
+                            reference,
+                            mapOf(
+                                "read" to true,
+                                "readAt" to FieldValue.serverTimestamp()
+                            )
                         )
-                    )
+                    }
+                    batch.commit().await()
                 }
-                batch.commit().await()
+            } catch (_: Exception) {
+                ToastFeedback.show("Hindi ma-update ang status ng mga abiso. Subukang muli.")
+                if (activePhone == phone) observeNotifications(phone)
+            } finally {
+                if (activePhone == phone) {
+                    _uiState.value = _uiState.value.copy(markingRead = false)
+                }
             }
         }
     }
@@ -176,39 +193,26 @@ fun NotificationCenterBell(
     Box {
         IconButton(
             onClick = {
+                viewModel.markAllRead()
                 showSheet = true
             }
         ) {
-            Icon(
-                imageVector = Icons.Default.Notifications,
-                contentDescription = if (state.unreadCount > 0) "Mga Abiso, ${state.unreadCount} hindi pa nababasa" else "Mga Abiso",
-                tint = EnerjeepBlue,
-                modifier = Modifier.size(27.dp)
-            )
-        }
-
-        if (state.unreadCount > 0) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-2).dp, y = 2.dp)
-                    .sizeIn(minWidth = 17.dp, minHeight = 17.dp),
-                shape = CircleShape,
-                color = ErrorRed
-            ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (state.unreadCount > 9) "9+" else state.unreadCount.toString(),
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            if (state.markingRead) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = EnerjeepBlue
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Mga Abiso",
+                    tint = EnerjeepBlue,
+                    modifier = Modifier.size(27.dp)
+                )
             }
         }
+
     }
 
     if (showSheet) {
@@ -235,11 +239,6 @@ fun NotificationCenterBell(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
-                if (state.unreadCount > 0) {
-                    TextButton(onClick = viewModel::markAllRead) {
-                        Text("Markahang nabasa lahat", maxLines = 1)
-                    }
-                }
                 IconButton(onClick = { showSheet = false }) {
                     Icon(Icons.Default.Close, contentDescription = "Isara")
                 }
