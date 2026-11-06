@@ -695,6 +695,9 @@ exports.deleteAccount = onCall(
           });
         }
 
+        // Keep historical queue entries, dispatch activity logs, and ledger
+        // records intact. They contain driver-name snapshots and are needed
+        // for audit/report history after an account is deleted.
         tx.delete(userRef);
         tx.delete(secretRef);
         if (plateClaimRef && plateClaim &&
