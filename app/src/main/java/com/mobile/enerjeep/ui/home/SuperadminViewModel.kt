@@ -69,12 +69,18 @@ class SuperadminViewModel @Inject constructor(
 
     private val _emergencyContactsError = MutableStateFlow<String?>(null)
     val emergencyContactsError = _emergencyContactsError.asStateFlow()
+    private val _emergencyContactsLoading = MutableStateFlow(true)
+    val emergencyContactsLoading = _emergencyContactsLoading.asStateFlow()
 
     private val _activityLogsError = MutableStateFlow<String?>(null)
     val activityLogsError = _activityLogsError.asStateFlow()
+    private val _activityLogsLoading = MutableStateFlow(true)
+    val activityLogsLoading = _activityLogsLoading.asStateFlow()
 
     private val _adminAccountsError = MutableStateFlow<String?>(null)
     val adminAccountsError = _adminAccountsError.asStateFlow()
+    private val _adminAccountsLoading = MutableStateFlow(true)
+    val adminAccountsLoading = _adminAccountsLoading.asStateFlow()
 
     private val _tiers = MutableStateFlow(
         listOf(
@@ -114,6 +120,9 @@ class SuperadminViewModel @Inject constructor(
         _emergencyContactsError.value = null
         _activityLogsError.value = null
         _adminAccountsError.value = null
+        _emergencyContactsLoading.value = true
+        _activityLogsLoading.value = true
+        _adminAccountsLoading.value = true
         startListeners()
     }
 
@@ -127,10 +136,15 @@ class SuperadminViewModel @Inject constructor(
                 if (error != null) {
                     _emergencyContactsError.value =
                         "Hindi ma-load ang emergency contacts. Suriin ang internet at subukang muli."
+                    _emergencyContactsLoading.value = false
                     return@addSnapshotListener
                 }
                 _emergencyContactsError.value = null
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot == null) {
+                    _emergencyContactsLoading.value = false
+                    return@addSnapshotListener
+                }
+                _emergencyContactsLoading.value = false
                 _emergencyContacts.value = snapshot
                     ?.documents
                     ?.map { document ->
@@ -154,10 +168,15 @@ class SuperadminViewModel @Inject constructor(
                 if (error != null) {
                     _activityLogsError.value =
                         "Hindi ma-load ang talaan ng aktibidad. Suriin ang internet at subukang muli."
+                    _activityLogsLoading.value = false
                     return@addSnapshotListener
                 }
                 _activityLogsError.value = null
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot == null) {
+                    _activityLogsLoading.value = false
+                    return@addSnapshotListener
+                }
+                _activityLogsLoading.value = false
                 _activityLogs.value = snapshot
                     .documents
                     ?.map { document ->
@@ -204,10 +223,15 @@ class SuperadminViewModel @Inject constructor(
                 if (error != null) {
                     _adminAccountsError.value =
                         "Hindi ma-load ang admin accounts. Suriin ang internet at subukang muli."
+                    _adminAccountsLoading.value = false
                     return@addSnapshotListener
                 }
                 _adminAccountsError.value = null
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot == null) {
+                    _adminAccountsLoading.value = false
+                    return@addSnapshotListener
+                }
+                _adminAccountsLoading.value = false
                 _adminAccounts.value = snapshot
                     .documents
                     ?.map { document ->
