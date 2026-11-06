@@ -236,7 +236,7 @@ exports.dailyQueueReset = onSchedule(
       const rawCreatedAt = user.get("createdAt");
       const createdAtMillis = rawCreatedAt && typeof rawCreatedAt.toMillis === "function"
         ? rawCreatedAt.toMillis()
-        : Number.MAX_SAFE_INTEGER;
+        : null;
       return [String(user.get("userId") || user.id), createdAtMillis];
     }));
 
