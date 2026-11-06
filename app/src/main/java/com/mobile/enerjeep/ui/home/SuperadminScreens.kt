@@ -498,6 +498,13 @@ fun ActivityLogView(
                                 color = Color.DarkGray
                             )
                         }
+                        if (log.driverName.isNotBlank()) {
+                            Text(
+                                "Driver: ${log.driverName}",
+                                fontSize = 12.sp,
+                                color = Color.DarkGray
+                            )
+                        }
                         Text(
                             "Ni: ${log.actorName}" +
                                     if (log.actorRole.isNotBlank()) {
