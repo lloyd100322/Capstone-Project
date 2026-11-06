@@ -58,6 +58,12 @@ class DriverProfileViewModel @Inject constructor(
     val uiState: StateFlow<DriverProfileUiState> =
         _uiState.asStateFlow()
 
+    private val _isSavingProfile = MutableStateFlow(false)
+    val isSavingProfile = _isSavingProfile.asStateFlow()
+
+    private val _isSavingPassword = MutableStateFlow(false)
+    val isSavingPassword = _isSavingPassword.asStateFlow()
+
     private var listener:
             ListenerRegistration? = null
 
@@ -356,6 +362,9 @@ class DriverProfileViewModel @Inject constructor(
             cleanEmergencyNumber
         )
 
+        if (_isSavingProfile.value) return
+        _isSavingProfile.value = true
+
         viewModelScope.launch {
             try {
                 FirebaseFunctions.getInstance("us-central1")
@@ -394,6 +403,8 @@ class DriverProfileViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang profile. Subukan muli."
                 )
+            } finally {
+                _isSavingProfile.value = false
             }
         }
     }
@@ -423,6 +434,9 @@ class DriverProfileViewModel @Inject constructor(
             ToastFeedback.show("Pumili ng ibang password kaysa sa kasalukuyan.")
             return
         }
+
+        if (_isSavingPassword.value) return
+        _isSavingPassword.value = true
 
         viewModelScope.launch {
             try {
@@ -456,6 +470,8 @@ class DriverProfileViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang password. Subukan muli."
                 )
+            } finally {
+                _isSavingPassword.value = false
             }
         }
     }
