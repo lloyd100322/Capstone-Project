@@ -58,6 +58,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    // Scalable dimension resources for responsive Compose spacing and card padding.
+    implementation("com.intuit.sdp:sdp-android:1.1.1")
+
     // Lifecycle
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
