@@ -346,7 +346,10 @@ fun AccountCard(
             ) {
                 Text(
                     text = account.name,
-                    modifier = Modifier.weight(1f),
+                    // Keep the role badge directly beside the name.
+                    // fill = false lets short names use only their natural width;
+                    // long names are constrained and truncated before the badge.
+                    modifier = Modifier.weight(1f, fill = false),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
@@ -374,6 +377,8 @@ fun AccountCard(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.weight(1f))
 
                 Surface(
                     color = statusBackground,
