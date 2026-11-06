@@ -27,7 +27,7 @@ fun responsivePageHorizontalPadding(): Dp =
  */
 @Composable
 fun responsivePageTitleSize(): TextUnit {
-    val titleDimension = dimensionResource(R.dimen._28ssp)
+    val titleDimension = dimensionResource(R.dimen._26ssp)
     val titleSp = with(LocalDensity.current) { titleDimension.toSp() }
     return titleSp.value.coerceIn(26f, 28f).sp
 }
