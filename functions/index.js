@@ -739,6 +739,7 @@ exports.dispatchQueueVehicle = onCall(
     const queueCollection = db.collection("queue");
     const queueControlRef = db.collection("settings").doc("queueControl");
     const tiersRef = db.collection("settings").doc("deductionTiers");
+    const dispatchActivityRef = db.collection("activityLogs").doc();
 
     try {
       await db.runTransaction(async (tx) => {
@@ -748,6 +749,7 @@ exports.dispatchQueueVehicle = onCall(
           tx.get(queueControlRef),
           tx.get(queueCollection),
         ]);
+        const nextQueueRevision = (control.get("revision") || 0) + 1;
         const currentCallerRole = String(callerSnapshot.get("role") || "").toLowerCase();
         const transactionCaller = {
           role: currentCallerRole,
@@ -864,9 +866,12 @@ exports.dispatchQueueVehicle = onCall(
             updatedAt: FieldValue.serverTimestamp(),
           });
         });
+        // Keep existing jeeps ahead of this new return trip.
+        // The first successful dispatch to this terminal is position 1,
+        // the next arrival is position 2, and so on.
         oppositeRouteRemaining.forEach((document, index) => {
           tx.update(document.ref, {
-            position: index + 2,
+            position: index + 1,
             updatedAt: FieldValue.serverTimestamp(),
           });
         });
@@ -882,7 +887,7 @@ exports.dispatchQueueVehicle = onCall(
             driverName,
             plateNumber,
             route: oppositeRoute,
-            position: 1,
+            position: oppositeRouteRemaining.length + 1,
             status: "Nakapila",
             time: new Intl.DateTimeFormat("en-US", {
               timeZone: "Asia/Manila",
@@ -920,9 +925,26 @@ exports.dispatchQueueVehicle = onCall(
         });
 
         tx.set(queueControlRef, {
-          revision: (control.get("revision") || 0) + 1,
+          revision: nextQueueRevision,
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Record the dispatch in the same transaction as the queue and
+        // ledger updates. This preserves the order of successful dispatches
+        // even when two admin devices receive callable responses at different times.
+        const actorName = [
+          String(callerSnapshot.get("firstName") || "").trim(),
+          String(callerSnapshot.get("lastName") || "").trim(),
+        ].filter(Boolean).join(" ") || "Hindi kilala";
+        tx.set(dispatchActivityRef, {
+          actorName,
+          actorPhone: caller.phone,
+          actorRole: currentCallerRole === "superadmin" ? "Superadmin" : "Admin",
+          action: "Dispatch",
+          detail: plateNumber + " — " + driverName + " • " + oppositeRoute,
+          createdAt: FieldValue.serverTimestamp(),
+          dispatchSequence: nextQueueRevision,
+        });
       });
     } catch (error) {
       if (error instanceof HttpsError) throw error;
