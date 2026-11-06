@@ -53,13 +53,11 @@ data class AppNotification(
 
 data class NotificationCenterState(
     val notifications: List<AppNotification> = emptyList(),
+    val unreadCount: Int = 0,
     val loading: Boolean = true,
     val markingRead: Boolean = false,
     val errorMessage: String? = null
-) {
-    val unreadCount: Int
-        get() = notifications.count { !it.read }
-}
+)
 
 @HiltViewModel
 class NotificationCenterViewModel @Inject constructor(
@@ -70,6 +68,7 @@ class NotificationCenterViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     private var notificationListener: ListenerRegistration? = null
+    private var unreadCountListener: ListenerRegistration? = null
     private var activePhone: String? = null
 
     init {
@@ -77,11 +76,14 @@ class NotificationCenterViewModel @Inject constructor(
             userSession.userProfileFlow.collectLatest { profile ->
                 notificationListener?.remove()
                 notificationListener = null
+                unreadCountListener?.remove()
+                unreadCountListener = null
                 val phone = profile?.phoneNumber?.trim()?.lowercase()
                     ?.takeIf { it.isNotBlank() }
                 activePhone = phone
                 _uiState.value = NotificationCenterState(
                     notifications = emptyList(),
+                    unreadCount = 0,
                     loading = phone != null
                 )
                 if (phone != null) observeNotifications(phone)
@@ -91,14 +93,17 @@ class NotificationCenterViewModel @Inject constructor(
 
     private fun observeNotifications(phone: String) {
         notificationListener?.remove()
+        unreadCountListener?.remove()
+        val notifications = firestore
+            .collection(FirestoreCollections.USERS)
+            .document(phone)
+            .collection(FirestoreCollections.NOTIFICATIONS)
+
         _uiState.value = _uiState.value.copy(
             loading = true,
             errorMessage = null
         )
-        notificationListener = firestore
-            .collection(FirestoreCollections.USERS)
-            .document(phone)
-            .collection(FirestoreCollections.NOTIFICATIONS)
+        notificationListener = notifications
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(50)
             .addSnapshotListener { snapshot, error ->
@@ -120,10 +125,20 @@ class NotificationCenterViewModel @Inject constructor(
                         createdAt = document.getTimestamp("createdAt")?.toDate()
                     )
                 }
-                _uiState.value = NotificationCenterState(
+                _uiState.value = _uiState.value.copy(
                     notifications = items,
-                    loading = false,
-                    markingRead = _uiState.value.markingRead
+                    loading = false
+                )
+            }
+
+        // Keep the numeric badge accurate for the whole collection, not
+        // just the 50 most recent notifications displayed in the sheet.
+        unreadCountListener = notifications
+            .whereEqualTo("read", false)
+            .addSnapshotListener { snapshot, error ->
+                if (activePhone != phone || error != null) return@addSnapshotListener
+                _uiState.value = _uiState.value.copy(
+                    unreadCount = snapshot?.size() ?: 0
                 )
             }
     }
@@ -139,6 +154,7 @@ class NotificationCenterViewModel @Inject constructor(
         // Remove the unread state immediately when the bell is opened.
         _uiState.value = _uiState.value.copy(
             notifications = _uiState.value.notifications.map { it.copy(read = true) },
+            unreadCount = 0,
             markingRead = true,
             errorMessage = null
         )
@@ -167,6 +183,16 @@ class NotificationCenterViewModel @Inject constructor(
                     }
                     batch.commit().await()
                 }
+
+                // Catch notifications that arrived while the read batches ran.
+                val remainingUnread = notifications.get().await().documents.count {
+                    it.getBoolean("read") != true
+                }
+                if (activePhone == phone) {
+                    _uiState.value = _uiState.value.copy(
+                        unreadCount = remainingUnread
+                    )
+                }
             } catch (_: Exception) {
                 ToastFeedback.show("Hindi ma-update ang status ng mga abiso. Subukang muli.")
                 if (activePhone == phone) observeNotifications(phone)
@@ -181,6 +207,8 @@ class NotificationCenterViewModel @Inject constructor(
     override fun onCleared() {
         notificationListener?.remove()
         notificationListener = null
+        unreadCountListener?.remove()
+        unreadCountListener = null
         super.onCleared()
     }
 }
@@ -195,6 +223,22 @@ fun NotificationCenterBell(
 
     // Bell only: the existing dashboard header supplies the app title.
     Box {
+        BadgedBox(
+            badge = {
+                if (state.unreadCount > 0) {
+                    Badge(
+                        containerColor = ErrorRed,
+                        contentColor = Color.White
+                    ) {
+                        Text(
+                            if (state.unreadCount > 99) "99+" else state.unreadCount.toString(),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        ) {
         IconButton(
             onClick = {
                 viewModel.markAllRead()
@@ -216,7 +260,7 @@ fun NotificationCenterBell(
                 )
             }
         }
-
+        }
     }
 
     if (showSheet) {
