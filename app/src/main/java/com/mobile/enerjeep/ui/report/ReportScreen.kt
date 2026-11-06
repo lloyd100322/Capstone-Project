@@ -76,6 +76,7 @@ fun ReportScreen(
     initialSection: String = "income"
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isSavingDonation by viewModel.isSavingDonation.collectAsStateWithLifecycle()
     val isSuperadmin = viewModel.isSuperadmin()
     val superadminViewModel: SuperadminViewModel? =
         if (isSuperadmin) hiltViewModel() else null
@@ -251,7 +252,10 @@ fun ReportScreen(
                             state.donasyonNgayon,
                             state.kabuuangDonasyon,
                             isSuperadmin = isSuperadmin,
-                            onAddDonasyon = { viewModel.addDonasyon(it) }
+                            isSubmitting = isSavingDonation,
+                            onAddDonasyon = { item, onComplete ->
+                                viewModel.addDonasyon(item, onComplete)
+                            }
                         )
                     }
 
@@ -489,7 +493,15 @@ fun UlatNgMultiyaContent(currentMultiya: List<ReportMultiyaItem>, allMultiya: Li
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<DonasyonItem>, donasyonNgayon: Double, kabuuangDonasyon: Double, isSuperadmin: Boolean, onAddDonasyon: (DonasyonItem) -> Unit) {
+fun DonasyonContent(
+    currentDonasyon: List<DonasyonItem>,
+    allDonasyon: List<DonasyonItem>,
+    donasyonNgayon: Double,
+    kabuuangDonasyon: Double,
+    isSuperadmin: Boolean,
+    isSubmitting: Boolean = false,
+    onAddDonasyon: (DonasyonItem, (Boolean) -> Unit) -> Unit
+) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var showAddModal by remember { mutableStateOf(false) }
@@ -558,10 +570,34 @@ fun DonasyonContent(currentDonasyon: List<DonasyonItem>, allDonasyon: List<Donas
         }
     }
     if (showAddModal) ModalBottomSheet(onDismissRequest = { showAddModal = false }, sheetState = sheetState, containerColor = Color.White) {
-        AddDonasyonFormContent(isGamit = false, onCancel = { showAddModal = false }, onSubmit = { onAddDonasyon(it); showAddModal = false; selectedTab = 0 })
+        AddDonasyonFormContent(
+            isGamit = false,
+            isSubmitting = isSubmitting,
+            onCancel = { if (!isSubmitting) showAddModal = false },
+            onSubmit = { item ->
+                onAddDonasyon(item) { success ->
+                    if (success) {
+                        showAddModal = false
+                        selectedTab = 0
+                    }
+                }
+            }
+        )
     }
     if (showGamitModal) ModalBottomSheet(onDismissRequest = { showGamitModal = false }, sheetState = sheetState, containerColor = Color.White) {
-        AddDonasyonFormContent(isGamit = true, onCancel = { showGamitModal = false }, onSubmit = { onAddDonasyon(it); showGamitModal = false; selectedTab = 0 })
+        AddDonasyonFormContent(
+            isGamit = true,
+            isSubmitting = isSubmitting,
+            onCancel = { if (!isSubmitting) showGamitModal = false },
+            onSubmit = { item ->
+                onAddDonasyon(item) { success ->
+                    if (success) {
+                        showGamitModal = false
+                        selectedTab = 0
+                    }
+                }
+            }
+        )
     }
 }
 
@@ -639,7 +675,12 @@ fun DonasyonCardItem(donasyon: DonasyonItem) {
 }
 
 @Composable
-fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (DonasyonItem) -> Unit) {
+fun AddDonasyonFormContent(
+    isGamit: Boolean,
+    isSubmitting: Boolean = false,
+    onCancel: () -> Unit,
+    onSubmit: (DonasyonItem) -> Unit
+) {
     var donor by remember { mutableStateOf("") }; var amount by remember { mutableStateOf("") }; var source by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
     val today = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date()); var date by remember { mutableStateOf(today) }
     Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp).padding(bottom = 32.dp)) {
@@ -652,8 +693,37 @@ fun AddDonasyonFormContent(isGamit: Boolean, onCancel: () -> Unit, onSubmit: (Do
         Spacer(Modifier.height(12.dp)); Text("Source", fontWeight = FontWeight.Medium); OutlinedTextField(source, { source = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text(if (isGamit) "Hal: tulong, opisina" else "Hal: byahe, LGU, etc.") })
         Spacer(Modifier.height(12.dp)); Text("Note", fontWeight = FontWeight.Medium); OutlinedTextField(note, { note = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Karagdagang detalye") })
         Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Kanselahin") }; Spacer(Modifier.width(12.dp))
-            Button(onClick = { val parsed = amount.toDoubleOrNull() ?: 0.0; if (donor.isNotBlank() && parsed > 0.0) onSubmit(DonasyonItem(donor, parsed, date, source, note, if (isGamit) "gamit" else "donate")) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Ipasa") }
+            OutlinedButton(
+                onClick = onCancel,
+                enabled = !isSubmitting,
+                modifier = Modifier.weight(1f)
+            ) { Text("Kanselahin") }
+            Spacer(Modifier.width(12.dp))
+            Button(
+                onClick = {
+                    val parsed = amount.toDoubleOrNull() ?: 0.0
+                    if (donor.isNotBlank() && parsed > 0.0 && !isSubmitting) {
+                        onSubmit(DonasyonItem(
+                            donor, parsed, date, source, note,
+                            if (isGamit) "gamit" else "donate"
+                        ))
+                    }
+                },
+                enabled = !isSubmitting && donor.isNotBlank() &&
+                    (amount.toDoubleOrNull() ?: 0.0) > 0.0,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ipasa")
+                }
+            }
         }
     }
 }
