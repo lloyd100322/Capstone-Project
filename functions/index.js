@@ -952,8 +952,10 @@ exports.dispatchQueueVehicle = onCall(
           driverId,
           driverName,
           plateNumber,
-          route: oppositeRoute,
-          detail: plateNumber + " — " + oppositeRoute,
+          // Activity history records the trip that was just dispatched.
+          // oppositeRoute is only for the driver's next queue assignment.
+          route: currentRoute,
+          detail: plateNumber + " — " + currentRoute,
           createdAt: FieldValue.serverTimestamp(),
           dispatchSequence: nextQueueRevision,
         });
