@@ -32,3 +32,16 @@ fun responsivePageTitleSize(): TextUnit {
     val titleSp = with(LocalDensity.current) { titleDimension.toSp() }
     return titleSp.value.coerceIn(26f, 28f).sp
 }
+
+/** Responsive subsection/form heading for screens with tighter layouts. */
+@Composable
+fun responsiveSectionTitleSize(): TextUnit {
+    val titleDimension = dimensionResource(SspR.dimen._20ssp)
+    val titleSp = with(LocalDensity.current) { titleDimension.toSp() }
+    return titleSp.value.coerceIn(20f, 22f).sp
+}
+
+/** Responsive inner padding for cards, dialogs, and form surfaces. */
+@Composable
+fun responsiveCardPadding(): Dp =
+    dimensionResource(SdpR.dimen._16sdp).coerceIn(12.dp, 20.dp)
