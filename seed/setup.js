@@ -1086,7 +1086,7 @@ async function legacyHistoricalRefs(activeDrivers, activeMembers) {
   const prefixes = activeDrivers.map(function (driver) {
     return "queue_" + safeId(driver.userId) + "_history_";
   });
-  const historyIdPattern = /^queue_.+_history_\\d{2}_\\d{2}$/;
+  const historyIdPattern = /^queue_.+_history_\d{2}_\d{2}$/;
   const [queueSnapshot, ledgerSnapshot] = await Promise.all([
     db.collection("queue").get(),
     db.collection("ledger").get(),
