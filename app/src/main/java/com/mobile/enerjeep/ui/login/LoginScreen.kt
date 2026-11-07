@@ -2,6 +2,8 @@
 package com.mobile.enerjeep.ui.login
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveCardPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -176,7 +178,7 @@ fun LoginScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp)
+                    modifier = Modifier.padding(responsiveCardPadding())
                 ) {
 
                     Text(
@@ -185,7 +187,7 @@ fun LoginScreen(
                         } else {
                             "Mag-sign In"
                         },
-                        fontSize = 20.sp,
+                        fontSize = responsiveSectionTitleSize(),
                         fontWeight = FontWeight.Bold,
                         color = Color.Black
                     )
