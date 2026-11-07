@@ -136,7 +136,7 @@ class ContentViewModel @Inject constructor(
 
                 if (doc.exists()) {
                     val data = doc.data
-                    val roleString = data?.get("role") as? String ?: UserRole.Driver.name
+                    val roleString = (data?.get("role") as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: UserRole.Driver.name
                     val matchedRole = UserRole.entries.find { 
                         it.name.lowercase() == roleString.lowercase() 
                     } ?: UserRole.Driver
