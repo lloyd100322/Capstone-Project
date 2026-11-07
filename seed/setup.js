@@ -220,7 +220,7 @@ function fullName(account) {
  * replacement numbers in the operational seeder.
  */
 function isPhilippineE164MobileNumber(value) {
-  return /^\\+63[89]\\d{9}$/.test(String(value || "").trim());
+  return /^\+63[89]\d{9}$/.test(String(value || "").trim());
 }
 
 function accountRoleLabel(role) {
