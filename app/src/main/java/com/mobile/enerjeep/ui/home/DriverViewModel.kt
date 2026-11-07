@@ -49,6 +49,7 @@ data class DriverDashboardUiState(
     val activeIncidentTitle: String? = null,
     val activeIncidentId: String? = null,
     val activeIncidentDate: String? = null,
+    val activeIncidentLocation: String? = null,
     // The plate of the jeepney the incident belongs to. It can be the
     // plate of another driver, because the dashboard shows the incidents
     // of the whole cooperative.
@@ -519,6 +520,7 @@ class DriverViewModel @Inject constructor(
             activeIncidentTitle = incident?.getString("title"),
             activeIncidentId = incident?.id,
             activeIncidentDate = incident?.getString("date"),
+            activeIncidentLocation = incident?.getString("location"),
             activeIncidentPlate = incident?.getString("plateNumber"),
             openIncidentCount = openIncidents.size
         )
@@ -535,6 +537,7 @@ class DriverViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             activeIncidentTitle = null,
             activeIncidentDate = null,
+            activeIncidentLocation = null,
             activeIncidentPlate = null
         )
     }
