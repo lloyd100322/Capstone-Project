@@ -1,6 +1,7 @@
 package com.mobile.enerjeep.ui.profile
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -345,7 +346,7 @@ fun ProfileMainContent(
 
         Text(
             text = "Profile",
-            fontSize = 26.sp,
+            fontSize = responsivePageTitleSize(),
             fontWeight = FontWeight.Bold
         )
 
