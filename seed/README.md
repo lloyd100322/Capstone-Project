@@ -4,6 +4,8 @@ Ginagawa ng tool na ito ang kumpletong operational records na ginagamit ng EnerJ
 
 Ang mga record na mabubuo ay lalabas sa app gamit ang normal na labels at format na ginagamit ng EnerJeep. Walang karagdagang label sa UI na nagsasabing espesyal na dataset ang record.
 
+Ang mga lokasyon sa incident records ay pinili lamang mula sa mga stop at terminal point na nakatala sa LTFRB route feed para sa [Heritage Homes - Monumento via NLEX](https://www.transit.land/explore/operators/o-wdw-ltfrb/routes/r-wdw5-heritagehomes~monumentovianlex). Kabilang dito ang NLEX Marilao, Meycauayan, Valenzuela, Caloocan, at Samson Road terminal sa Monumento-side corridor. May allowlist validation din ang generator upang hindi makapasok ang ibang lokasyon.
+
 **Paalala:** Ang mga queue history, incident scenario, donation at financial entries na ginagawa ng tool ay synthetic presentation records. Hindi ito kapalit ng aktuwal na cooperative records at hindi dapat gamitin bilang tunay na bookkeeping o operational evidence.
 
 ## Ano ang napupunan
