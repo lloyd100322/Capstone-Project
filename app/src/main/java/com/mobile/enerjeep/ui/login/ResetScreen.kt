@@ -41,6 +41,9 @@ import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.responsiveCardPadding
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 
 @Composable
 fun ResetPasswordScreen(
@@ -60,7 +63,7 @@ fun ResetPasswordScreen(
                 rememberScrollState()
             )
             .imePadding()
-            .padding(24.dp),
+            .padding(horizontal = responsivePageHorizontalPadding(), vertical = 24.dp),
         horizontalAlignment =
             Alignment.CenterHorizontally
     ) {
@@ -157,7 +160,7 @@ fun ResetPasswordScreen(
             ) {
 
                 Column(
-                    modifier = Modifier.padding(24.dp)
+                    modifier = Modifier.padding(responsiveCardPadding())
                 ) {
 
                     when (uiState.step) {
@@ -216,7 +219,7 @@ fun PhoneInputContent(
 
         Text(
             text = "Nakalimutan ang Password",
-            fontSize = 18.sp,
+            fontSize = responsiveSectionTitleSize(),
             fontWeight = FontWeight.Bold
         )
     }
