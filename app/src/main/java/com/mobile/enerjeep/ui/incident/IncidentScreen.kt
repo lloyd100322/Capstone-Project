@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.incident
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -275,7 +276,7 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
             IconButton(onClick = onBack, enabled = !isReporting) {
                 Icon(Icons.Default.ArrowBack, "Back")
             }
-            Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Mag-report ng Insidente", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(24.dp))
         Text("Plaka", fontWeight = FontWeight.Medium)
@@ -465,7 +466,7 @@ fun IncidentDetailsContent(
     onCallDriver: (() -> Unit)? = null
 ) {
     Column(Modifier.fillMaxWidth().padding(24.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
         Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
         IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
         /*
