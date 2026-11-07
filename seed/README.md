@@ -16,6 +16,12 @@ Hindi gagalawin ang mga sumusunod:
 
 Hindi babaguhin ang account status, roles, admin stations, profile details, password credentials o Firebase Auth users.
 
+**Pinananatili rin ang kasalukuyang account phone numbers.** Ang `users/{phone}` document ID ay ginagamit din bilang Firebase Authentication phone identity; ang Cloud Function ay naghahanap ng Auth user gamit ang eksaktong phone number. Kaya hindi ligtas na bumuo ng random na mukhang totoong mobile number at ilagay ito sa account: maaari nitong maputol ang OTP/login at account deletion, o tumapat sa totoong subscriber.
+
+Bine-validate ng seeder na Philippine mobile E.164 format (`+63...`) ang account document IDs at hindi nito pinapalitan ang mga ito. Mananatili ang pangalan at iba pang account fields.
+
+Para sa demo-only fictional numbers, gamitin ang Firebase Authentication **Phone numbers for testing**. Itinatakda ito sa Firebase Console; hindi nagpapadala ng SMS para sa configured test number at may maximum na 10 test numbers. Kailangang tunay na fictional at hindi ginagamit ng ibang subscriber ang bawat number. Ang paglipat ng existing accounts sa mga test identities ay hiwalay na Auth/Firestore migration, hindi bahagi ng ordinaryong three-month data reset.
+
 **Tatanggalin ang lahat ng subcollections sa ilalim ng bawat `users/{account}` document**, kabilang ang lumang notifications. Mananatili ang parent account documents.
 
 ## Ano ang lilinisin
