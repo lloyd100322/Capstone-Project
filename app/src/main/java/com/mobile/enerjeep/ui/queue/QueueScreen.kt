@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.queue
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -1047,7 +1048,7 @@ fun DispatchCollectionContent(
 
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Koleksyon sa Dispatch", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Koleksyon sa Dispatch", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
             IconButton(onClick = onCancel) { Icon(Icons.Default.Close, contentDescription = "Close") }
         }
 
