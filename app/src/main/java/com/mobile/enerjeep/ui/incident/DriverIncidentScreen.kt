@@ -217,41 +217,40 @@ fun DriverIncidentCard(
     modifier: Modifier = Modifier,
     isHighlighted: Boolean = false
 ) {
-    // Contact details are resolved only when the user taps the call action.
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isHighlighted) EnerjeepBlue.copy(alpha = 0.06f) else Color.White
         ),
-        border = if (isHighlighted) androidx.compose.foundation.BorderStroke(2.dp, EnerjeepBlue) else null,
+        border = if (isHighlighted) {
+            androidx.compose.foundation.BorderStroke(2.dp, EnerjeepBlue)
+        } else {
+            null
+        },
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(Modifier.padding(20.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    Text(incident.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
-                    Spacer(Modifier.height(2.dp)); Text(incident.plateNumber, fontSize = 14.sp, color = TextSecondary)
-                    if (incident.location.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(incident.location, fontSize = 14.sp, color = TextSecondary)
-                        }
-                    }
-                    Spacer(Modifier.height(2.dp)); Text(incident.description, fontSize = 14.sp, color = TextSecondary)
-                    Spacer(Modifier.height(6.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text(incident.date, fontSize = 12.sp, color = TextSecondary) }
-                }
-                Surface(color = if (incident.isResolved) SuccessGreen.copy(alpha = .1f) else WarningOrangeLight, shape = RoundedCornerShape(8.dp)) {
-                    Text(if (incident.isResolved) "Naayos" else "Di-naayos", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            IncidentCardHeader(
+                title = incident.title,
+                status = if (incident.isResolved) "Naayos" else "Di-naayos",
+                isResolved = incident.isResolved
+            )
+            Spacer(Modifier.height(12.dp))
+            IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+            if (incident.location.isNotBlank()) IncidentInfoRow("Lokasyon", incident.location)
+            if (incident.date.isNotBlank()) IncidentInfoRow("Petsa", incident.date)
+            if (incident.multiya > 0.0) {
+                IncidentInfoRow(
+                    "Multa",
+                    String.format(java.util.Locale.getDefault(), "₱%,.2f", incident.multiya)
+                )
             }
+            if (incident.description.isNotBlank()) {
+                IncidentInfoRow("Paglalarawan", incident.description)
+            }
+
             Spacer(Modifier.height(16.dp))
-            /*
-             * Tawag: naka-DIAL (hindi auto-call) para makita muna
-             * ang numero bago tumawag.
-             */
             OutlinedButton(
                 onClick = onCallDriver,
                 enabled = !isLookingUpDriverPhone,
@@ -266,7 +265,12 @@ fun DriverIncidentCard(
                         color = SuccessGreen
                     )
                 } else {
-                    Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                    Icon(
+                        Icons.Default.Call,
+                        contentDescription = null,
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
