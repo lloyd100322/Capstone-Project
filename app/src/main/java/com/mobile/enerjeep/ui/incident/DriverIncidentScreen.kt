@@ -233,23 +233,6 @@ fun DriverIncidentCard(
         )
     ) {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
-            if (isHighlighted) {
-                Surface(
-                    color = EnerjeepBlue,
-                    contentColor = Color.White,
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text(
-                        text = "PINILING INSIDENTE",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.4.sp
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-            }
             IncidentCardHeader(
                 title = incident.title,
                 status = if (incident.isResolved) "Naayos" else "Di-naayos",
