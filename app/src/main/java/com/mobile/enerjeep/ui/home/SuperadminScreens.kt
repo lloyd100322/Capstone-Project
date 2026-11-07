@@ -1,6 +1,7 @@
 package com.mobile.enerjeep.ui.home
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,7 +60,7 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
     ) {
         Text(
             "Emergency List",
-            fontSize = 22.sp,
+            fontSize = responsiveSectionTitleSize(),
             fontWeight = FontWeight.Bold
         )
 
@@ -645,7 +646,7 @@ fun SettingsView(viewModel: SuperadminViewModel) {
             .imePadding()
             .padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), top = 8.dp, bottom = 32.dp)
     ) {
-        Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Settings", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
 
         Spacer(Modifier.height(16.dp))
 
