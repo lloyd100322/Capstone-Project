@@ -2,15 +2,14 @@
 /**
  * EnerJeep operational dataset refresh.
  *
- * Builds realistic queue, incident, earnings, fine, donation, notification,
- * emergency-contact and audit records using the existing Firestore accounts.
+ * Builds synthetic presentation/test records using the existing Firestore accounts.
  *
  * Safety:
- * - Never creates, deletes, or rewrites users, userSecrets, Firebase Auth users,
- *   driverPlateClaims, or account profile fields.
- * - Replaces only documents recorded in settings/operationsIndex plus the
- *   exact document IDs written by the previous setup.js version.
- * - Dry-run is the default. Pass --apply to write changes.
+ * - Preserves users account profiles, userSecrets, Firebase Auth users,
+ *   driverPlateClaims, and secureSessions.
+ * - Cleans every other Firestore root collection recursively, including all
+ *   subcollections beneath users/{account}, then writes a fresh three-month dataset.
+ * - Dry-run is the default. Pass --apply to replace/delete non-account data.
  * - Keep service-account credentials outside this repository.
  */
 
@@ -234,10 +233,6 @@ function amountForSeat(seater, tiers) {
   const configured = Number(tiers[key]);
   if (Number.isFinite(configured) && configured >= 0) return configured;
   return seater > 0 ? seater * 2 : 0;
-}
-
-function legacyTag(number) {
-  return (0xa100 + number).toString(16);
 }
 
 // --------------------------------------------------------------------- read accounts
@@ -1179,10 +1174,18 @@ async function main() {
   logCleanupCounts("Existing non-account records to be replaced:", cleanup.replacedCounts);
   logCleanupCounts("Existing non-account records to be deleted:", cleanup.deleteCounts);
   console.log("");
-  console.log("Old Kita/cooperative-income records to delete: " +
-    (cleanup.deleteCounts.kita || cleanup.replacedCounts.kita || 0));
-  console.log("Old incident records to delete: " +
-    (cleanup.deleteCounts.incidents || cleanup.replacedCounts.incidents || 0));
+  console.log("Old Kita collection documents to delete: " +
+    (cleanup.deleteCounts.kita || 0));
+  const financeCollections = ["kita", "donations", "ledger"];
+  const financeRecordsChanged = financeCollections.reduce(function (total, name) {
+    return total + (cleanup.deleteCounts[name] || 0) +
+      (cleanup.replacedCounts[name] || 0);
+  }, 0);
+  console.log("Existing cooperative-fund/earnings records replaced or deleted: " +
+    financeRecordsChanged);
+  console.log("Old incident records replaced or deleted: " +
+    (cleanup.deleteCounts.incidents || 0) +
+    (cleanup.replacedCounts.incidents || 0));
   console.log("Total old documents to delete: " + cleanup.deleteRefs.length);
   console.log("Total existing documents to replace with fresh records: " +
     Object.keys(cleanup.replacedCounts).reduce(function (total, key) {
