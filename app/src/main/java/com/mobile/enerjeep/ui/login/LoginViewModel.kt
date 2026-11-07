@@ -389,7 +389,9 @@ class LoginViewModel @Inject constructor(
                 // and migrated any legacy value on the trusted server.
 
                 val roleString =
-                    data["role"] as? String
+                    (data["role"] as? String)
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
                         ?: UserRole.Driver.name
 
                 val isDriver = roleString.equals(
@@ -402,7 +404,7 @@ class LoginViewModel @Inject constructor(
 
                 if (
                     !isDriver &&
-                    accountStatus.equals(
+                    accountStatus?.trim().equals(
                         "inactive",
                         ignoreCase = true
                     )
