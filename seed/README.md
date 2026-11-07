@@ -13,7 +13,7 @@ Ang mga lokasyon sa incident records ay pinili lamang mula sa mga stop at termin
 | Firestore collection | Mga record na ginagawa |
 |---|---|
 | users | Lahat ng kasalukuyang account profiles ay ginagamit bilang source; hindi binabago |
-| queue | Kasalukuyang pila para sa bawat active driver sa dalawang ruta, dispatch history sa loob ng labindalawang buwan, at cancelled entry |
+| queue | Kasalukuyang pila para sa bawat active driver sa dalawang ruta, dispatch history sa loob ng kasalukuyan at nakaraang dalawang buwan (3 calendar months), at cancelled entry |
 | ledger | Dispatch earnings para sa bawat driver, gross/net values at seat deductions, kasama ang hiwalay na bayad ng multa |
 | incidents | Mga bukas at naayos na incident reports, may driver, plaka, lokasyon, petsa, detalye at penalty |
 | donations | Mga natanggap na ambag at nagamit na pondo na may petsa, source at notes |
