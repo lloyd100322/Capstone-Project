@@ -536,6 +536,7 @@ class DriverViewModel @Inject constructor(
     fun clearWarning() {
         _uiState.value = _uiState.value.copy(
             activeIncidentTitle = null,
+            activeIncidentId = null,
             activeIncidentDate = null,
             activeIncidentLocation = null,
             activeIncidentPlate = null
