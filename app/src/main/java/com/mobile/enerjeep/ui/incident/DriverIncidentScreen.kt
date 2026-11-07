@@ -220,17 +220,36 @@ fun DriverIncidentCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isHighlighted) EnerjeepBlue.copy(alpha = 0.06f) else Color.White
+            containerColor = if (isHighlighted) EnerjeepBlue.copy(alpha = 0.14f) else Color.White
         ),
         border = if (isHighlighted) {
-            androidx.compose.foundation.BorderStroke(2.dp, EnerjeepBlue)
+            androidx.compose.foundation.BorderStroke(3.dp, EnerjeepBlue)
         } else {
             null
         },
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isHighlighted) 8.dp else 4.dp
+        )
     ) {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            if (isHighlighted) {
+                Surface(
+                    color = EnerjeepBlue,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text(
+                        text = "PINILING INSIDENTE",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.4.sp
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+            }
             IncidentCardHeader(
                 title = incident.title,
                 status = if (incident.isResolved) "Naayos" else "Di-naayos",
