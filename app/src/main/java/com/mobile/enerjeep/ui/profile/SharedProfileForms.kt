@@ -1,6 +1,5 @@
 package com.mobile.enerjeep.ui.profile
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -160,7 +159,6 @@ fun SharedEditProfileForm(
                         enabled = !isSubmitting,
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(24.dp),
-                        border = BorderStroke(1.dp, EnerjeepBlue.copy(alpha = 0.35f))
                     ) {
                         Text("Kanselahin", color = Color.Black)
                     }
