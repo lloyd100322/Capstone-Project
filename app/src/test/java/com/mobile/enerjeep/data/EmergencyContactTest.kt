@@ -41,6 +41,16 @@ class EmergencyContactTest {
     }
 
     @Test
+    fun nameSanitizerPreservesTrailingSpaceWhileTyping() {
+        assertEquals("Maria ", EmergencyContact.sanitizeName("Maria "))
+    }
+
+    @Test
+    fun nameSanitizerPreservesSpacesBetweenWords() {
+        assertEquals("Maria Clara", EmergencyContact.sanitizeName("Maria Clara"))
+    }
+
+    @Test
     fun validNameIsAccepted() {
         assertTrue(EmergencyContact.isValidName("Maria Santos"))
         assertTrue(EmergencyContact.isValidName("Maria D. Santos"))
