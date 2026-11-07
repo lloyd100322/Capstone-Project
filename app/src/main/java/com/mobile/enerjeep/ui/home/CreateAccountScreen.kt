@@ -1,6 +1,8 @@
 package com.mobile.enerjeep.ui.home
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveCardPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -115,7 +117,7 @@ fun CreateAccountScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp)
+                    modifier = Modifier.padding(responsiveCardPadding())
                 ) {
                     // Stack name inputs on compact phones; keep two columns on wider screens.
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -335,11 +337,11 @@ fun CreateAccountScreen(
                             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                         ) {
                             Column(
-                                modifier = Modifier.padding(16.dp)
+                                modifier = Modifier.padding(responsiveCardPadding())
                             ) {
                                 Text(
                                     "Detalye ng Driver",
-                                    fontSize = 16.sp,
+                                    fontSize = responsiveSectionTitleSize(),
                                     fontWeight = FontWeight.Bold
                                 )
 
