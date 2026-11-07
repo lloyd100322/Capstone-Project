@@ -1,124 +1,108 @@
-# EnerJeep — Operational Data Refresh
+# EnerJeep — Full Firestore Reset and Three-Month Dataset
 
-Ginagawa ng tool na ito ang kumpletong operational records na ginagamit ng EnerJeep. Ang mga pangalan, phone number, role, user ID, plaka at iba pang detalye ng account ay kinukuha mula sa kasalukuyang Firestore collection na users, kaya hindi kailangang gumawa ng panibagong login accounts.
+Ginagamit ng seeder ang mga kasalukuyang EnerJeep accounts bilang source ng pangalan, phone number, role, user ID at plate number. Hindi ito gumagawa ng bagong login accounts.
 
-Ang mga record na mabubuo ay lalabas sa app gamit ang normal na labels at format na ginagamit ng EnerJeep. Walang karagdagang label sa UI na nagsasabing espesyal na dataset ang record.
+**Mahalaga:** Synthetic presentation/test records ang bagong queue history, incident scenarios, ledger entries, donations at activity logs. Hindi ito aktuwal na cooperative transactions o bookkeeping evidence.
 
-Ang mga lokasyon sa incident records ay pinili lamang mula sa mga stop at terminal point na nakatala sa LTFRB route feed para sa [Heritage Homes - Monumento via NLEX](https://www.transit.land/explore/operators/o-wdw-ltfrb/routes/r-wdw5-heritagehomes~monumentovianlex). Kabilang dito ang NLEX Marilao, Meycauayan, Valenzuela, Caloocan, at Samson Road terminal sa Monumento-side corridor. May allowlist validation din ang generator upang hindi makapasok ang ibang lokasyon.
+## Ano ang pinananatili
 
-**Paalala:** Ang mga queue history, incident scenario, donation at financial entries na ginagawa ng tool ay synthetic presentation records. Hindi ito kapalit ng aktuwal na cooperative records at hindi dapat gamitin bilang tunay na bookkeeping o operational evidence.
+Hindi gagalawin ang mga sumusunod:
 
-## Ano ang napupunan
+- `users` — lahat ng kasalukuyang account profile at account fields
+- `userSecrets` — password hashes at salts
+- Firebase Authentication users — lahat ng kasalukuyang login identities
+- `driverPlateClaims` — unique plate ownership na nakatali sa accounts
+- `secureSessions` — kasalukuyang secure login sessions
 
-| Firestore collection | Mga record na ginagawa |
-|---|---|
-| users | Lahat ng kasalukuyang account profiles ay ginagamit bilang source; hindi binabago |
-| queue | Kasalukuyang pila para sa bawat active driver sa dalawang ruta, dispatch history sa loob ng kasalukuyan at nakaraang dalawang buwan (3 calendar months), at cancelled entry |
-| ledger | Dispatch earnings para sa bawat driver, gross/net values at seat deductions, kasama ang hiwalay na bayad ng multa |
-| incidents | Mga bukas at naayos na incident reports, may driver, plaka, lokasyon, petsa, detalye at penalty |
-| donations | Mga natanggap na ambag at nagamit na pondo na may petsa, source at notes |
-| settings | Default deduction tiers kung may kulang, queue rotation metadata at queue revision |
-| emergencyContacts | National emergency hotline at dispatcher/admin contact mula sa aktuwal na admin account |
-| activityLogs | Mga entry para sa dispatch, incident, settings at iba pang aktibidad |
-| users/{phone}/notifications | Unread incident at dispatch notifications para sa bawat active role |
+Hindi babaguhin ang account status, roles, admin stations, profile details, password credentials o Firebase Auth users.
 
-### Saklaw ng bawat account role
+**Tatanggalin ang lahat ng subcollections sa ilalim ng bawat `users/{account}` document**, kabilang ang lumang notifications. Mananatili ang parent account documents.
 
-**Driver**
-- May sariling active queue entry.
-- May sariling dispatch earnings history sa ledger.
-- Nakikita ang shared incident notices, parehong bukas at naayos.
-- May unread notifications at normal na profile details mula sa kasalukuyang account.
+## Ano ang lilinisin
 
-**Admin**
-- May laman ang dashboard statistics, pila, incident reports, fines, donations at income reports.
-- Naka-link sa sariling station kung mayroon nang adminStation ang account.
-- May notifications at activity trail.
+Sa `--apply`, recursively lilinisin ang lahat ng existing Firestore root collections maliban sa limang account/auth collections sa itaas. Kasama rito ang lahat ng lumang documents at nested subcollections sa:
 
-**Superadmin**
-- May dashboard at operational reports.
-- May deduction tiers at queue rotation settings.
-- May admin/dispatcher contacts at activity logs.
-- May unread notifications.
+- `queue` — kasalukuyang pila, cancelled entries at lahat ng lumang dispatch/history
+- `incidents` — lahat ng lumang incident reports at incident test records
+- `ledger` — lahat ng lumang dispatch earnings at fine/payment records
+- `kita` — lahat ng lumang Kita records
+- `donations` — lahat ng lumang cooperative fund entries
+- `emergencyContacts`, `activityLogs`, `notifications`
+- `settings` — lahat ng lumang settings at operations index
+- iba pang non-account collections na makita sa Firestore project, kahit hindi nakalista rito
 
-## Mahalagang proteksyon sa account
+Pagkatapos, gagawa ang seeder ng bagong operational dataset at bagong default settings. Ibig sabihin, mare-reset din ang dating deduction-tier at queue-rotation settings sa defaults ng seeder.
 
-Hindi binabago ng tool na ito ang mga sumusunod:
+Ang mga existing document IDs na kapareho ng bagong dataset ay papalitan ng bagong records. Lahat ng iba pang non-account documents ay buburahin. Kaya walang maiiwang lumang queue, Kita, incident, ledger, donation o dating test data.
 
-- users — lahat ng kasalukuyang account profile at detalye
-- userSecrets — lahat ng password hashes at salts
-- Firebase Authentication phone accounts
-- driverPlateClaims
-- FCM tokens at account status
-- Existing account roles at admin stations
+## Saklaw ng bagong records
 
-Hindi rin ito gumagawa ng bagong password at hindi nito nire-reset ang password ng kahit anong account. Gagamitin ng bagong operational records ang eksaktong user ID, pangalan, phone number at plate number na nasa kasalukuyang account documents.
+**Tatlong Manila calendar months lang:** kasalukuyang buwan at ang nakaraang dalawang buwan. Halimbawa, kung Nobyembre ang kasalukuyang buwan, September 1 hanggang sa kasalukuyang oras/petsa ng Nobyembre ang saklaw.
 
-Ang tool ay hindi gumagamit ng broad database wipe. Tinatanggal lamang nito ang:
-1. eksaktong operational document IDs na ginawa ng dating setup.js;
-2. eksaktong per-account incident notification IDs na ginawa ng dating incident trigger; at
-3. dokumentong IDs na naka-record sa internal settings/operationsIndex mula sa naunang takbo ng bagong version.
+Lahat ng generated timestamped records ay vine-validate bago mag-preview o magsulat. Hindi kasama sa three-month limit ang account profiles, password credentials, Firebase Auth identities, plate claims at secure sessions dahil pinananatili ang mga iyon.
 
-Ang ibang Firestore records na hindi pag-aari ng dataset refresh ay pinananatili.
-
-Kasama sa refresh ang fallback cleanup para sa lumang 12-buwang dispatch history na ginawa ng dating generator. Hinahanap nito ang eksaktong `queue_<userId>_history_MM_NN` document IDs at ang katumbas na `_dispatch` ledger entries at dispatch notifications. Buburahin ang mga iyon sa `--apply` bago isulat ang bagong tatlong-buwang dataset, kahit wala o kulang ang dating `settings/operationsIndex`. Hindi nito binubura ang ordinaryong UUID queue entries o ibang ledger records.
+Ang bagong dataset ay bumubuo ng:
+- current queue entries at three-month dispatch history
+- incident reports sa loob ng date window
+- dispatch earnings at paid-fine ledger entries
+- cooperative fund/donation entries
+- emergency contacts, activity logs at account notifications
+- bagong deduction tiers, queue rotation at queue revision settings
 
 ## Bago patakbuhin
 
-1. Siguraduhing may existing active account para sa superadmin, admin, at hindi bababa sa apat na driver.
-2. Siguraduhing ang bawat active driver ay may userId, first name, last name, phone number, plate number, license number, seater at emergency contact name/number. Kailangan ding may valid na adminStation (marilao o monumento) ang bawat admin account.
+1. Siguraduhing may active Superadmin, Admin at hindi bababa sa apat na active Driver accounts.
+2. Siguraduhing kumpleto ang required driver profile fields at valid ang bawat admin station.
 3. Kailangan ang Node.js at internet connection.
-4. Kumuha ng Firebase service-account key sa Firebase Console → Project settings → Service accounts → Generate new private key.
-5. Ilagay ang JSON key sa labas ng repository, halimbawa sa Downloads folder. Huwag itong i-commit o i-upload sa GitHub.
+4. Gumawa ng Firebase service-account key sa Firebase Console → Project settings → Service accounts.
+5. Itago ang JSON key sa labas ng repository. Huwag itong i-commit o i-upload sa GitHub.
 
-## Windows / PowerShell instructions
+## Windows / PowerShell
 
-Buksan ang PowerShell at pumunta sa seed folder ng local clone mo. Halimbawa:
+Pumunta sa `seed` folder ng local project:
 
 ~~~powershell
-cd C:\Users\Dave\AndroidStudioProjects\Capstone-Project5\seed
+cd C:\Users\Dave\AndroidStudioProjects\Capstone-Project3\seed
 npm install
 ~~~
 
-### 1. Preview muna — walang isusulat sa Firestore
+Palitan ang service-account path ayon sa aktuwal na lokasyon ng JSON key.
 
-Palitan ang file path sa command ng aktuwal na lokasyon ng service-account JSON file mo.
+### 1. Preview muna — walang mababago sa Firestore
 
 ~~~powershell
 node setup.js --serviceAccount "C:\Users\Dave\Downloads\serviceAccount.json" --project enerjeep-b8f3a
 ~~~
 
-Iche-check nito ang kasalukuyang accounts at ipapakita ang bilang ng records na lilinisin at gagawin. **Walang mababago sa Firestore sa preview mode.**
+Ipinapakita ng preview ang:
+- target Firebase project
+- bilang ng account profiles na pananatilihin
+- bagong three-month dataset na gagawin
+- bilang ng lumang Kita at incident records
+- bilang ng ibang non-account records na papalitan o buburahin
 
-Tiyaking ang target project ay enerjeep-b8f3a at tama ang bilang ng active Superadmin, Admin at Drivers.
+**Walang isinusulat o binubura ang preview.** Suriin ang project ID at lahat ng bilang. Gumawa muna ng Firestore backup/export bago mag-apply dahil lahat ng non-account data sa project ay lilinisin.
 
-### 2. I-apply ang bagong operational records
+### 2. I-apply ang clean reset
 
-Kapag tama ang preview, patakbuhin ang kaparehong command at idagdag ang --apply.
+Kapag tama ang preview at may backup ka na, patakbuhin ang kaparehong command at idagdag ang `--apply`:
 
 ~~~powershell
 node setup.js --serviceAccount "C:\Users\Dave\Downloads\serviceAccount.json" --project enerjeep-b8f3a --apply
 ~~~
 
-Gagamit ang script ng Firebase Admin SDK. Dahil dito, kailangan talagang tama ang project at service-account key bago mag-apply.
+Isinusulat muna ang bagong records; pagkatapos, buburahin ang lahat ng lumang non-account documents at gagawa ng bagong `settings/operationsIndex`. Hindi gagalawin ang account profiles at credentials.
 
 ### 3. Pagkatapos ng successful run
 
 1. Isara at buksan muli ang EnerJeep app.
-2. Mag-login gamit ang mga dati nang account credentials.
-3. Gamitin pa rin ang nakatakdang Firebase Phone Auth test numbers at OTP codes kung iyon ang kasalukuyang login setup.
-4. Tingnan ang Home, Pila, Insidente, Kita, Mga Ulat, Profile, Settings, Talaan at notification bell ayon sa role.
+2. Mag-login gamit ang dati nang account credentials.
+3. I-check ang Queue, Incidents, Kita/Cooperative Fund, Ledger, Reports at Notifications ayon sa role.
 
-Hindi kailangan ng Firebase Functions o Firestore Rules deployment para lamang maisulat ang records na ito. Ang script ay direktang sumusulat sa Firestore gamit ang Admin SDK.
+Hindi kailangan ng Firebase Functions o Firestore Rules deployment para lamang patakbuhin ang seeder. Direktang sumusulat ang Firebase Admin SDK sa Firestore.
 
-## Pag-uulit ng refresh
+## Importanteng paalala
 
-Puwedeng ulitin ang preview at apply. Gumagamit ang script ng stable document IDs at internal index para palitan ang sarili nitong dating records, hindi para magdagdag nang magdagdag ng duplicate entries.
-
-**Huwag magdagdag ng --wipe.** Wala nang broad wipe option ang bagong tool dahil kailangang manatiling ligtas ang kasalukuyang user accounts at credentials. Para tuluyang mawala sa app ang lumang generated history, kailangang patakbuhin ang bagong seeder gamit ang `--apply`; ang pag-update o pag-install lang ng APK ay hindi nagbabago ng existing Firestore documents.
-
-## Kapag may validation error
-
-Kung may account field na kulang o walang active account para sa isa sa mga role, ititigil ng script ang proseso bago magsulat. Ayusin muna ang kasalukuyang account sa app at patakbuhin muli ang preview.
-
-Kung may ibang operational records na ayaw mong palitan, huwag mong baguhin ang document IDs o ang settings/operationsIndex nang mano-mano.
+- Ang pag-install o pag-update ng APK ay hindi naglilinis ng Firestore. Kailangan ang preview at saka ang `--apply`.
+- Huwag i-share ang service-account JSON file o ang laman nito.
+- Kapag may validation error sa account records, hihinto ang script bago simulan ang writes. Ayusin muna ang account data at ulitin ang preview.
