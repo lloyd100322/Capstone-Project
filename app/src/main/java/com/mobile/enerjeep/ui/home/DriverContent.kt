@@ -1,6 +1,9 @@
 package com.mobile.enerjeep.ui.home
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +35,7 @@ import com.mobile.enerjeep.ui.theme.*
 import com.mobile.enerjeep.ui.theme.TextSecondary
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.ui.incident.DriverIncidentScreen
+import com.mobile.enerjeep.ui.incident.IncidentInfoRow
 import com.mobile.enerjeep.ui.kita.KitaScreen
 import com.mobile.enerjeep.ui.profile.DriverProfileScreen
 import android.media.RingtoneManager
@@ -55,12 +59,14 @@ fun DriverContent(
 ) {
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
     var showIncidentForm by remember { mutableStateOf(false) }
+    var pendingIncidentFocusId by remember { mutableStateOf<String?>(null) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Fase 7: dispatch alert (banner + bell + sound)
     val dispatchAlert by viewModel.dispatchAlert.collectAsStateWithLifecycle()
+    val isEndingTravel by viewModel.isEndingTravel.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     /*
@@ -208,15 +214,13 @@ fun DriverContent(
                         activeIncidentTitle = uiState.activeIncidentTitle,
                         activeIncidentDate = uiState.activeIncidentDate,
                         activeIncidentPlate = uiState.activeIncidentPlate,
+                        activeIncidentLocation = uiState.activeIncidentLocation,
                         openIncidentCount = uiState.openIncidentCount,
                         posisyonBukas = uiState.posisyonBukas,
-                        queueLeadName = uiState.queueLeadName,
-                        queueLeadPlate = uiState.queueLeadPlate,
-                        queueNextName = uiState.queueNextName,
-                        queueNextPlate = uiState.queueNextPlate,
                         isInQueue = uiState.activeQueueDocId.isNotBlank() &&
                                 !uiState.isCancelledInQueue,
                         travelEnded = uiState.travelEndedToday,
+                        isEndingTravel = isEndingTravel,
                         dailyEarnings = uiState.dailyEarnings,
                         dispatchAlert = dispatchAlert,
                         dispatchSecondsLeft = alertSecondsLeft,
@@ -228,11 +232,23 @@ fun DriverContent(
                         },
                         onEmergencyClick = {
                             showEmergencyDialog = true
+                        },
+                        onIncidentClick = {
+                            pendingIncidentFocusId = uiState.activeIncidentId
+                            selectedTab = DriverTab.Insidente
+                            showIncidentForm = false
                         }
                     )
                 }
                 DriverTab.Insidente -> {
-                    DriverIncidentScreen()
+                    DriverIncidentScreen(
+                        focusIncidentId = pendingIncidentFocusId,
+                        onFocusHandled = { handledId ->
+                            if (pendingIncidentFocusId == handledId) {
+                                pendingIncidentFocusId = null
+                            }
+                        }
+                    )
                 }
                 DriverTab.Kita -> {
                     KitaScreen()
@@ -268,20 +284,19 @@ fun DriverDashboardContent(
     activeIncidentTitle: String?,
     activeIncidentDate: String?,
     activeIncidentPlate: String?,
+    activeIncidentLocation: String? = null,
     openIncidentCount: Int,
     posisyonBukas: Int = 0,
-    queueLeadName: String = "",
-    queueLeadPlate: String = "",
-    queueNextName: String = "",
-    queueNextPlate: String = "",
     isInQueue: Boolean = false,
     travelEnded: Boolean = false,
+    isEndingTravel: Boolean = false,
     dailyEarnings: Double? = null,
     dispatchAlert: DriverDispatchAlert? = null,
     dispatchSecondsLeft: Int = 5,
     onDismissAlert: () -> Unit = {},
     onTaposNa: () -> Unit = {},
-    onEmergencyClick: () -> Unit = {}
+    onEmergencyClick: () -> Unit = {},
+    onIncidentClick: () -> Unit = {}
 ) {
     var showTaposConfirm by remember { mutableStateOf(false) }
 
@@ -312,7 +327,7 @@ fun DriverDashboardContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(responsivePageHorizontalPadding())
     ) {
         // Dashboard header with the notification bell beside the app title.
         Row(
@@ -341,7 +356,7 @@ fun DriverDashboardContent(
         // Greeting
         Text(
             text = "Musta, $firstName!",
-            fontSize = 28.sp,
+            fontSize = responsivePageTitleSize(),
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )
@@ -491,106 +506,12 @@ fun DriverDashboardContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        /*
-         * Fase 4B: sino ang #1 at sino ang kasunod sa pila ng ruta -
-         * para alam ng driver kung sino ang mauuna at sino ang sumusunod.
-         */
-        if (queueLeadName.isNotBlank() || queueLeadPlate.isNotBlank()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = if (route.isNotBlank()) {
-                            "Pila Ngayon ($route)"
-                        } else {
-                            "Pila Ngayon"
-                        },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = Color.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            color = EnerjeepBlue,
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(
-                                text = "#1",
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp,
-                                    vertical = 4.dp
-                                ),
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = listOf(
-                                queueLeadName,
-                                queueLeadPlate
-                            ).filter { it.isNotBlank() }
-                                .joinToString(" • "),
-                            fontSize = 14.sp,
-                            color = Color.Black,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (queueNextName.isNotBlank() ||
-                        queueNextPlate.isNotBlank()
-                    ) {
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = Color(0xFFECEFF3),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text(
-                                    text = "Kasunod",
-                                    modifier = Modifier.padding(
-                                        horizontal = 10.dp,
-                                        vertical = 4.dp
-                                    ),
-                                    color = Color(0xFF5A6472),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = listOf(
-                                    queueNextName,
-                                    queueNextPlate
-                                ).filter { it.isNotBlank() }
-                                    .joinToString(" • "),
-                                fontSize = 14.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Incident/Warning Card
+        // Incident/Warning Card - tap to open and focus the highlighted incident.
         if (openIncidentCount > 0) {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onIncidentClick),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -644,41 +565,22 @@ fun DriverDashboardContent(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = activeIncidentTitle ?: "Insidente",
+                                modifier = Modifier.fillMaxWidth(),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = Color.Black,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                                softWrap = true
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                // The incident can belong to another driver,
-                                // so the plate of the incident is shown.
-                                // The plate of the signed-in driver is used
-                                // when the record has no plate.
-                                text = "Plaka " + (activeIncidentPlate?.takeIf { it.isNotBlank() }
-                                    ?: plateNumber),
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                            Spacer(modifier = Modifier.height(8.dp))
+                            IncidentInfoRow(
+                                "Plaka ng Sasakyan",
+                                activeIncidentPlate?.takeIf { it.isNotBlank() } ?: plateNumber
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AccessTime,
-                                    contentDescription = null,
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = activeIncidentDate ?: "",
-                                    fontSize = 12.sp,
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            if (!activeIncidentLocation.isNullOrBlank()) {
+                                IncidentInfoRow("Lokasyon", activeIncidentLocation)
+                            }
+                            if (!activeIncidentDate.isNullOrBlank()) {
+                                IncidentInfoRow("Petsa", activeIncidentDate)
                             }
                         }
                     }
@@ -736,26 +638,41 @@ fun DriverDashboardContent(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                enabled = !doneToday,
+                enabled = !doneToday && !isEndingTravel,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = SuccessGreen,
                     disabledContainerColor = ErrorRed,
                     disabledContentColor = Color.White
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Tapos Na Bumyahe",
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isEndingTravel) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Pinoproseso...",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tapos Na Bumyahe",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             /*

@@ -1,6 +1,9 @@
 
 package com.mobile.enerjeep.ui.login
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveCardPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -135,7 +138,7 @@ fun LoginScreen(
                 .consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(24.dp),
+                .padding(responsivePageHorizontalPadding()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
@@ -175,7 +178,7 @@ fun LoginScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp)
+                    modifier = Modifier.padding(responsiveCardPadding())
                 ) {
 
                     Text(
@@ -184,7 +187,7 @@ fun LoginScreen(
                         } else {
                             "Mag-sign In"
                         },
-                        fontSize = 20.sp,
+                        fontSize = responsiveSectionTitleSize(),
                         fontWeight = FontWeight.Bold,
                         color = Color.Black
                     )
@@ -410,18 +413,27 @@ fun LoginScreen(
                                         !isBusy,
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text(
-                                text = if (
-                                    uiState is LoginUiState.ResendingOtp
-                                ) {
-                                    "Nagpapadala..."
-                                } else {
-                                    "Ipadala"
-                                },
-                                maxLines = 1,
-                                color = EnerjeepBlue,
-                                fontSize = 14.sp
-                            )
+                            if (uiState is LoginUiState.ResendingOtp) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = EnerjeepBlue
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Nagpapadala...",
+                                    maxLines = 1,
+                                    color = EnerjeepBlue,
+                                    fontSize = 14.sp
+                                )
+                            } else {
+                                Text(
+                                    "Ipadala",
+                                    maxLines = 1,
+                                    color = EnerjeepBlue,
+                                    fontSize = 14.sp
+                                )
+                            }
                         }
 
                         if (resendCooldownSeconds > 0) {

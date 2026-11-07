@@ -35,7 +35,8 @@ data class AccountItem(
     val phone: String,
     val dateCreated: String,
     val isActive: Boolean,
-    val plateNumber: String = ""
+    val plateNumber: String = "",
+    val createdAtMillis: Long = 0L
 )
 
 data class AccountManagementUiState(
@@ -162,14 +163,17 @@ class AccountManagementViewModel @Inject constructor(
                             }
                             ?: "-",
 
+                        createdAtMillis = readDate(document, "createdAt")?.time ?: 0L,
+
                         isActive = isActive,
 
                         plateNumber = document
                             .getString("plateNumber")
                             .orEmpty()
                     )
-                }.sortedBy {
-                    it.name.lowercase(Locale.ROOT)
+                }.sortedByDescending {
+                    // Newest account first; missing timestamps naturally fall to the bottom.
+                    it.createdAtMillis
                 }
 
                 val current = _uiState.value

@@ -1,10 +1,14 @@
 package com.mobile.enerjeep.ui.incident
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,6 +33,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
@@ -46,7 +51,11 @@ import com.mobile.enerjeep.ui.components.ToastFeedback
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
+fun DriverIncidentScreen(
+    focusIncidentId: String? = null,
+    onFocusHandled: (String) -> Unit = {},
+    viewModel: DriverIncidentViewModel = hiltViewModel()
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
@@ -57,8 +66,28 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         historyFilter,
         { it.createdAtMillis.takeIf { millis -> millis > 0 } }
     ) else uiState.filteredIncidents
+    var highlightedIncidentId by remember { mutableStateOf<String?>(null) }
+    var pendingBringIntoViewId by remember { mutableStateOf<String?>(null) }
 
-    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).imePadding().padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
+    LaunchedEffect(focusIncidentId, uiState.allIncidents, uiState.isLoading, uiState.errorMessage) {
+        val requestedId = focusIncidentId ?: return@LaunchedEffect
+        val target = uiState.allIncidents.firstOrNull { it.id == requestedId }
+        if (target != null) {
+            viewModel.onSearchQueryChanged("")
+            viewModel.onTabSelected(
+                if (target.isResolved) IncidentTabType.NAAYOS
+                else IncidentTabType.DI_NAAYOS
+            )
+            historyFilter = HistoryFilterState()
+            highlightedIncidentId = target.id
+            pendingBringIntoViewId = target.id
+            onFocusHandled(requestedId)
+        } else if (!uiState.isLoading && uiState.errorMessage == null) {
+            onFocusHandled(requestedId)
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).imePadding().padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep App Logo", modifier = Modifier.size(60.dp))
@@ -66,7 +95,7 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             Text("Enerjeep", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
         Spacer(Modifier.height(32.dp))
-        Text("Insidente", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text("Insidente", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(Modifier.height(24.dp))
         Row(Modifier.fillMaxWidth()) {
             IncidentSummaryCard(Modifier.weight(1f), uiState.openCount, "Di-naayos", WarningOrange, WarningOrange) { Icon(Icons.Default.Warning, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(24.dp)) }
@@ -74,11 +103,10 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
             IncidentSummaryCard(Modifier.weight(1f), uiState.resolvedCount, "Naayos", SuccessGreen, SuccessGreen) { Icon(Icons.Outlined.CheckCircleOutline, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(24.dp)) }
         }
         Spacer(Modifier.height(24.dp))
-        OutlinedTextField(
-            value = uiState.searchQuery, onValueChange = viewModel::onSearchQueryChanged, modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon", color = TextSecondary, fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) }, shape = RoundedCornerShape(24.dp), singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, unfocusedBorderColor = FieldBorderColor, focusedBorderColor = EnerjeepBlue)
+        SearchField(
+            value = uiState.searchQuery,
+            onValueChange = viewModel::onSearchQueryChanged,
+            placeholder = "Hanapin: uri / plaka / lugar"
         )
         Spacer(Modifier.height(16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -115,8 +143,24 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 visibleIncidents.forEach { incident ->
+                    val bringIntoViewRequester = remember(incident.id) {
+                        BringIntoViewRequester()
+                    }
+                    LaunchedEffect(pendingBringIntoViewId, incident.id) {
+                        if (pendingBringIntoViewId == incident.id) {
+                            kotlinx.coroutines.delay(150)
+                            bringIntoViewRequester.bringIntoView()
+                            if (pendingBringIntoViewId == incident.id) {
+                                pendingBringIntoViewId = null
+                            }
+                        }
+                    }
                     DriverIncidentCard(
+                        modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+                        isHighlighted = incident.id == highlightedIncidentId,
                         incident = incident,
+                        isLookingUpDriverPhone =
+                            incident.id in uiState.lookingUpDriverPhoneIds,
                         onCallDriver = {
                             viewModel.lookupIncidentDriverPhone(incident.id) { phone ->
                                 val number = phone ?: uiState.officePhone
@@ -168,44 +212,76 @@ fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boo
 @Composable
 fun DriverIncidentCard(
     incident: DriverIncident,
-    onCallDriver: () -> Unit
+    isLookingUpDriverPhone: Boolean = false,
+    onCallDriver: () -> Unit,
+    modifier: Modifier = Modifier,
+    isHighlighted: Boolean = false
 ) {
-    // Contact details are resolved only when the user taps the call action.
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-        Column(Modifier.padding(20.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column(Modifier.weight(1f)) {
-                    Text(incident.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
-                    Spacer(Modifier.height(2.dp)); Text(incident.plateNumber, fontSize = 14.sp, color = TextSecondary)
-                    if (incident.location.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(incident.location, fontSize = 14.sp, color = TextSecondary)
-                        }
-                    }
-                    Spacer(Modifier.height(2.dp)); Text(incident.description, fontSize = 14.sp, color = TextSecondary)
-                    Spacer(Modifier.height(6.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)); Text(incident.date, fontSize = 12.sp, color = TextSecondary) }
-                }
-                Surface(color = if (incident.isResolved) SuccessGreen.copy(alpha = .1f) else WarningOrangeLight, shape = RoundedCornerShape(8.dp)) {
-                    Text(if (incident.isResolved) "Naayos" else "Di-naayos", Modifier.padding(horizontal = 12.dp, vertical = 6.dp), color = if (incident.isResolved) SuccessGreen else WarningOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isHighlighted) EnerjeepBlue.copy(alpha = 0.14f) else Color.White
+        ),
+        border = if (isHighlighted) {
+            androidx.compose.foundation.BorderStroke(3.dp, EnerjeepBlue)
+        } else {
+            null
+        },
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isHighlighted) 8.dp else 4.dp
+        )
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            IncidentCardHeader(
+                title = incident.title,
+                status = if (incident.isResolved) "Naayos" else "Di-naayos",
+                isResolved = incident.isResolved
+            )
+            Spacer(Modifier.height(12.dp))
+            IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+            if (incident.location.isNotBlank()) IncidentInfoRow("Lokasyon", incident.location)
+            if (incident.date.isNotBlank()) IncidentInfoRow("Petsa", incident.date)
+            if (incident.multiya > 0.0) {
+                IncidentInfoRow(
+                    "Multa",
+                    String.format(java.util.Locale.getDefault(), "₱%,.2f", incident.multiya)
+                )
             }
+            if (incident.description.isNotBlank()) {
+                IncidentInfoRow("Paglalarawan", incident.description)
+            }
+
             Spacer(Modifier.height(16.dp))
-            /*
-             * Tawag: naka-DIAL (hindi auto-call) para makita muna
-             * ang numero bago tumawag.
-             */
             OutlinedButton(
                 onClick = onCallDriver,
+                enabled = !isLookingUpDriverPhone,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
             ) {
-                Icon(Icons.Default.Call, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                if (isLookingUpDriverPhone) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = SuccessGreen
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Call,
+                        contentDescription = null,
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
                 Spacer(Modifier.width(8.dp))
-                Text("Tawagan", color = SuccessGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    if (isLookingUpDriverPhone) "Kinukuha ang numero..." else "Tawagan",
+                    color = SuccessGreen,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
             }
         }
     }

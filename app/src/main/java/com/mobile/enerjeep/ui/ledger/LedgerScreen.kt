@@ -28,6 +28,8 @@ import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
 import com.mobile.enerjeep.ui.theme.SuccessGreen
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.theme.responsiveCardPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 
 
 fun formatCurrency(amount: Double): String = "₱${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
@@ -58,10 +60,10 @@ fun TerminalFeeFormContent(
     val feeTypes = listOf("Multa")
     var selectedFeeType by remember { mutableStateOf(feeTypes.first()) }
 
-    Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp).padding(bottom = 32.dp)) {
+    Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(responsiveCardPadding()).padding(bottom = 32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onCancel) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Text("I-record ang Bayad ng Multa", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("I-record ang Bayad ng Multa", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(24.dp))
         Text("Plaka", fontWeight = FontWeight.Medium)
@@ -106,7 +108,29 @@ fun TerminalFeeFormContent(
             OutlinedButton(onClick = onCancel, enabled = !isSubmitting, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin", color = Color.Black) }
             Spacer(Modifier.width(16.dp))
             val finalAmount = amount.toDoubleOrNull() ?: 0.0
-            Button(onClick = { selectedDriver?.let { if (finalAmount > 0.0) onSubmit(it, finalAmount, selectedFeeType) } }, enabled = !isSubmitting && selectedDriver != null && finalAmount > 0.0, modifier = Modifier.weight(1f).height(56.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text(if (isSubmitting) "Sine-save..." else "Ipasa") }
+            Button(
+                onClick = {
+                    selectedDriver?.let {
+                        if (finalAmount > 0.0 && !isSubmitting) {
+                            onSubmit(it, finalAmount, selectedFeeType)
+                        }
+                    }
+                },
+                enabled = !isSubmitting && selectedDriver != null && finalAmount > 0.0,
+                modifier = Modifier.weight(1f).height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ipasa")
+                }
+            }
         }
     }
 }

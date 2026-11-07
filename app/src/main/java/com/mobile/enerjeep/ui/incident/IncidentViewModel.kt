@@ -324,8 +324,14 @@ class IncidentViewModel @Inject constructor(
     /**
      * Sends a previously saved (but not sent) incident to the drivers.
      */
-    fun sendIncidentToDriver(incidentId: String) {
+    fun sendIncidentToDriver(
+        incidentId: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        if (incidentId in _sendingIncidentIds.value) return
+        _sendingIncidentIds.value = _sendingIncidentIds.value + incidentId
         viewModelScope.launch {
+            var succeeded = false
             try {
                 firestore
                     .collection(FirestoreCollections.INCIDENTS)
@@ -345,6 +351,7 @@ class IncidentViewModel @Inject constructor(
                     incidentId
                 )
 
+                succeeded = true
                 ToastFeedback.show(
                     "Naipadala na sa mga driver ang insidente."
                 )
@@ -352,12 +359,23 @@ class IncidentViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi maipadala ang insidente."
                 )
+            } finally {
+                _sendingIncidentIds.value = _sendingIncidentIds.value - incidentId
+                onComplete(succeeded)
             }
         }
     }
 
-    // In-flight flag for reportIncident (double-tap protection).
+    // In-flight state lets the report form show progress and prevent duplicate submissions.
     private var reportingIncident = false
+    private val _isReporting = MutableStateFlow(false)
+    val isReporting = _isReporting.asStateFlow()
+
+    private val _resolvingIncidentIds = MutableStateFlow<Set<String>>(emptySet())
+    val resolvingIncidentIds = _resolvingIncidentIds.asStateFlow()
+
+    private val _sendingIncidentIds = MutableStateFlow<Set<String>>(emptySet())
+    val sendingIncidentIds = _sendingIncidentIds.asStateFlow()
 
     fun reportIncident(
         plateNumber: String,
@@ -365,7 +383,8 @@ class IncidentViewModel @Inject constructor(
         location: String,
         penalty: String,
         description: String,
-        sendToDriver: Boolean = true
+        sendToDriver: Boolean = true,
+        onComplete: (Boolean) -> Unit = {}
     ) {
 
         val profile =
@@ -388,9 +407,10 @@ class IncidentViewModel @Inject constructor(
         // In-flight guard: a double tap must not record the incident twice.
         if (reportingIncident) return
         reportingIncident = true
+        _isReporting.value = true
 
         viewModelScope.launch {
-
+            var succeeded = false
             try {
 
                 val driverDocument =
@@ -467,7 +487,8 @@ class IncidentViewModel @Inject constructor(
                         "description" to
                                 description.trim(),
 
-                        "sentToDriver" to sendToDriver,
+                        // All newly reported incidents are immediately visible to drivers.
+                        "sentToDriver" to true,
 
                         "isResolved" to false,
 
@@ -499,8 +520,9 @@ class IncidentViewModel @Inject constructor(
                     "${plateNumber.trim()} • $type • $location"
                 )
 
+                succeeded = true
                 ToastFeedback.show(
-                    "Naitala ang insidente para sa ${plateNumber.trim()}."
+                    "Naipadala ang insidente sa mga driver para sa ${plateNumber.trim()}."
                 )
 
             } catch (e: Exception) {
@@ -511,16 +533,21 @@ class IncidentViewModel @Inject constructor(
                 )
             } finally {
                 reportingIncident = false
+                _isReporting.value = false
+                onComplete(succeeded)
             }
         }
     }
 
     fun resolveIncident(
-        incidentId: String
+        incidentId: String,
+        onComplete: (Boolean) -> Unit = {}
     ) {
+        if (incidentId in _resolvingIncidentIds.value) return
+        _resolvingIncidentIds.value = _resolvingIncidentIds.value + incidentId
 
         viewModelScope.launch {
-
+            var succeeded = false
             try {
 
                 firestore
@@ -547,6 +574,7 @@ class IncidentViewModel @Inject constructor(
                     incidentId
                 )
 
+                succeeded = true
                 ToastFeedback.show(
                     "Naayos na ang insidente. Nasa Kasaysayan na ito."
                 )
@@ -557,6 +585,9 @@ class IncidentViewModel @Inject constructor(
                     e.message
                         ?: "Hindi ma-resolve ang insidente"
                 )
+            } finally {
+                _resolvingIncidentIds.value = _resolvingIncidentIds.value - incidentId
+                onComplete(succeeded)
             }
         }
     }

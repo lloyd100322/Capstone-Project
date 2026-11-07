@@ -29,11 +29,14 @@ data class EmergencyContactItem(
 data class ActivityLogItem(
     val id: String = "",
     val actorName: String = "",
+    val driverName: String = "",
+    val plateNumber: String = "",
     val actorRole: String = "",
     val action: String = "",
     val detail: String = "",
     val time: String = "",
-    val createdAtMillis: Long = 0L
+    val createdAtMillis: Long = 0L,
+    val dispatchSequence: Long = 0L
 )
 
 data class DeductionTier(
@@ -66,12 +69,18 @@ class SuperadminViewModel @Inject constructor(
 
     private val _emergencyContactsError = MutableStateFlow<String?>(null)
     val emergencyContactsError = _emergencyContactsError.asStateFlow()
+    private val _emergencyContactsLoading = MutableStateFlow(true)
+    val emergencyContactsLoading = _emergencyContactsLoading.asStateFlow()
 
     private val _activityLogsError = MutableStateFlow<String?>(null)
     val activityLogsError = _activityLogsError.asStateFlow()
+    private val _activityLogsLoading = MutableStateFlow(true)
+    val activityLogsLoading = _activityLogsLoading.asStateFlow()
 
     private val _adminAccountsError = MutableStateFlow<String?>(null)
     val adminAccountsError = _adminAccountsError.asStateFlow()
+    private val _adminAccountsLoading = MutableStateFlow(true)
+    val adminAccountsLoading = _adminAccountsLoading.asStateFlow()
 
     private val _tiers = MutableStateFlow(
         listOf(
@@ -91,6 +100,14 @@ class SuperadminViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
+    private val _isSavingSettings = MutableStateFlow(false)
+    val isSavingSettings = _isSavingSettings.asStateFlow()
+    private val _isAddingEmergencyContact = MutableStateFlow(false)
+    val isAddingEmergencyContact = _isAddingEmergencyContact.asStateFlow()
+
+    private val _removingEmergencyContactIds = MutableStateFlow<Set<String>>(emptySet())
+    val removingEmergencyContactIds = _removingEmergencyContactIds.asStateFlow()
+
     private val listeners = mutableListOf<ListenerRegistration>()
 
     init {
@@ -103,6 +120,9 @@ class SuperadminViewModel @Inject constructor(
         _emergencyContactsError.value = null
         _activityLogsError.value = null
         _adminAccountsError.value = null
+        _emergencyContactsLoading.value = true
+        _activityLogsLoading.value = true
+        _adminAccountsLoading.value = true
         startListeners()
     }
 
@@ -116,10 +136,15 @@ class SuperadminViewModel @Inject constructor(
                 if (error != null) {
                     _emergencyContactsError.value =
                         "Hindi ma-load ang emergency contacts. Suriin ang internet at subukang muli."
+                    _emergencyContactsLoading.value = false
                     return@addSnapshotListener
                 }
                 _emergencyContactsError.value = null
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot == null) {
+                    _emergencyContactsLoading.value = false
+                    return@addSnapshotListener
+                }
+                _emergencyContactsLoading.value = false
                 _emergencyContacts.value = snapshot
                     ?.documents
                     ?.map { document ->
@@ -143,10 +168,15 @@ class SuperadminViewModel @Inject constructor(
                 if (error != null) {
                     _activityLogsError.value =
                         "Hindi ma-load ang talaan ng aktibidad. Suriin ang internet at subukang muli."
+                    _activityLogsLoading.value = false
                     return@addSnapshotListener
                 }
                 _activityLogsError.value = null
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot == null) {
+                    _activityLogsLoading.value = false
+                    return@addSnapshotListener
+                }
+                _activityLogsLoading.value = false
                 _activityLogs.value = snapshot
                     .documents
                     ?.map { document ->
@@ -155,6 +185,10 @@ class SuperadminViewModel @Inject constructor(
                             id = document.id,
                             actorName = document
                                 .getString("actorName").orEmpty(),
+                            driverName = document
+                                .getString("driverName").orEmpty(),
+                            plateNumber = document
+                                .getString("plateNumber").orEmpty(),
                             actorRole = document
                                 .getString("actorRole").orEmpty(),
                             action = document
@@ -168,10 +202,17 @@ class SuperadminViewModel @Inject constructor(
                                 ).format(it)
                             }.orEmpty(),
                             createdAtMillis =
-                                timestamp?.toDate()?.time ?: 0L
+                                timestamp?.toDate()?.time ?: 0L,
+                            dispatchSequence =
+                                document.getLong("dispatchSequence") ?: 0L
                         )
                     }
                     .orEmpty()
+                    .sortedWith(
+                        compareByDescending<ActivityLogItem> { it.createdAtMillis }
+                            .thenByDescending { it.dispatchSequence }
+                            .thenByDescending { it.id }
+                    )
             }
 
         // Admin accounts - the superadmin adds them to the emergency list.
@@ -182,10 +223,15 @@ class SuperadminViewModel @Inject constructor(
                 if (error != null) {
                     _adminAccountsError.value =
                         "Hindi ma-load ang admin accounts. Suriin ang internet at subukang muli."
+                    _adminAccountsLoading.value = false
                     return@addSnapshotListener
                 }
                 _adminAccountsError.value = null
-                if (snapshot == null) return@addSnapshotListener
+                if (snapshot == null) {
+                    _adminAccountsLoading.value = false
+                    return@addSnapshotListener
+                }
+                _adminAccountsLoading.value = false
                 _adminAccounts.value = snapshot
                     .documents
                     ?.map { document ->
@@ -255,6 +301,9 @@ class SuperadminViewModel @Inject constructor(
             return
         }
 
+        if (_isAddingEmergencyContact.value) return
+        _isAddingEmergencyContact.value = true
+
         viewModelScope.launch {
             try {
                 val reference = firestore
@@ -283,11 +332,17 @@ class SuperadminViewModel @Inject constructor(
             } catch (e: Exception) {
                 _message.value =
                     e.message ?: "Hindi maidagdag ang kontak."
+            } finally {
+                _isAddingEmergencyContact.value = false
             }
         }
     }
 
     fun removeEmergencyContact(item: EmergencyContactItem) {
+        if (item.id in _removingEmergencyContactIds.value) return
+        _removingEmergencyContactIds.value =
+            _removingEmergencyContactIds.value + item.id
+
         viewModelScope.launch {
             try {
                 firestore
@@ -306,6 +361,9 @@ class SuperadminViewModel @Inject constructor(
             } catch (e: Exception) {
                 _message.value =
                     e.message ?: "Hindi maalis ang kontak."
+            } finally {
+                _removingEmergencyContactIds.value =
+                    _removingEmergencyContactIds.value - item.id
             }
         }
     }
@@ -335,6 +393,8 @@ class SuperadminViewModel @Inject constructor(
     }
 
     fun saveSettings() {
+        if (_isSavingSettings.value) return
+
         val tierMap = mutableMapOf<String, Any>()
         _tiers.value.forEach { tier ->
             val seater = tier.seater.trim().toIntOrNull()
@@ -350,43 +410,46 @@ class SuperadminViewModel @Inject constructor(
             return
         }
         _cutoffHour.value = cutoff.toString()
+        _isSavingSettings.value = true
 
         viewModelScope.launch {
             try {
-                firestore
-                    .collection(FirestoreCollections.SETTINGS)
-                    .document("deductionTiers")
-                    .set(tierMap)
-                    .await()
-
-                firestore
-                    .collection(FirestoreCollections.SETTINGS)
-                    .document("queueRotation")
-                    .set(
-                        mapOf(
-                            "cutoffHour" to cutoff,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        ),
-                        SetOptions.merge()
-                    )
-                    .await()
+                // Save the deduction tiers and reset hour together. This avoids
+                // reporting success when only one part of the settings changed.
+                val batch = firestore.batch()
+                batch.set(
+                    firestore.collection(FirestoreCollections.SETTINGS)
+                        .document("deductionTiers"),
+                    tierMap
+                )
+                batch.set(
+                    firestore.collection(FirestoreCollections.SETTINGS)
+                        .document("queueRotation"),
+                    mapOf(
+                        "cutoffHour" to cutoff,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                batch.commit().await()
 
                 ActivityLogger.log(
                     firestore, userSession,
                     "Settings",
                     "Oras ng reset: " +
-                            com.mobile.enerjeep.ui.queue.QueueViewModel
-                                .formatCutoffHour(cutoff) +
-                            " | Bawas kada upuan: " +
-                            tierMap.entries.joinToString(", ") {
-                                "${it.key}=${it.value}"
-                            }
+                        com.mobile.enerjeep.ui.queue.QueueViewModel
+                            .formatCutoffHour(cutoff) +
+                        " | Bawas kada upuan: " +
+                        tierMap.entries.joinToString(", ") {
+                            "${it.key}=${it.value}"
+                        }
                 )
 
                 _message.value = "Na-save ang settings."
             } catch (e: Exception) {
-                _message.value =
-                    e.message ?: "Hindi ma-save ang settings."
+                _message.value = e.message ?: "Hindi ma-save ang settings."
+            } finally {
+                _isSavingSettings.value = false
             }
         }
     }

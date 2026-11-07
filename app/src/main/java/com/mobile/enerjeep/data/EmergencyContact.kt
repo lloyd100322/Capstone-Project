@@ -38,7 +38,9 @@ object EmergencyContact {
             builder.append(character)
         }
 
-        return builder.toString().trim()
+        // Do not trim while typing: a trailing space is needed to enter
+        // the next word (e.g. "Maria Clara"). The save paths trim the final value.
+        return builder.toString()
     }
 
     /**

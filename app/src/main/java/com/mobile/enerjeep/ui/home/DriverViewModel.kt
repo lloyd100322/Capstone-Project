@@ -47,7 +47,9 @@ data class DriverDashboardUiState(
     val totalInQueue: Int = 0,
     val queueStatus: String = "",
     val activeIncidentTitle: String? = null,
+    val activeIncidentId: String? = null,
     val activeIncidentDate: String? = null,
+    val activeIncidentLocation: String? = null,
     // The plate of the jeepney the incident belongs to. It can be the
     // plate of another driver, because the dashboard shows the incidents
     // of the whole cooperative.
@@ -56,11 +58,6 @@ data class DriverDashboardUiState(
     val openIncidentCount: Int = 0,
     // Fase 4B: posisyon BUKAS (rotation: #1 -> hulihan, iba -> bawas 1).
     val posisyonBukas: Int = 0,
-    // Sino ang #1 at sino ang kasunod sa pila ng ruta ng driver.
-    val queueLeadName: String = "",
-    val queueLeadPlate: String = "",
-    val queueNextName: String = "",
-    val queueNextPlate: String = "",
     // The doc id of the driver's own active queue entry ("Tapos Na").
     val activeQueueDocId: String = "",
     val isCancelledInQueue: Boolean = false,
@@ -178,9 +175,6 @@ class DriverViewModel @Inject constructor(
                     QueueViewModel.sameRoute(it.getString("route"), ownRoute)
         }.sortedBy { it.getLong("position") ?: Int.MAX_VALUE.toLong() }
 
-        val lead = routeFront.getOrNull(0)
-        val next = routeFront.getOrNull(1)
-
         // Display a continuous rank from the live route list. The temporary
         // client fallback cannot rewrite the other drivers' stored positions.
         val position = routeFront.indexOfFirst { it.id == own?.id }
@@ -189,17 +183,33 @@ class DriverViewModel @Inject constructor(
             ?: 0
         val total = routeFront.size
 
-        /*
-         * Posisyon BUKAS: sa rotation ng cut-off, ang #1 ngayon ay
-         * mapupunta sa hulihan at ang lahat ay uusad ng isa. Kaya kung
-         * #1 ka ngayon -> hulihan ka bukas; kung hindi -> bawas 1.
-         */
-        val bukas = when {
-            own == null || own.getBoolean("isCancelled") == true -> 0
-            total <= 1 -> 1
-            position == 1 -> total
-            position > 1 -> position - 1
-            else -> 0
+        // The earliest retained queue record is the fallback for older
+        // drivers whose queue entries predate the accountCreatedAt field.
+        val accountCreatedAtByDriver = documents
+            .filter { !it.getString("driverId").isNullOrBlank() }
+            .groupBy { it.getString("driverId").orEmpty() }
+            .mapValues { (_, entries) ->
+                entries.mapNotNull { entry ->
+                    entry.safeTimestamp("accountCreatedAt")?.toDate()?.time
+                        ?: entry.safeTimestamp("createdAt")?.toDate()?.time
+                }.minOrNull()
+            }
+
+        // Forecast the next-day position from the permanent roster order.
+        val fixedRosterOrder = routeFront.sortedWith(
+            compareBy<DocumentSnapshot> { entry ->
+                entry.safeTimestamp("accountCreatedAt")?.toDate()?.time
+                    ?: accountCreatedAtByDriver[entry.getString("driverId").orEmpty()]
+                    ?: entry.safeTimestamp("createdAt")?.toDate()?.time
+                    ?: Long.MAX_VALUE
+            }.thenBy { it.getString("driverId").orEmpty() }.thenBy { it.id }
+        )
+        val bukas = if (own == null || own.getBoolean("isCancelled") == true) {
+            0
+        } else {
+            fixedRosterOrder.indexOfFirst { it.id == own.id }
+                .takeIf { it >= 0 }
+                ?.plus(1) ?: 0
         }
 
         _uiState.value = _uiState.value.copy(
@@ -208,10 +218,6 @@ class DriverViewModel @Inject constructor(
             queueStatus = own?.getString("status").orEmpty(),
             route = ownRoute,
             posisyonBukas = bukas,
-            queueLeadName = lead?.getString("driverName").orEmpty(),
-            queueLeadPlate = lead?.getString("plateNumber").orEmpty(),
-            queueNextName = next?.getString("driverName").orEmpty(),
-            queueNextPlate = next?.getString("plateNumber").orEmpty(),
             activeQueueDocId = own?.id.orEmpty(),
             isCancelledInQueue = own?.getBoolean("isCancelled") == true
         )
@@ -304,6 +310,8 @@ class DriverViewModel @Inject constructor(
      * Kasaysayan) at ang nasa likod niya ay uusad.
      */
     private var endingTravel = false
+    private val _isEndingTravel = MutableStateFlow(false)
+    val isEndingTravel = _isEndingTravel.asStateFlow()
 
     /**
      * Uses the trusted server operation so ownership, queue re-numbering,
@@ -319,6 +327,7 @@ class DriverViewModel @Inject constructor(
         if (endingTravel) return
 
         endingTravel = true
+        _isEndingTravel.value = true
         viewModelScope.launch {
             try {
                 FirebaseFunctions.getInstance("us-central1")
@@ -344,6 +353,7 @@ class DriverViewModel @Inject constructor(
                 ToastFeedback.show(e.message ?: "Hindi matapos ang biyahe.")
             } finally {
                 endingTravel = false
+                _isEndingTravel.value = false
             }
         }
     }
@@ -508,7 +518,9 @@ class DriverViewModel @Inject constructor(
 
         _uiState.value = _uiState.value.copy(
             activeIncidentTitle = incident?.getString("title"),
+            activeIncidentId = incident?.id,
             activeIncidentDate = incident?.getString("date"),
+            activeIncidentLocation = incident?.getString("location"),
             activeIncidentPlate = incident?.getString("plateNumber"),
             openIncidentCount = openIncidents.size
         )
@@ -524,7 +536,9 @@ class DriverViewModel @Inject constructor(
     fun clearWarning() {
         _uiState.value = _uiState.value.copy(
             activeIncidentTitle = null,
+            activeIncidentId = null,
             activeIncidentDate = null,
+            activeIncidentLocation = null,
             activeIncidentPlate = null
         )
     }

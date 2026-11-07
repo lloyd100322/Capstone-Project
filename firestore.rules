@@ -250,8 +250,13 @@ service cloud.firestore {
       allow create: if canManageQueueRoute(request.resource.data.route)
         && request.resource.data.keys().hasOnly([
           'id', 'driverId', 'plateNumber', 'driverName', 'route',
-          'position', 'status', 'time', 'createdAt', 'updatedAt'
+          'position', 'status', 'time', 'createdAt', 'updatedAt',
+          'accountCreatedAt'
         ])
+        && (
+          !request.resource.data.keys().hasAny(['accountCreatedAt'])
+          || request.resource.data.accountCreatedAt is timestamp
+        )
         && request.resource.data.driverId is string
         && request.resource.data.driverId.size() > 0
         && request.resource.data.status == 'Nakapila'

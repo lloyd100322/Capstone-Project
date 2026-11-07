@@ -84,7 +84,7 @@ class ContentViewModel @Inject constructor(
                     val result = QueueRotation.rotateOnce(firestore)
                     if (result.rotated) {
                         ToastFeedback.show(
-                            "Na-reset na ang pila: ang dating #1 ay nasa huli na."
+                            "Inikot ang pila: ang dating #1 ay nasa hulihan na at ang dating #2 ang bagong #1."
                         )
                     }
                     result.cutoffHour
@@ -136,7 +136,7 @@ class ContentViewModel @Inject constructor(
 
                 if (doc.exists()) {
                     val data = doc.data
-                    val roleString = data?.get("role") as? String ?: UserRole.Driver.name
+                    val roleString = (data?.get("role") as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: UserRole.Driver.name
                     val matchedRole = UserRole.entries.find { 
                         it.name.lowercase() == roleString.lowercase() 
                     } ?: UserRole.Driver

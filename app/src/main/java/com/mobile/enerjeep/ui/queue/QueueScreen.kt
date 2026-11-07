@@ -1,5 +1,8 @@
 package com.mobile.enerjeep.ui.queue
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -38,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
@@ -55,6 +60,9 @@ fun QueueScreen(
     // Collect Business State from ViewModel safely
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cutoffHourLabel by viewModel.cutoffLabel.collectAsStateWithLifecycle()
+    val isResettingQueue by viewModel.isResettingQueue.collectAsStateWithLifecycle()
+    val busyActions by viewModel.busyActions.collectAsStateWithLifecycle()
+    val queueActionInProgress = busyActions.isNotEmpty()
 
     // Ephemeral UI State (stays in the composable)
     var searchQuery by remember { mutableStateOf("") }
@@ -93,7 +101,7 @@ fun QueueScreen(
     // Instead of just a boolean, hold the actual vehicle being dispatched so the modal knows what to show
     var vehicleToDispatch by remember { mutableStateOf<QueueVehicle?>(null) }
 
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
         containerColor = LightGrayBackground
@@ -104,7 +112,7 @@ fun QueueScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(24.dp)
+                .padding(responsivePageHorizontalPadding())
         ) {
             // Header
             Row(
@@ -122,25 +130,14 @@ fun QueueScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(text = "Pila ng Dispatch", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Text(text = "Pila ng Dispatch", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold, color = Color.Black)
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Search Bar
-            OutlinedTextField(
+            SearchField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Hanapin ayon sa plaka", color = TextSecondary) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = FieldBorderColor,
-                    focusedBorderColor = EnerjeepBlue,
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White
-                )
+                placeholder = "Hanapin ang plaka"
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -166,6 +163,24 @@ fun QueueScreen(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        if (isResettingQueue) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = EnerjeepBlue
+                                )
+                                Text(
+                                    "Nagre-reset ang pila...",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -241,37 +256,33 @@ fun QueueScreen(
                             text = "Kasaysayan",
                             isSelected = selectedTab == 2,
                             onClick = { selectedTab = 2 },
-                            fontSize = 10.sp
+                            fontSize = 13.sp
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    /*
-                     * Zoom: PINCH gestures na lang ang gamit (walang
-                     * button). Pinch IN = maliit na box (zoom out),
-                     * pinch OUT = normal na laki.
-                     */
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (canManageSelectedRoute) {
-                                "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon."
-                            } else {
-                                "Pinch para mag-zoom."
-                            },
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
+                    if (selectedTab != 2) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (canManageSelectedRoute) {
+                                    "Pinch para mag-zoom • Pindutin nang matagal ang kahon para ilipat ang posisyon."
+                                } else {
+                                    "Pinch para mag-zoom."
+                                },
+                                fontSize = 12.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
 
                     // Dynamic Lists (filtered by the search bar: plaka o driver)
                     val searchMatches = { plate: String, driver: String ->
@@ -386,7 +397,8 @@ fun QueueScreen(
                                                 if (canManageSelectedRoute &&
                                                     compactView &&
                                                     searchQuery.isBlank() &&
-                                                    !vehicle.isCancelled
+                                                    !vehicle.isCancelled &&
+                                                    !queueActionInProgress
                                                 ) {
                                                     Modifier.pointerInput(vehicle.id) {
                                                         detectDragGesturesAfterLongPress(
@@ -408,7 +420,7 @@ fun QueueScreen(
                                                                 if (steps != 0) {
                                                                     viewModel.updateVehiclePosition(
                                                                         vehicle.id,
-                                                                        vehicle.position + steps
+                                                                        steps
                                                                     )
                                                                 }
                                                                 dragIndex = null
@@ -432,12 +444,17 @@ fun QueueScreen(
                                             canReorder = canManageSelectedRoute && searchQuery.isBlank(),
                                             canDispatch = canManageSelectedRoute && vehicle.id == frontOfLineId,
                                             canManage = canManageSelectedRoute,
+                                            isCancelling = "cancel:${vehicle.id}" in busyActions,
+                                            isRestoring = "restore:${vehicle.id}" in busyActions,
+                                            isMovingUp = "position-up:${vehicle.id}" in busyActions,
+                                            isMovingDown = "position-down:${vehicle.id}" in busyActions,
+                                            isAnyQueueActionRunning = queueActionInProgress,
                                             onDispatchClick = {
                                                 if (canManageSelectedRoute) vehicleToDispatch = vehicle
                                             },
-                                            onPositionUpdate = { newPosition ->
+                                            onMoveBy = { positionDelta ->
                                                 if (canManageSelectedRoute) {
-                                                    viewModel.updateVehiclePosition(vehicle.id, newPosition)
+                                                    viewModel.updateVehiclePosition(vehicle.id, positionDelta)
                                                 }
                                             },
                                             onCancelClick = {
@@ -501,10 +518,17 @@ fun QueueScreen(
                 suggestedDeduction = {
                     viewModel.suggestedDeduction(vehicleToDispatch!!.driverId)
                 },
+                isSubmitting = "dispatch:${vehicleToDispatch!!.id}" in busyActions,
                 onCancel = { vehicleToDispatch = null },
                 onDispatch = { income, otherFees ->
-                    viewModel.dispatchVehicle(vehicleToDispatch!!.id, income, otherFees)
-                    vehicleToDispatch = null
+                    val selectedVehicleId = vehicleToDispatch!!.id
+                    viewModel.dispatchVehicle(
+                        selectedVehicleId,
+                        income,
+                        otherFees
+                    ) { succeeded ->
+                        if (succeeded) vehicleToDispatch = null
+                    }
                 }
             )
         }
@@ -570,8 +594,13 @@ fun QueueItem(
     canReorder: Boolean = true,
     canDispatch: Boolean = true,
     canManage: Boolean = true,
+    isCancelling: Boolean = false,
+    isRestoring: Boolean = false,
+    isMovingUp: Boolean = false,
+    isMovingDown: Boolean = false,
+    isAnyQueueActionRunning: Boolean = false,
     onDispatchClick: () -> Unit,
-    onPositionUpdate: (Int) -> Unit,
+    onMoveBy: (Int) -> Unit,
     onCancelClick: () -> Unit,
     onRestoreClick: () -> Unit = {}
 ) {
@@ -579,22 +608,44 @@ fun QueueItem(
 
     if (showCancelConfirm) {
         AlertDialog(
-            onDismissRequest = { showCancelConfirm = false },
+            onDismissRequest = { if (!isCancelling) showCancelConfirm = false },
             title = { Text("Kanselahin ang pila?") },
-            text = { Text("Mananatili sa pila ang ${vehicle.plateNumber} bilang \"Nakansela\" at ilalagay sa pinakadulo. Maaari pa itong i-dispatch mamaya.") },
+            text = {
+                Text(
+                    "Mananatili sa pila ang ${vehicle.plateNumber} bilang \"Nakansela\" at ilalagay sa pinakadulo. Maaari pa itong i-dispatch mamaya."
+                )
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    showCancelConfirm = false
-                    onCancelClick()
-                }) { Text("Oo", color = ErrorRed, maxLines = 1) }
+                TextButton(
+                    onClick = {
+                        if (!isCancelling) {
+                            showCancelConfirm = false
+                            onCancelClick()
+                        }
+                    },
+                    enabled = !isCancelling
+                ) {
+                    if (isCancelling) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Oo", color = ErrorRed, maxLines = 1)
+                    }
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showCancelConfirm = false }) { Text("Hindi") }
+                TextButton(
+                    onClick = { showCancelConfirm = false },
+                    enabled = !isCancelling
+                ) {
+                    Text("Hindi")
+                }
             }
         )
     }
 
-    // Resolve UI colors based on ViewModel status string
     val (statusBg, statusColor) = when {
         vehicle.isCancelled -> Pair(ErrorRedLight, ErrorRed)
         vehicle.status.lowercase() == "nakapila" -> Pair(WarningOrangeLight, WarningOrange)
@@ -607,8 +658,13 @@ fun QueueItem(
         shape = RoundedCornerShape(24.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(if (compact) 12.dp else 20.dp)) {
-            Row(verticalAlignment = Alignment.Top) {
+        Column(
+            modifier = Modifier.padding(if (compact) 12.dp else 20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Surface(
                     modifier = Modifier.size(if (compact) 32.dp else 40.dp),
                     shape = RoundedCornerShape(12.dp),
@@ -623,67 +679,83 @@ fun QueueItem(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        WorldIcon(modifier = Modifier.size(16.dp), color = Color.Black)
+                        WorldIcon(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.Black
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = vehicle.plateNumber,
+                            modifier = Modifier.weight(1f),
                             fontWeight = FontWeight.Bold,
-                            fontSize = if (compact) 13.sp else 16.sp
+                            fontSize = if (compact) 13.sp else 16.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.weight(1f))
-                        StatusBadge(
-                            text = if (vehicle.isCancelled) "Nakansela" else vehicle.status,
-                            backgroundColor = statusBg,
-                            textColor = statusColor
-                        )
+                        if (!vehicle.isCancelled) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            StatusBadge(
+                                text = vehicle.status,
+                                backgroundColor = statusBg,
+                                textColor = statusColor
+                            )
+                        }
                     }
+
                     Text(
                         text = vehicle.driverName,
                         fontSize = if (compact) 12.sp else 14.sp,
-                        color = TextSecondary
+                        color = TextSecondary,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis
                     )
+
                     if (!compact) {
-                        Text(text = vehicle.route, fontSize = 12.sp, color = TextSecondary)
+                        Text(
+                            text = vehicle.route,
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
 
-                    /*
-                     * Posisyon = the big NUMBER badge on the left only.
-                     * The old "Posisyon" button / tap-to-edit is gone;
-                     * reordering is done with the big up/down arrows.
-                     */
-                    Text(
-                        text = "Sumali: ${vehicle.time}",
-                        fontSize = if (compact) 11.sp else 12.sp,
-                        color = TextSecondary
+                    QueueJoinedTime(
+                        time = vehicle.time,
+                        fontSize = if (compact) 11.sp else 12.sp
                     )
                 }
 
-                /*
-                 * Upper-right corner: an X button for "Kanselahin" (with
-                 * the confirm dialog), or "Ibalik sa Pila" for cancelled
-                 * rows. No more text button in the middle of the row.
-                 */
-                if (canManage) {
-                    if (vehicle.isCancelled) {
-                        TextButton(
-                            onClick = onRestoreClick,
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(
-                                text = "Ibalik",
-                                fontSize = 11.sp,
-                                color = SuccessGreen,
-                                maxLines = 1
+                // The cancelled label stays in the upper-right corner.
+                // Restore is a proper outlined action at the lower-left.
+                if (vehicle.isCancelled) {
+                    StatusBadge(
+                        text = "Nakansela",
+                        backgroundColor = statusBg,
+                        textColor = statusColor
+                    )
+                } else if (canManage) {
+                    IconButton(
+                        onClick = { showCancelConfirm = true },
+                        enabled = !isCancelling && !isAnyQueueActionRunning,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        if (isCancelling) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = ErrorRed
                             )
-                        }
-                    } else {
-                        IconButton(
-                            onClick = { showCancelConfirm = true },
-                            modifier = Modifier.size(36.dp)
-                        ) {
+                        } else {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Kanselahin",
@@ -700,6 +772,7 @@ fun QueueItem(
             if (canDispatch) {
                 Button(
                     onClick = onDispatchClick,
+                    enabled = !isAnyQueueActionRunning,
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
                     shape = RoundedCornerShape(16.dp)
@@ -711,43 +784,45 @@ fun QueueItem(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            /*
-             * The ONLY position control: two BIG up/down arrows. The old
-             * "Posisyon" button + number field + Set/Bawi are gone.
-             * Kept visible at every zoom level as an accessible alternative
-             * to long-press dragging. Hidden while searching and for cancelled
-             * rows (they wait at the end anyway).
-             */
             if (canReorder && !vehicle.isCancelled) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            if (displayPosition > 1) {
-                                onPositionUpdate(displayPosition - 1)
-                            }
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(if (compact) 48.dp else 56.dp)
-                            .semantics {
-                                contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
+                    // Walang up arrow kapag nasa #1 na.
+                    if (displayPosition > 1) {
+                        OutlinedButton(
+                            onClick = {
+                                if (!isAnyQueueActionRunning) onMoveBy(-1)
                             },
-                        enabled = displayPosition > 1,
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        ArrowUpIcon(
-                            modifier = Modifier.size(28.dp),
-                            color = EnerjeepBlue
-                        )
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(if (compact) 48.dp else 56.dp)
+                                .semantics {
+                                    contentDescription = "Itaas si ${vehicle.plateNumber} sa pila"
+                                },
+                            enabled = !isAnyQueueActionRunning,
+                            shape = RoundedCornerShape(16.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            if (isMovingUp) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                ArrowUpIcon(
+                                    modifier = Modifier.size(28.dp),
+                                    color = EnerjeepBlue
+                                )
+                            }
+                        }
                     }
+
                     OutlinedButton(
                         onClick = {
-                            onPositionUpdate(displayPosition + 1)
+                            if (!isAnyQueueActionRunning) onMoveBy(1)
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -755,16 +830,116 @@ fun QueueItem(
                             .semantics {
                                 contentDescription = "Ibaba si ${vehicle.plateNumber} sa pila"
                             },
+                        enabled = !isAnyQueueActionRunning,
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor),
                         contentPadding = PaddingValues(0.dp)
                     ) {
-                        ArrowDownIcon(
-                            modifier = Modifier.size(28.dp),
-                            color = EnerjeepBlue
-                        )
+                        if (isMovingDown) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            ArrowDownIcon(
+                                modifier = Modifier.size(28.dp),
+                                color = EnerjeepBlue
+                            )
+                        }
                     }
                 }
+            }
+
+            if (canManage && vehicle.isCancelled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    OutlinedButton(
+                        onClick = onRestoreClick,
+                        enabled = !isRestoring && !isAnyQueueActionRunning,
+                        modifier = Modifier.height(40.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                    ) {
+                        if (isRestoring) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = SuccessGreen
+                            )
+                        } else {
+                            Text("Ibalik", fontSize = 12.sp, color = SuccessGreen)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueueJoinedTime(
+    time: String,
+    fontSize: androidx.compose.ui.unit.TextUnit
+) {
+    val parts = time.split(" • ", limit = 2)
+    val datePart = parts.firstOrNull().orEmpty()
+    val clockPart = parts.getOrNull(1).orEmpty()
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        if (clockPart.isBlank()) {
+            Text(
+                text = "Sumali: $datePart",
+                fontSize = fontSize,
+                color = TextSecondary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else if (maxWidth < 240.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "Sumali: $datePart",
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = clockPart,
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Sumali: $datePart",
+                    modifier = Modifier.weight(1f),
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = clockPart,
+                    fontSize = fontSize,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
             }
         }
     }
@@ -814,7 +989,10 @@ fun StatusBadge(text: String, backgroundColor: Color, textColor: Color) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = textColor
+            color = textColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -843,7 +1021,8 @@ fun DispatchCollectionContent(
     driverName: String,
     suggestedDeduction: suspend () -> Double = { 0.0 },
     onCancel: () -> Unit,
-    onDispatch: (Double, Double) -> Unit
+    onDispatch: (Double, Double) -> Unit,
+    isSubmitting: Boolean = false
 ) {
     var income by remember { mutableStateOf("") }
     var otherFees by remember { mutableStateOf("") }
@@ -869,7 +1048,7 @@ fun DispatchCollectionContent(
 
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Koleksyon sa Dispatch", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Koleksyon sa Dispatch", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
             IconButton(onClick = onCancel) { Icon(Icons.Default.Close, contentDescription = "Close") }
         }
 
@@ -920,11 +1099,29 @@ fun DispatchCollectionContent(
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FieldBorderColor)) { Text("Kanselahin", color = Color.Black) }
             Spacer(modifier = Modifier.width(16.dp))
             Button(
-                onClick = { onDispatch(income.toDoubleOrNull() ?: 0.0, otherFees.toDoubleOrNull() ?: 0.0) },
+                onClick = {
+                    if (!isSubmitting) {
+                        onDispatch(
+                            income.toDoubleOrNull() ?: 0.0,
+                            otherFees.toDoubleOrNull() ?: 0.0
+                        )
+                    }
+                },
+                enabled = !isSubmitting,
                 modifier = Modifier.weight(1f).height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
                 shape = RoundedCornerShape(16.dp)
-            ) { Text("I-dispatch") }
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("I-dispatch")
+                }
+            }
         }
     }
 }

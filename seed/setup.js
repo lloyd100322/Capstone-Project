@@ -2,15 +2,14 @@
 /**
  * EnerJeep operational dataset refresh.
  *
- * Builds realistic queue, incident, earnings, fine, donation, notification,
- * emergency-contact and audit records using the existing Firestore accounts.
+ * Builds synthetic presentation/test records using the existing Firestore accounts.
  *
  * Safety:
- * - Never creates, deletes, or rewrites users, userSecrets, Firebase Auth users,
- *   driverPlateClaims, or account profile fields.
- * - Replaces only documents recorded in settings/operationsIndex plus the
- *   exact document IDs written by the previous setup.js version.
- * - Dry-run is the default. Pass --apply to write changes.
+ * - Preserves users account profiles, userSecrets, Firebase Auth users,
+ *   driverPlateClaims, and secureSessions.
+ * - Cleans every other Firestore root collection recursively, including all
+ *   subcollections beneath users/{account}, then writes a fresh three-month dataset.
+ * - Dry-run is the default. Pass --apply to replace/delete non-account data.
  * - Keep service-account credentials outside this repository.
  */
 
@@ -85,9 +84,25 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const TIME_ZONE = "Asia/Manila";
+const DATA_WINDOW_MONTHS = 3;
 const INDEX_REF = db.collection("settings").doc("operationsIndex");
 const ROUTE_AM = "Marilao – Monumento";
 const ROUTE_MA = "Monumento – Marilao";
+
+// Verified corridor locations from the LTFRB route feed for
+// "Heritage Homes - Monumento via NLEX". Keep incident locations within
+// these listed stops/terminal points; do not substitute nearby off-route roads.
+const NLEX_ROUTE_LOCATIONS = Object.freeze({
+  marilaoNlex: "North Luzon Expressway, Marilao, Bulacan",
+  meycauayanCamalig: "Maycauayan Camalig, City of Meycauayan, Bulacan",
+  malhacanNlex: "Malhacan Road / North Luzon Expressway Intersection, City of Meycauayan, Bulacan",
+  valenzuelaMindanao: "North Luzon Expressway / Mindanao Avenue, Valenzuela City",
+  valenzuelaArty: "North Luzon Expressway near Arty Subdivision, Valenzuela City",
+  caloocanNlexComplex: "North Luzon Expressway near NLEX Complex, Caloocan City",
+  caloocanEdsa: "North Luzon Expressway / Epifanio de los Santos Avenue Intersection, Caloocan City",
+  caloocan8thStreet: "Epifanio de los Santos Avenue / 8th Street Intersection, Caloocan City",
+  monumentoSideTerminal: "Lapu-Lapu / Samson Road Intersection, Malabon City",
+});
 
 // --------------------------------------------------------------------- dates
 function manilaParts(date) {
@@ -118,6 +133,25 @@ function daysAgo(days, hour, minute) {
     0,
     0
   ));
+}
+
+function recentDate(daysBack, hour, minute) {
+  const current = manilaParts(new Date());
+  const safeDaysBack = Math.min(
+    Math.max(0, Math.trunc(daysBack)),
+    Math.max(0, current.day - 1)
+  );
+  let safeHour = hour;
+  let safeMinute = minute;
+
+  if (safeDaysBack === 0 &&
+      (safeHour > current.hour ||
+       (safeHour === current.hour && safeMinute > current.minute))) {
+    safeHour = current.hour;
+    safeMinute = current.minute;
+  }
+
+  return daysAgo(safeDaysBack, safeHour, safeMinute);
 }
 
 function monthDate(monthsAgo, day, hour, minute) {
@@ -180,6 +214,15 @@ function fullName(account) {
     .trim();
 }
 
+/**
+ * Account document IDs are also Firebase Auth phone identities.
+ * Keep only valid Philippine mobile numbers in E.164 form; never fabricate
+ * replacement numbers in the operational seeder.
+ */
+function isPhilippineE164MobileNumber(value) {
+  return /^\+63[89]\d{9}$/.test(String(value || "").trim());
+}
+
 function accountRoleLabel(role) {
   if (role === "superadmin") return "Superadmin";
   if (role === "admin") return "Admin";
@@ -199,103 +242,6 @@ function amountForSeat(seater, tiers) {
   const configured = Number(tiers[key]);
   if (Number.isFinite(configured) && configured >= 0) return configured;
   return seater > 0 ? seater * 2 : 0;
-}
-
-function legacyTag(number) {
-  return (0xa100 + number).toString(16);
-}
-
-// --------------------------------------------------------------------- old dataset IDs
-// Only the exact operational document IDs from the previous setup.js are
-// removed. Account and password documents are deliberately excluded.
-function previousSetupDocumentIds() {
-  const ids = {
-    queue: [],
-    incidents: [],
-    ledger: [],
-    donations: [],
-    emergencyContacts: [],
-    activityLogs: [],
-    notifications: [],
-  };
-
-  const oldDriverIds = [];
-  for (let i = 3; i <= 35; i++) {
-    oldDriverIds.push("USR-" + String(i).padStart(4, "0"));
-  }
-
-  // Previous active queue entries on Marilao – Monumento.
-  for (let i = 0; i <= 16; i++) {
-    ids.queue.push(
-      "queue_" + oldDriverIds[i] + "_" + legacyTag(i)
-    );
-  }
-
-  // Previous active queue entries on Monumento – Marilao (except #1,
-  // which was the returning queue entry written after a dispatch).
-  for (let i = 1; i <= 15; i++) {
-    ids.queue.push(
-      "queue_" + oldDriverIds[17 + i] + "_" + legacyTag(100 + i)
-    );
-  }
-
-  const oldRogerDispatch =
-    "queue_" + oldDriverIds[0] + "_" + legacyTag(201);
-  const oldJessDispatch =
-    "queue_" + oldDriverIds[1] + "_" + legacyTag(202);
-  const oldJimmyDispatch =
-    "queue_" + oldDriverIds[17] + "_" + legacyTag(203);
-
-  ids.queue.push(oldRogerDispatch);
-  ids.queue.push(oldJessDispatch);
-  ids.queue.push(oldJimmyDispatch);
-  ids.queue.push(
-    "queue_" + oldDriverIds[0] + "_after_" + oldRogerDispatch
-  );
-  ids.queue.push(
-    "queue_" + oldDriverIds[17] + "_after_" + oldJimmyDispatch
-  );
-  ids.queue.push(
-    "queue_" + oldDriverIds[1] + "_" + legacyTag(204)
-  );
-
-  [301, 302, 303, 304].forEach(function (n) {
-    ids.incidents.push("incident_" + legacyTag(n));
-  });
-
-  [oldRogerDispatch, oldJessDispatch, oldJimmyDispatch].forEach(function (id) {
-    ids.ledger.push(id + "_dispatch");
-  });
-  [801, 802].forEach(function (n) {
-    ids.ledger.push("fee_" + legacyTag(n));
-  });
-
-  for (let i = 0; i < 5; i++) {
-    ids.donations.push("donation_" + legacyTag(501 + i));
-  }
-  for (let i = 0; i < 4; i++) {
-    ids.emergencyContacts.push("contact_" + legacyTag(601 + i));
-  }
-  for (let i = 0; i < 5; i++) {
-    ids.activityLogs.push("log_" + legacyTag(701 + i));
-  }
-
-  // The previous incident trigger generated one per-account document
-  // using "incident_" + incidentId. Remove only those exact old IDs.
-  const oldIncidentIds = ids.incidents.map(function (id) {
-    return "incident_" + id;
-  });
-  for (let i = 1; i <= 35; i++) {
-    const phone = "+639171" + String(i).padStart(6, "0");
-    oldIncidentIds.forEach(function (notificationId) {
-      ids.notifications.push({
-        phone: phone,
-        id: notificationId,
-      });
-    });
-  }
-
-  return ids;
 }
 
 // --------------------------------------------------------------------- read accounts
@@ -326,6 +272,23 @@ async function loadExistingAccounts() {
   const recognized = accounts.filter(function (account) {
     return isMemberRole(account.role);
   });
+
+  // Cloud Functions resolve /users/{phone} against Firebase Auth by the
+  // exact E.164 phone number. Replacing it with a random-looking number would
+  // disconnect the account from its Auth identity and could collide with a
+  // real subscriber. Validate, then preserve the existing account identity.
+  const invalidAuthPhoneAccounts = recognized.filter(function (account) {
+    return !isPhilippineE164MobileNumber(account.docId);
+  });
+  if (invalidAuthPhoneAccounts.length > 0) {
+    throw new Error(
+      "May account document ID na hindi valid Philippine mobile E.164 format. " +
+      "Hindi papalitan ng seed ang account phone identities. Gamitin ang " +
+      "existing verified Firebase Auth number (+63...), o mag-set up muna " +
+      "ng dedicated Firebase fictional test numbers at hiwalay na migration. " +
+      "Walang account o operational data ang binago."
+    );
+  }
   const activeMembers = recognized.filter(function (account) {
     return account.status !== "inactive";
   });
@@ -415,22 +378,12 @@ async function loadExistingAccounts() {
 
 // --------------------------------------------------------------------- settings
 async function loadSettings(drivers) {
-  const refs = {
-    tiers: db.collection("settings").doc("deductionTiers"),
-    rotation: db.collection("settings").doc("queueRotation"),
-    queueControl: db.collection("settings").doc("queueControl"),
+  // Reset all non-account settings with the operational dataset refresh.
+  // These are the system defaults, not values copied from the old test data.
+  const tiers = {
+    "16": 32,
+    "22": 44,
   };
-
-  const snapshots = await Promise.all([
-    refs.tiers.get(),
-    refs.rotation.get(),
-    refs.queueControl.get(),
-  ]);
-
-  const tiersData = snapshots[0].exists ? (snapshots[0].data() || {}) : {};
-  const tiers = Object.assign({}, tiersData);
-  if (!Number.isFinite(Number(tiers["16"]))) tiers["16"] = 32;
-  if (!Number.isFinite(Number(tiers["22"]))) tiers["22"] = 44;
 
   drivers.forEach(function (driver) {
     if (driver.seater > 0 && !Number.isFinite(Number(tiers[String(driver.seater)]))) {
@@ -438,26 +391,63 @@ async function loadSettings(drivers) {
     }
   });
 
-  const storedCutoff = snapshots[1].exists
-    ? Number(snapshots[1].get("cutoffHour"))
-    : 21;
-  const cutoffHour = Number.isInteger(storedCutoff) &&
-    storedCutoff >= 0 && storedCutoff <= 23
-    ? storedCutoff
-    : 21;
-
-  const previousRevision = snapshots[2].exists
-    ? Number(snapshots[2].get("revision") || 0)
-    : 0;
-
   return {
     tiers: tiers,
-    cutoffHour: cutoffHour,
-    nextQueueRevision: previousRevision + 1,
+    cutoffHour: 21,
+    nextQueueRevision: 1,
   };
 }
 
 // --------------------------------------------------------------------- dataset generation
+function validateDatasetWindow(dataset, asOf) {
+  const local = manilaParts(asOf);
+  // Start of the first day of the current plus previous two Manila calendar months.
+  const windowStart = new Date(Date.UTC(
+    local.year,
+    local.month - DATA_WINDOW_MONTHS,
+    1,
+    -8,
+    0,
+    0,
+    0
+  ));
+  const records = [];
+
+  Object.keys(dataset.collections).forEach(function (collection) {
+    dataset.collections[collection].forEach(function (item) {
+      records.push({
+        collection: collection,
+        id: item.id,
+        createdAt: item.data.createdAt,
+      });
+    });
+  });
+  dataset.notifications.forEach(function (item) {
+    records.push({
+      collection: "users/{phone}/notifications",
+      id: item.id,
+      createdAt: item.data.createdAt,
+    });
+  });
+
+  const outsideWindow = records.filter(function (record) {
+    const createdAt = record.createdAt &&
+      typeof record.createdAt.toDate === "function"
+      ? record.createdAt.toDate()
+      : null;
+    return !createdAt || createdAt < windowStart || createdAt > asOf;
+  });
+  if (outsideWindow.length > 0) {
+    throw new Error(
+      "May generated record na wala sa " + DATA_WINDOW_MONTHS +
+      "-month data window: " +
+      outsideWindow.slice(0, 5).map(function (record) {
+        return record.collection + "/" + record.id;
+      }).join(", ")
+    );
+  }
+}
+
 function buildDataset(accounts, settings) {
   const drivers = accounts.activeDrivers;
   const admins = accounts.admins;
@@ -502,7 +492,7 @@ function buildDataset(accounts, settings) {
     const station = index % 2 === 0 ? "marilao" : "monumento";
     const route = station === "marilao" ? ROUTE_AM : ROUTE_MA;
     routePositions[station] += 1;
-    const joinedAt = daysAgo(0, 5, Math.min(55, index));
+    const joinedAt = recentDate(0, 5, Math.min(55, index));
     const id = "queue_" + safeId(driver.userId) + "_daily";
     add("queue", id, {
       id: id,
@@ -518,16 +508,20 @@ function buildDataset(accounts, settings) {
     });
   });
 
-  // Dispatch and earnings history spread over the last twelve calendar months.
+  // Dispatch and earnings history stay within the current and previous two calendar months.
   // Every active driver receives at least one matching queue + ledger record.
   const eventCount = Math.max(drivers.length, 36);
   const dispatchEvents = [];
   for (let i = 0; i < eventCount; i++) {
     const driver = drivers[i % drivers.length];
-    const monthOffset = i % 12;
+    const monthOffset = i % DATA_WINDOW_MONTHS;
     const cycle = Math.floor(i / 6);
     const dispatchAt = monthOffset === 0
-      ? daysAgo(0, 6 + ((cycle * 2) % 11), (10 + cycle * 7) % 60)
+      ? recentDate(
+          cycle % 6,
+          6 + ((cycle * 2) % 11),
+          (10 + cycle * 7) % 60
+        )
       : monthDate(monthOffset, [5, 13, 22][cycle % 3], 7 + (cycle % 8), (cycle * 11) % 60);
 
     const joinedAt = addMinutes(dispatchAt, -35);
@@ -601,7 +595,7 @@ function buildDataset(accounts, settings) {
 
   // A cancelled entry remains in history, not among the active queue rows.
   const cancelledDriver = drivers[1];
-  const cancelledAt = daysAgo(0, 5, 45);
+  const cancelledAt = recentDate(0, 5, 45);
   const cancelledId = "queue_" + safeId(cancelledDriver.userId) + "_cancelled";
   add("queue", cancelledId, {
     id: cancelledId,
@@ -612,56 +606,69 @@ function buildDataset(accounts, settings) {
     position: 0,
     status: "cancelled",
     isCancelled: true,
-    time: timeLabel(daysAgo(0, 5, 15)),
-    createdAt: timestamp(daysAgo(0, 5, 15)),
+    time: timeLabel(recentDate(0, 5, 15)),
+    createdAt: timestamp(recentDate(0, 5, 15)),
     cancelledAt: timestamp(cancelledAt),
     updatedAt: timestamp(cancelledAt),
   });
 
-  // Incident records: open and resolved items with dates, locations and penalties.
+  // Incident records use actual stops/terminal points on the NLEX corridor.
   const incidentTemplates = [
     {
       title: "Flat tire sa likurang gulong",
-      location: "MacArthur Highway, Marilao, Bulacan",
-      description: "Nabutas ang likurang gulong habang bumibiyahe. Naiparada nang ligtas ang sasakyan at napalitan ang gulong.",
+      location: NLEX_ROUTE_LOCATIONS.marilaoNlex,
+      description: "Nabutas ang likurang gulong habang bumibiyahe sa NLEX. Naipatawag ang roadside assistance at naipasuri ang gulong bago ipinagpatuloy ang biyahe.",
       daysBack: 0, hour: 7, minute: 20, penalty: 0, resolved: false,
     },
     {
       title: "Pag-init ng makina",
-      location: "Lias Road, Marilao, Bulacan",
-      description: "Uminit ang makina habang mabigat ang daloy ng trapiko. Pansamantalang huminto ang driver at sinuri ang cooling system.",
+      location: NLEX_ROUTE_LOCATIONS.malhacanNlex,
+      description: "Tumaas ang temperatura ng makina malapit sa Malhacan Road interchange. Itinigil muna ang biyahe sa ligtas na lugar at sinuri ang cooling system.",
       daysBack: 0, hour: 9, minute: 10, penalty: 0, resolved: false,
     },
     {
-      title: "Minor collision sa gilid ng kalsada",
-      location: "Monumento Circle, Caloocan City",
-      description: "Nagkaroon ng gasgas sa harapang bahagi habang pumapasok sa pila. Walang naiulat na nasaktan at na-inspeksyon ang sasakyan.",
+      title: "Minor collision sa expressway",
+      location: NLEX_ROUTE_LOCATIONS.caloocanNlexComplex,
+      description: "Nagkaroon ng bahagyang banggaan habang mabagal ang takbo ng trapiko sa bahagi ng NLEX Complex. Walang naiulat na nasaktan at na-inspeksyon ang sasakyan.",
       daysBack: 2, hour: 14, minute: 35, penalty: 250, resolved: true,
     },
     {
       title: "Nasirang side mirror",
-      location: "Brgy. Malinta, Valenzuela City",
-      description: "Natamaan ang kanang side mirror sa masikip na kalsada. Napalitan na ang piyesa at nasuri ang pagkakakabit.",
+      location: NLEX_ROUTE_LOCATIONS.valenzuelaMindanao,
+      description: "Natamaan ang kanang side mirror habang dumaraan sa bahagi ng Mindanao Avenue interchange. Napalitan ang piyesa at nasuri ang pagkakakabit.",
       daysBack: 5, hour: 11, minute: 5, penalty: 0, resolved: true,
     },
     {
-      title: "Pagtagas ng hangin sa preno",
-      location: "Longos, Meycauayan City, Bulacan",
-      description: "Napansin ang pagbabago sa tunog ng preno bago bumiyahe. Itinigil muna ang operasyon at ipinatingin ang brake line.",
+      title: "Babala sa sistema ng preno",
+      location: NLEX_ROUTE_LOCATIONS.valenzuelaArty,
+      description: "Napansin ng driver na lumambot ang pedal ng preno habang nasa NLEX. Inihinto muna ang operasyon at ipinatingin ang brake line bago muling bumiyahe.",
       daysBack: 1, hour: 8, minute: 40, penalty: 0, resolved: false,
     },
     {
-      title: "Paglabag sa itinakdang paradahan",
-      location: "Poblacion, Meycauayan City, Bulacan",
-      description: "Nakatanggap ng citation matapos huminto sa bahaging hindi itinalaga para sa pagsasakay at pagbaba ng pasahero.",
+      title: "Minor traffic citation",
+      location: NLEX_ROUTE_LOCATIONS.monumentoSideTerminal,
+      description: "Nakatanggap ng citation matapos hindi masunod ang itinakdang loading at unloading area malapit sa Samson Road terminal.",
       daysBack: 18, hour: 10, minute: 25, penalty: 200, resolved: true,
     },
   ];
 
+  const allowedRouteLocations = new Set(Object.values(NLEX_ROUTE_LOCATIONS));
+  const offRouteIncidents = incidentTemplates.filter(function (template) {
+    return !allowedRouteLocations.has(template.location);
+  });
+  if (offRouteIncidents.length > 0) {
+    throw new Error(
+      "May incident location na wala sa verified NLEX route stops: " +
+      offRouteIncidents.map(function (template) {
+        return template.location;
+      }).join(", ")
+    );
+  }
+
   const incidents = incidentTemplates.map(function (template, index) {
     const driver = drivers[index % drivers.length];
     const id = "incident_" + String(index + 1).padStart(2, "0");
-    const createdAt = daysAgo(
+    const createdAt = recentDate(
       template.daysBack,
       template.hour,
       template.minute
@@ -733,11 +740,11 @@ function buildDataset(accounts, settings) {
     [7, 9, 15, "Mga Kaibigan ng Kooperatiba", 3000, "Suporta para sa kaligtasan at operasyon", "Donasyon", "donate"],
     [14, 14, 0, "Pondo ng Kooperatiba", 650, "Mga gamit sa opisina at dokumentasyon", "Operasyon", "gamit"],
     [45, 11, 20, "Pondo ng Kooperatiba", 1200, "Tulong sa agarang pangangailangan ng isang kasapi", "Tulong sa Kasapi", "gamit"],
-    [90, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
+    [59, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
   ];
 
   donationEntries.forEach(function (entry, index) {
-    const date = daysAgo(entry[0], entry[1], entry[2]);
+    const date = recentDate(entry[0], entry[1], entry[2]);
     const id = "donation_cooperative_" + String(index + 1).padStart(2, "0");
     add("donations", id, {
       id: id,
@@ -773,7 +780,7 @@ function buildDataset(accounts, settings) {
       number: account.phoneNumber,
       addedBy: superadminName,
       isActive: true,
-      createdAt: timestamp(daysAgo(20 + index, 9, 0)),
+      createdAt: timestamp(daysAgo(Math.min(20 + index, 59), 9, 0)),
     });
   });
 
@@ -920,58 +927,132 @@ function buildDataset(accounts, settings) {
   };
 }
 
-// --------------------------------------------------------------------- manifest + writes
-function previousManifestRefs(manifest) {
-  const refs = [];
-  const collectionIds = manifest && manifest.collectionIds
-    ? manifest.collectionIds
-    : {};
+// --------------------------------------------------------------------- clean-slate cleanup
+const PRESERVED_ACCOUNT_COLLECTIONS = new Set([
+  "users",
+  "userSecrets",
+  "driverPlateClaims",
+  "secureSessions",
+]);
 
-  const allowedCollections = new Set([
-    "queue", "incidents", "ledger", "donations",
-    "emergencyContacts", "activityLogs",
-  ]);
-  Object.keys(collectionIds).forEach(function (collection) {
-    if (!allowedCollections.has(collection)) return;
-    (collectionIds[collection] || []).forEach(function (id) {
-      refs.push(db.collection(collection).doc(id));
-    });
-  });
+/**
+ * Collect every existing document in a collection and all of its
+ * subcollections. Root account documents are handled separately so that
+ * their profile documents are never included in the deletion plan.
+ */
+async function collectCollectionTree(collectionRef, refsByPath, counts, groupName) {
+  const snapshot = await collectionRef.get();
+  counts[groupName] = (counts[groupName] || 0) + snapshot.size;
 
-  (manifest && Array.isArray(manifest.notifications)
-    ? manifest.notifications
-    : []).forEach(function (entry) {
-      (entry.ids || []).forEach(function (id) {
-        refs.push(
-          db.collection("users")
-            .doc(entry.userDocumentId)
-            .collection("notifications")
-            .doc(id)
-        );
-      });
-    });
+  for (const document of snapshot.docs) {
+    refsByPath.set(document.ref.path, document.ref);
 
-  return refs;
+    const childCollections = await document.ref.listCollections();
+    for (const childCollection of childCollections) {
+      await collectCollectionTree(
+        childCollection,
+        refsByPath,
+        counts,
+        groupName
+      );
+    }
+  }
 }
 
-function legacyRefs() {
-  const oldIds = previousSetupDocumentIds();
-  const refs = [];
-  Object.keys(oldIds).forEach(function (collection) {
-    if (collection === "notifications") return;
-    oldIds[collection].forEach(function (id) {
-      refs.push(db.collection(collection).doc(id));
-    });
-  });
-  oldIds.notifications.forEach(function (entry) {
-    refs.push(
-      db.collection("users")
-        .doc(entry.phone)
-        .collection("notifications")
-        .doc(entry.id)
+/**
+ * Preserve account profiles, password hashes, Firebase Auth identities,
+ * plate claims, and secure login sessions. Clear every other root collection
+ * recursively. Under /users, retain each account document but clear every
+ * nested collection (including notifications).
+ */
+async function collectNonAccountDocumentRefs() {
+  const refsByPath = new Map();
+  const counts = {};
+  const rootCollections = await db.listCollections();
+
+  for (const rootCollection of rootCollections) {
+    if (rootCollection.id === "users") {
+      const accountSnapshot = await rootCollection.get();
+      for (const accountDocument of accountSnapshot.docs) {
+        const childCollections = await accountDocument.ref.listCollections();
+        for (const childCollection of childCollections) {
+          await collectCollectionTree(
+            childCollection,
+            refsByPath,
+            counts,
+            "users/{account} subcollections"
+          );
+        }
+      }
+      continue;
+    }
+
+    if (PRESERVED_ACCOUNT_COLLECTIONS.has(rootCollection.id)) {
+      continue;
+    }
+
+    await collectCollectionTree(
+      rootCollection,
+      refsByPath,
+      counts,
+      rootCollection.id
     );
+  }
+
+  return {
+    refs: Array.from(refsByPath.values()),
+    counts: counts,
+  };
+}
+
+function cleanupGroupForPath(documentPath) {
+  const parts = documentPath.split("/");
+  return parts[0] === "users"
+    ? "users/{account} subcollections"
+    : parts[0];
+}
+
+/**
+ * Documents which are also targets of the new dataset are overwritten with
+ * fresh records. All remaining non-account documents are deleted.
+ */
+function buildCleanSlatePlan(existingData, writeOperations) {
+  const writePaths = new Set(
+    writeOperations.map(function (operation) {
+      return operation.ref.path;
+    })
+  );
+  const deleteRefs = [];
+  const replacedCounts = {};
+  const deleteCounts = {};
+
+  existingData.refs.forEach(function (ref) {
+    const group = cleanupGroupForPath(ref.path);
+    if (writePaths.has(ref.path)) {
+      replacedCounts[group] = (replacedCounts[group] || 0) + 1;
+    } else {
+      deleteRefs.push(ref);
+      deleteCounts[group] = (deleteCounts[group] || 0) + 1;
+    }
   });
-  return refs;
+
+  return {
+    deleteRefs: deleteRefs,
+    replacedCounts: replacedCounts,
+    deleteCounts: deleteCounts,
+  };
+}
+
+function logCleanupCounts(title, counts) {
+  const entries = Object.keys(counts).sort();
+  console.log(title);
+  if (entries.length === 0) {
+    console.log("  (none)");
+    return;
+  }
+  entries.forEach(function (name) {
+    console.log("  " + name + ": " + counts[name]);
+  });
 }
 
 async function commitDeletes(refs) {
@@ -1026,7 +1107,7 @@ function buildWriteOperations(dataset, settings, oldQueueRevision) {
   operations.push({
     ref: tiersRef,
     data: settings.tiers,
-    merge: true,
+    merge: false,
   });
   operations.push({
     ref: rotationRef,
@@ -1035,7 +1116,7 @@ function buildWriteOperations(dataset, settings, oldQueueRevision) {
       lastQueueDay: queueDayId(currentTime, settings.cutoffHour),
       updatedAt: FieldValue.serverTimestamp(),
     },
-    merge: true,
+    merge: false,
   });
   operations.push({
     ref: queueControlRef,
@@ -1043,7 +1124,7 @@ function buildWriteOperations(dataset, settings, oldQueueRevision) {
       revision: oldQueueRevision,
       updatedAt: FieldValue.serverTimestamp(),
     },
-    merge: true,
+    merge: false,
   });
 
   return operations;
@@ -1082,32 +1163,34 @@ async function main() {
   const accounts = await loadExistingAccounts();
   const settings = await loadSettings(accounts.activeDrivers);
   const dataset = buildDataset(accounts, settings);
-  const previousIndex = await INDEX_REF.get();
-  const previousManifest = previousIndex.exists
-    ? previousIndex.data()
-    : null;
+  validateDatasetWindow(dataset, new Date());
 
-  const removeRefs = previousManifestRefs(previousManifest).concat(legacyRefs());
   const operations = buildWriteOperations(
     dataset,
     settings,
     settings.nextQueueRevision
   );
   const manifest = buildManifest(dataset);
+  const existingData = await collectNonAccountDocumentRefs();
+  const cleanup = buildCleanSlatePlan(existingData, operations);
 
   console.log("");
-  console.log("EnerJeep — Operational Data Refresh");
+  console.log("EnerJeep — Full Operational Data Reset");
   console.log("Firebase project: " + projectId);
   console.log("Mode: " + (applyChanges ? "APPLY" : "PREVIEW ONLY"));
   console.log("");
-  console.log("Existing accounts (profiles and credentials remain unchanged):");
-  console.log("  Superadmin: " + dataset.counts.activeSuperadmins);
-  console.log("  Admin: " + dataset.counts.activeAdmins);
-  console.log("  Active drivers: " + dataset.counts.activeDrivers);
+  console.log("Accounts preserved:");
+  console.log("  Superadmin profiles: " + dataset.counts.activeSuperadmins);
+  console.log("  Admin profiles: " + dataset.counts.activeAdmins);
+  console.log("  Active driver profiles: " + dataset.counts.activeDrivers);
+  console.log("  Existing Philippine E.164 phone identities: " + accounts.all.length + " (PRESERVED)");
+  console.log("  Password hashes, Firebase Auth, plate claims, secure sessions: PRESERVED");
+  console.log("  No random or unverified account phone numbers are generated.");
   console.log("");
-  console.log("Records to create or replace:");
+  console.log("New generated operational records:");
+  console.log("  Date scope: current Manila calendar month + previous two months only");
   console.log("  Current queue entries: " + dataset.counts.activeQueue);
-  console.log("  Dispatch history (twelve-month range): " + dataset.counts.historyQueue);
+  console.log("  Dispatch history: " + dataset.counts.historyQueue);
   console.log("  Incident reports: " + dataset.counts.incidents);
   console.log("  Dispatch earnings: " + dataset.counts.dispatchLedger);
   console.log("  Paid fines: " + dataset.counts.fineLedger);
@@ -1116,33 +1199,57 @@ async function main() {
   console.log("  Activity records: " + dataset.counts.activityLogs);
   console.log("  Per-account notifications: " + dataset.counts.notifications);
   console.log("");
-  console.log("Old generated operational document IDs queued for removal: " + removeRefs.length);
-  console.log("User profiles, password hashes, Auth accounts and plate claims: NOT MODIFIED");
-  console.log("Unrelated Firestore records: PRESERVED");
+  logCleanupCounts("Existing non-account records to be replaced:", cleanup.replacedCounts);
+  logCleanupCounts("Existing non-account records to be deleted:", cleanup.deleteCounts);
+  console.log("");
+  console.log("Old Kita collection documents to delete: " +
+    (cleanup.deleteCounts.kita || 0));
+  const financeCollections = ["kita", "donations", "ledger"];
+  const financeRecordsChanged = financeCollections.reduce(function (total, name) {
+    return total + (cleanup.deleteCounts[name] || 0) +
+      (cleanup.replacedCounts[name] || 0);
+  }, 0);
+  console.log("Existing cooperative-fund/earnings records replaced or deleted: " +
+    financeRecordsChanged);
+  console.log("Old incident records replaced or deleted: " +
+    (cleanup.deleteCounts.incidents || 0) +
+    (cleanup.replacedCounts.incidents || 0));
+  console.log("Total old documents to delete: " + cleanup.deleteRefs.length);
+  console.log("Total existing documents to replace with fresh records: " +
+    Object.keys(cleanup.replacedCounts).reduce(function (total, key) {
+      return total + cleanup.replacedCounts[key];
+    }, 0));
+  console.log("");
+  console.log("No account profile or account credential document is in the deletion plan.");
+  console.log("All other Firestore root collections are cleaned recursively, including legacy test collections.");
+  console.log("All subcollections beneath each /users/{account} document are cleaned (including old notifications).");
 
   if (!applyChanges) {
     console.log("");
-    console.log("Walang binago sa Firestore. Suriin ang bilang sa itaas.");
-    console.log("Kapag tama, ulitin ang command at idagdag ang --apply.");
+    console.log("PREVIEW ONLY — WALANG BINAGO SA FIRESTORE.");
+    console.log("Suriin ang project ID at bilang sa itaas. Mag-backup muna bago mag-apply.");
+    console.log("Kapag tama ang preview, ulitin ang command at idagdag ang --apply.");
     return;
   }
 
+  // Write the fresh replacement records first. This makes a failed write
+  // recoverable without first removing the currently stored operational data.
   console.log("");
-  console.log("Inaalis ang dating generated operational records...");
-  await commitDeletes(removeRefs);
-
-  console.log("Isinusulat ang bagong records...");
+  console.log("Isinusulat ang bagong three-month operational records...");
   await commitWrites(operations);
 
-  console.log("Ina-update ang internal document index...");
+  console.log("Nililinis ang lahat ng lumang non-account records...");
+  await commitDeletes(cleanup.deleteRefs);
+
+  console.log("Ina-update ang bagong internal operations index...");
   await INDEX_REF.set(manifest, { merge: false });
 
   console.log("");
-  console.log("Matagumpay na na-update ang operational data.");
-  console.log("Hindi binago ang kasalukuyang user accounts o password credentials.");
+  console.log("Matagumpay ang full operational data reset.");
+  console.log("Napanatili ang lahat ng account profiles, credentials, Auth users, plate claims at secure sessions.");
+  console.log("Ang natitirang operational records ay bagong dataset lamang na sakop ang kasalukuyan at nakaraang dalawang calendar month.");
   console.log("I-restart ang EnerJeep app upang i-refresh ang lahat ng screens.");
 }
-
 main()
   .then(function () {
     return admin.app().delete();

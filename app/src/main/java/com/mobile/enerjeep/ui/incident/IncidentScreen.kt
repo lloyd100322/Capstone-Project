@@ -1,5 +1,8 @@
 package com.mobile.enerjeep.ui.incident
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,6 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.PesoIcon
 import com.mobile.enerjeep.ui.components.HistoryFilterState
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
@@ -39,6 +43,8 @@ import com.mobile.enerjeep.ui.components.ToastFeedback
 @Composable
 fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val resolvingIncidentIds by viewModel.resolvingIncidentIds.collectAsStateWithLifecycle()
+    val sendingIncidentIds by viewModel.sendingIncidentIds.collectAsStateWithLifecycle()
     /* Ang "Talaan" tab ay tinanggal: dito na sa Insidente ang pag-record
      * ng bayad ng multa ("may incident -> nagbayad"). */
     val ledgerViewModel: LedgerViewModel = hiltViewModel()
@@ -57,27 +63,19 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(containerColor = LightGrayBackground) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).imePadding().padding(responsivePageHorizontalPadding())) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(R.drawable.app_icon), contentDescription = "Enerjeep Logo", modifier = Modifier.size(52.dp)); Spacer(Modifier.width(12.dp)); Text("Enerjeep", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(32.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Insidente", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(
-                        onClick = {
-                            multaPrefillPlate = ""
-                            multaPrefillAmount = ""
-                            multaPrefillIncidentId = null
-                            isSavingMulta = false
-                            showMultaModal = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
-                        shape = RoundedCornerShape(16.dp)
-                    ) { Text("Multa", fontSize = 12.sp, color = Color.White) }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text("I-report", maxLines = 1) }
+                Text("Insidente", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = onReportClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("I-report", maxLines = 1)
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -103,7 +101,11 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         IncidentStatCard(Modifier.weight(1f), "Naayos", state.resolvedCount.toString()) { Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen) }
                     }
                     Spacer(Modifier.height(24.dp))
-                    OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Hanapin ayon sa uri, plaka, o lokasyon") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+                    SearchField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = "Hanapin: uri / plaka / lugar"
+                    )
                     Spacer(Modifier.height(24.dp))
                     Row(Modifier.fillMaxWidth().height(48.dp)) {
                         IncidentTabButton(Modifier.weight(1f), "Di-naayos", selectedTab == 0) { selectedTab = 0 }
@@ -120,9 +122,12 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
                         ) {
                             incidents.forEach { incident ->
                                 IncidentItemCard(
-                                    incident,
+                                    incident = incident,
+                                    isResolving = incident.id in resolvingIncidentIds,
                                     onViewClick = { selectedIncident = incident },
-                                    onMarkResolvedClick = { viewModel.resolveIncident(incident.id) }
+                                    onMarkResolvedClick = {
+                                        viewModel.resolveIncident(incident.id)
+                                    }
                                 )
                             }
                         }
@@ -165,10 +170,17 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
         IncidentDetailsContent(
             incident,
             onCancel = { selectedIncident = null },
-            onResolve = { viewModel.resolveIncident(incident.id); selectedIncident = null },
+            onResolve = {
+                viewModel.resolveIncident(incident.id) { success ->
+                    if (success) selectedIncident = null
+                }
+            },
+            isResolving = incident.id in resolvingIncidentIds,
+            isSending = incident.id in sendingIncidentIds,
             onSendToDriver = {
-                viewModel.sendIncidentToDriver(incident.id)
-                selectedIncident = null
+                viewModel.sendIncidentToDriver(incident.id) { success ->
+                    if (success) selectedIncident = null
+                }
             },
             onRecordPayment = {
                 multaPrefillPlate = incident.plateNumber
@@ -243,22 +255,55 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
 @Composable
 fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = hiltViewModel()) {
     val driverOptions by viewModel.driverOptions.collectAsStateWithLifecycle()
+    val isReporting by viewModel.isReporting.collectAsStateWithLifecycle()
     var expandedDriver by remember { mutableStateOf(false) }
     var selectedDriver by remember(driverOptions) { mutableStateOf(driverOptions.firstOrNull()) }
     var incidentType by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var penalty by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var submitted by remember { mutableStateOf(false) }
-    var savedSentToDriver by remember { mutableStateOf(true) }
-    var showSendPrompt by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") }; Text("Mag-report ng Insidente", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
-        Spacer(Modifier.height(24.dp)); Text("Plaka", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
-        ExposedDropdownMenuBox(expanded = expandedDriver, onExpandedChange = { if (!submitted && driverOptions.isNotEmpty()) expandedDriver = !expandedDriver }) {
-            OutlinedTextField(value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" } ?: "Walang dispatched na jeep", onValueChange = {}, readOnly = true, enabled = !submitted && driverOptions.isNotEmpty(), trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) }, modifier = Modifier.fillMaxWidth().menuAnchor())
-            ExposedDropdownMenu(expanded = expandedDriver, onDismissRequest = { expandedDriver = false }) { driverOptions.forEach { driver -> DropdownMenuItem(text = { Text("${driver.plateNumber} — ${driver.driverName}") }, onClick = { selectedDriver = driver; expandedDriver = false }) } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(responsivePageHorizontalPadding())) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, enabled = !isReporting) {
+                Icon(Icons.Default.ArrowBack, "Back")
+            }
+            Text("Mag-report ng Insidente", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(24.dp))
+        Text("Plaka", fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        ExposedDropdownMenuBox(
+            expanded = expandedDriver,
+            onExpandedChange = {
+                if (!isReporting && driverOptions.isNotEmpty()) {
+                    expandedDriver = !expandedDriver
+                }
+            }
+        ) {
+            OutlinedTextField(
+                value = selectedDriver?.let { "${it.plateNumber} — ${it.driverName}" }
+                    ?: "Walang dispatched na jeep",
+                onValueChange = {},
+                readOnly = true,
+                enabled = !isReporting && driverOptions.isNotEmpty(),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expandedDriver) },
+                modifier = Modifier.fillMaxWidth().menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedDriver,
+                onDismissRequest = { expandedDriver = false }
+            ) {
+                driverOptions.forEach { driver ->
+                    DropdownMenuItem(
+                        text = { Text("${driver.plateNumber} — ${driver.driverName}") },
+                        onClick = {
+                            selectedDriver = driver
+                            expandedDriver = false
+                        }
+                    )
+                }
+            }
         }
         if (driverOptions.isEmpty()) {
             Text(
@@ -267,97 +312,81 @@ fun IncidentReportFormScreen(onBack: () -> Unit, viewModel: IncidentViewModel = 
                 fontSize = 12.sp
             )
         }
-        if (driverOptions.isEmpty()) Text("Walang driver account na may plaka.", color = Color.Red, fontSize = 12.sp)
         Spacer(Modifier.height(16.dp))
-        IncidentFormTextField("Uri ng Insidente", incidentType, { if (!submitted) incidentType = it }, "Ilagay ang uri ng insidente")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Lokasyon", location, { if (!submitted) location = it }, "Ilagay ang lokasyon")
-        Spacer(Modifier.height(16.dp)); IncidentFormTextField("Multa", penalty, { if (!submitted && (it.isEmpty() || it.all(Char::isDigit))) penalty = it }, "0", leadingIcon = { PesoIcon(size = 18.dp, color = TextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        Spacer(Modifier.height(16.dp)); Text("Paglalarawan", fontWeight = FontWeight.Medium); Spacer(Modifier.height(8.dp))
-        OutlinedTextField(description, { if (!submitted) description = it }, modifier = Modifier.fillMaxWidth().height(120.dp), placeholder = { Text("Ilarawan ang nangyari...") })
+        IncidentFormTextField(
+            "Uri ng Insidente",
+            incidentType,
+            { if (!isReporting) incidentType = it },
+            "Ilagay ang uri ng insidente"
+        )
+        Spacer(Modifier.height(16.dp))
+        IncidentFormTextField(
+            "Lokasyon",
+            location,
+            { if (!isReporting) location = it },
+            "Ilagay ang lokasyon"
+        )
+        Spacer(Modifier.height(16.dp))
+        IncidentFormTextField(
+            "Multa",
+            penalty,
+            { if (!isReporting && (it.isEmpty() || it.all(Char::isDigit))) penalty = it },
+            "0",
+            leadingIcon = { PesoIcon(size = 18.dp, color = TextSecondary) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("Paglalarawan", fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            description,
+            { if (!isReporting) description = it },
+            modifier = Modifier.fillMaxWidth().height(120.dp),
+            placeholder = { Text("Ilarawan ang nangyari...") },
+            enabled = !isReporting
+        )
         Spacer(Modifier.height(32.dp))
         Row(Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp)) { Text("Kanselahin") }; Spacer(Modifier.width(16.dp))
-            Button(onClick = { if (!submitted && selectedDriver != null) { showSendPrompt = true } else if (submitted) onBack() }, enabled = selectedDriver != null && driverOptions.isNotEmpty(), modifier = Modifier.weight(1f).height(56.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text(if (submitted) "Tapos" else "Ipasa") }
-        }
-        if (submitted) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                if (savedSentToDriver) {
-                    "Na-save at naipadala na sa mga driver ang report. Maaari mo nang isara ang form."
-                } else {
-                    "Na-save ang report nang hindi ipinapadala. Makikita mo ito sa Detalye kung nais mo itong ipadala."
+            OutlinedButton(
+                onClick = onBack,
+                enabled = !isReporting,
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Kanselahin")
+            }
+            Spacer(Modifier.width(16.dp))
+            Button(
+                onClick = {
+                    if (!isReporting && selectedDriver != null) {
+                        viewModel.reportIncident(
+                            selectedDriver!!.plateNumber,
+                            incidentType,
+                            location,
+                            penalty,
+                            description,
+                            sendToDriver = true
+                        ) { success ->
+                            if (success) onBack()
+                        }
+                    }
                 },
-                color = SuccessGreen,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-
-    /*
-     * Hindi "ipasa" agad - nagtatanong muna kung ipapadala ba sa mga
-     * driver ang insidente o i-save lamang muna (admin-only draft).
-     */
-    if (showSendPrompt) {
-        AlertDialog(
-            onDismissRequest = { showSendPrompt = false },
-            title = { Text("Ipadala sa mga driver ang insidente?") },
-            text = {
-                Text(
-                    "Ipapakita ang insidente sa app ng mga driver. " +
-                            "Pwede mo rin itong i-save muna nang hindi " +
-                            "ipinapadala."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showSendPrompt = false
-                        selectedDriver?.let {
-                            viewModel.reportIncident(
-                                it.plateNumber,
-                                incidentType,
-                                location,
-                                penalty,
-                                description,
-                                sendToDriver = true
-                            )
-                            savedSentToDriver = true
-                            submitted = true
-                        }
-                    }
-                ) {
-                    Text("Ipadala", color = EnerjeepBlue, maxLines = 1)
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
-                        onClick = {
-                            showSendPrompt = false
-                            selectedDriver?.let {
-                                viewModel.reportIncident(
-                                    it.plateNumber,
-                                    incidentType,
-                                    location,
-                                    penalty,
-                                    description,
-                                    sendToDriver = false
-                                )
-                                savedSentToDriver = false
-                                submitted = true
-                            }
-                        }
-                    ) {
-                        Text("I-save", maxLines = 1)
-                    }
-                    TextButton(
-                        onClick = { showSendPrompt = false }
-                    ) {
-                        Text("Kanselahin", color = TextSecondary)
-                    }
+                enabled = selectedDriver != null && driverOptions.isNotEmpty() && !isReporting,
+                modifier = Modifier.weight(1f).height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) {
+                if (isReporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ipasa")
                 }
             }
-        )
+        }
     }
 }
 
@@ -367,27 +396,90 @@ fun IncidentStatCard(modifier: Modifier = Modifier, title: String, value: String
 }
 
 @Composable
-fun IncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit, onMarkResolvedClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-        Column(Modifier.padding(20.dp)) {
-            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.location, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
-            Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth()) { Button(onClick = onMarkResolvedClick, modifier = Modifier.weight(1f)) { Text("Ayusin", maxLines = 1) }; Spacer(Modifier.width(8.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) { Text("Tingnan", maxLines = 1) } }
+fun IncidentItemCard(
+    incident: IncidentItem,
+    isResolving: Boolean = false,
+    onViewClick: () -> Unit,
+    onMarkResolvedClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            IncidentCardHeader(
+                title = incident.title,
+                status = incident.status,
+                isResolved = incident.status == "Naayos"
+            )
+            Spacer(Modifier.height(12.dp))
+            IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+            if (incident.location.isNotBlank()) IncidentInfoRow("Lokasyon", incident.location)
+            if (incident.date.isNotBlank()) IncidentInfoRow("Petsa", incident.date)
+            if (incident.description.isNotBlank()) {
+                IncidentInfoRow("Paglalarawan", incident.description)
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onMarkResolvedClick,
+                    enabled = !isResolving,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (isResolving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Ayusin", maxLines = 1)
+                    }
+                }
+                OutlinedButton(
+                    onClick = onViewClick,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Tingnan", maxLines = 1)
+                }
+            }
         }
     }
 }
 
 @Composable
 fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-        Column(Modifier.padding(20.dp)) {
-            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            IncidentCardHeader(
+                title = incident.title,
+                status = incident.status,
+                isResolved = incident.status == "Naayos"
+            )
             Spacer(Modifier.height(12.dp))
-            // The "Naayos" tab only holds resolved incidents, but the
-            // badge still follows the real status of the record.
-            val isResolved = incident.status == "Naayos"
-            StatusBadge(incident.status, if (isResolved) SuccessGreenLight else WarningOrangeLight, if (isResolved) SuccessGreen else WarningOrange)
-            Spacer(Modifier.height(12.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.fillMaxWidth()) { Text("Tingnan") }
+            IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+            if (incident.location.isNotBlank()) IncidentInfoRow("Lokasyon", incident.location)
+            if (incident.date.isNotBlank()) IncidentInfoRow("Petsa", incident.date)
+            if (incident.description.isNotBlank()) {
+                IncidentInfoRow("Paglalarawan", incident.description)
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onViewClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Tingnan", maxLines = 1)
+            }
         }
     }
 }
@@ -397,28 +489,63 @@ fun IncidentDetailsContent(
     incident: IncidentItem,
     onCancel: () -> Unit,
     onResolve: () -> Unit,
+    isResolving: Boolean = false,
+    isSending: Boolean = false,
     onSendToDriver: () -> Unit = {},
     onRecordPayment: (() -> Unit)? = null,
     onCallDriver: (() -> Unit)? = null
 ) {
-    Column(Modifier.fillMaxWidth().padding(24.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = 20.sp, fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
-        Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
-        IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
-        /*
-         * Fase 6: tel: call button - tawagan ang driver ng sasakyan
-         * (naka-DIAL para makita muna ang numero bago tumawag).
-         */
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 720.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Detalye ng Insidente",
+                modifier = Modifier.weight(1f),
+                fontSize = responsiveSectionTitleSize(),
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Default.Close, contentDescription = "Isara")
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = incident.title,
+            modifier = Modifier.fillMaxWidth(),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            softWrap = true
+        )
+        Spacer(Modifier.height(12.dp))
+        StatusBadge(
+            incident.status,
+            if (incident.status == "Naayos") SuccessGreenLight else WarningOrangeLight,
+            if (incident.status == "Naayos") SuccessGreen else WarningOrange
+        )
+        Spacer(Modifier.height(16.dp))
+        IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+        IncidentInfoRow("Lokasyon", incident.location)
+        IncidentInfoRow("Petsa", incident.date)
+        IncidentInfoRow("Multa", incident.penalty)
+        IncidentInfoRow("Paglalarawan", incident.description)
+        IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
+
         if (onCallDriver != null) {
             Spacer(Modifier.height(16.dp))
             OutlinedButton(
                 onClick = onCallDriver,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    SuccessGreen
-                )
+                border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
             ) {
                 Icon(
                     Icons.Default.Call,
@@ -430,12 +557,11 @@ fun IncidentDetailsContent(
                 Text("Tawagan", color = SuccessGreen, maxLines = 1)
             }
         }
-        /*
-         * "May incident -> nagbayad": kung may multa ang insidente,
-         * maaaring i-record dito ang bayad ng driver (Talaan ay wala na).
-         */
+
         val penaltyDigits = incident.penalty.filter { it.isDigit() }
-        if (onRecordPayment != null && penaltyDigits.isNotEmpty() && (penaltyDigits.toIntOrNull() ?: 0) > 0) {
+        if (onRecordPayment != null && penaltyDigits.isNotEmpty() &&
+            (penaltyDigits.toIntOrNull() ?: 0) > 0
+        ) {
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onRecordPayment,
@@ -448,20 +574,108 @@ fun IncidentDetailsContent(
                 Text("Bayaran", color = Color.White, maxLines = 1)
             }
         }
+
         if (incident.sentToDriver == "Hindi") {
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onSendToDriver,
+                enabled = !isSending,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
-            ) { Text("Ipadala", maxLines = 1) }
+            ) {
+                if (isSending) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ipadala", maxLines = 1)
+                }
+            }
         }
-        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara", maxLines = 1) }; Spacer(Modifier.width(12.dp)); Button(onClick = onResolve, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)) { Text("Ayusin", maxLines = 1) } }
+
+        Spacer(Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Isara", maxLines = 1)
+            }
+            Button(
+                onClick = onResolve,
+                enabled = !isResolving,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) {
+                if (isResolving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ayusin", maxLines = 1)
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun IncidentInfoRow(label: String, value: String) { Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) { Text(label, color = TextSecondary, fontSize = 12.sp); Text(value, fontWeight = FontWeight.Medium) } }
+fun IncidentCardHeader(
+    title: String,
+    status: String,
+    isResolved: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            softWrap = true
+        )
+        Spacer(Modifier.width(12.dp))
+        StatusBadge(
+            status,
+            if (isResolved) SuccessGreenLight else WarningOrangeLight,
+            if (isResolved) SuccessGreen else WarningOrange
+        )
+    }
+}
+
+@Composable
+fun IncidentInfoRow(label: String, value: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.fillMaxWidth(),
+            color = TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value.ifBlank { "—" },
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.Black,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            softWrap = true
+        )
+    }
+}
 
 @Composable
 fun IncidentFormTextField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String, leadingIcon: (@Composable () -> Unit)? = null, keyboardOptions: KeyboardOptions = KeyboardOptions.Default) {

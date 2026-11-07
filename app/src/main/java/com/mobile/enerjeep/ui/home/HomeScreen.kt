@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.home
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -246,6 +248,7 @@ fun HomeScreen(
 
                             // Stats are the quick access: tap = open tab.
                             onSalesClick = {
+                                reportStartScreen = "income"
                                 selectedTab = HomeTab.MgaUlat
                             },
 
@@ -254,13 +257,14 @@ fun HomeScreen(
                             },
 
                             onIncidentClick = {
-                                selectedTab = HomeTab.Insidente
+                                reportStartScreen = "incidents"
+                                selectedTab = HomeTab.MgaUlat
                             },
 
-                            // Donasyon stat = straight to the Donasyon
-                            // section of the Mga Ulat screen.
+                            // Each dashboard summary opens its matching
+                            // report and locks the Reports content to that section.
                             onDonasyonClick = {
-                                reportStartScreen = "donasyon"
+                                reportStartScreen = "donations"
                                 selectedTab = HomeTab.MgaUlat
                             },
 
@@ -343,7 +347,7 @@ fun HomeContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(responsivePageHorizontalPadding())
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -373,7 +377,7 @@ fun HomeContent(
 
         Text(
             text = "Musta, $firstName!",
-            fontSize = 28.sp,
+            fontSize = responsivePageTitleSize(),
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )

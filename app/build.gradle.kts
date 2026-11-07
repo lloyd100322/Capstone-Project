@@ -86,6 +86,10 @@ dependencies {
     implementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.firebase.appcheck.debug)
 
+    // Adaptive Compose dimensions (read through ResponsiveDimensions.kt).
+    implementation(libs.intuit.sdp)
+    implementation(libs.intuit.ssp)
+
     testImplementation(libs.junit)
     // Compose test artifacts have no version in the catalog - the BOM
     // supplies it. androidTest is its OWN scope (it does NOT inherit the

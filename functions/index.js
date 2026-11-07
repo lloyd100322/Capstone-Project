@@ -95,7 +95,7 @@ async function getVerifiedUserContext(request) {
     db.collection("secureSessions").doc(request.auth.uid).get(),
   ]);
   const expiresAt = secureSession.get("expiresAt");
-  const role = String(user.get("role") || "").toLowerCase();
+  const role = String(user.get("role") || "").trim().toLowerCase();
   if (!user.exists ||
       !secureSession.exists ||
       secureSession.get("phoneNumber") !== phone ||
@@ -104,7 +104,7 @@ async function getVerifiedUserContext(request) {
       typeof expiresAt.toMillis !== "function" ||
       expiresAt.toMillis() <= Date.now() ||
       !["admin", "superadmin", "driver"].includes(role) ||
-      String(user.get("status") || "active").toLowerCase() !== "active") {
+      String(user.get("status") || "active").trim().toLowerCase() !== "active") {
     throw new HttpsError("permission-denied", "Kailangan ang aktibong password at OTP-verified session.");
   }
 
@@ -223,12 +223,14 @@ exports.dailyQueueReset = onSchedule(
   { schedule: "0 * * * *", timeZone: "Asia/Manila", region: "us-central1" },
   async () => {
     const metaRef = db.collection("settings").doc("queueRotation");
-
-    // Simple read muna para makuha ang mga id (walang query sa loob ng
-    // transaction sa mobile/admin SDK - pareho ng QueueRotation).
     const queueControlRef = db.collection("settings").doc("queueControl");
+    const queueCollection = db.collection("queue");
+    const usersCollection = db.collection("users");
+
     const observedRevision = (await queueControlRef.get()).get("revision") || 0;
-    const queueIds = (await db.collection("queue").get()).docs.map((d) => d.id);
+    const queueIds = (await queueCollection.get()).docs.map((document) => document.id);
+    const driverIds = (await usersCollection.where("role", "==", "driver").get())
+      .docs.map((document) => document.id);
 
     const rotated = await db.runTransaction(async (tx) => {
       const queueControl = await tx.get(queueControlRef);
@@ -236,49 +238,173 @@ exports.dailyQueueReset = onSchedule(
       if (currentRevision !== observedRevision) {
         throw new Error("Queue changed during scheduled reset; retry on next schedule.");
       }
+
       const meta = await tx.get(metaRef);
       const rawHour = meta.get("cutoffHour");
       const cutoffHour =
         typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23
           ? rawHour
           : 21;
-
       const today = queueDayIdManila(new Date(), cutoffHour);
       if (meta.get("lastQueueDay") === today) {
-        return false; // na-ikot na ang araw na ito
+        return false;
       }
 
-      // Basahin ang bawat entry SA LOOB ng transaction (laging sariwa).
+      // Fresh queue and account reads are part of the same transaction.
       const docs = [];
       for (const id of queueIds) {
-        const snap = await tx.get(db.collection("queue").doc(id));
-        if (snap.exists) docs.push(snap);
+        const snapshot = await tx.get(queueCollection.doc(id));
+        if (snapshot.exists) docs.push(snapshot);
+      }
+      const driverAccounts = [];
+      for (const id of driverIds) {
+        const snapshot = await tx.get(usersCollection.doc(id));
+        if (snapshot.exists &&
+            String(snapshot.get("role") || "").toLowerCase() === "driver" &&
+            String(snapshot.get("status") || "active").toLowerCase() === "active") {
+          driverAccounts.push(snapshot);
+        }
       }
 
-      [1, 0].forEach((key) => {
-        const active = docs
-          .filter((d) => isQueueActive(d.data()) && routeKey(d.data().route) === key)
-          .sort(
-            (a, b) =>
-              (a.get("position") ?? Number.MAX_SAFE_INTEGER) -
-              (b.get("position") ?? Number.MAX_SAFE_INTEGER)
-          );
+      // The permanent cycle is based on ALL active driver accounts, not
+      // today's active queue rows. A driver may be dispatched/completed and
+      // temporarily absent from /queue; that must not shorten the cycle.
+      const earliestQueueCreatedAtByDriver = new Map();
+      for (const document of docs) {
+        const driverId = String(document.get("driverId") || "");
+        if (!driverId) continue;
+        const stored = document.get("accountCreatedAt");
+        const legacy = document.get("createdAt");
+        const timestamp = stored && typeof stored.toMillis === "function"
+          ? stored
+          : legacy;
+        if (!timestamp || typeof timestamp.toMillis !== "function") continue;
+        const millis = timestamp.toMillis();
+        const previous = earliestQueueCreatedAtByDriver.get(driverId);
+        if (previous === undefined || millis < previous) {
+          earliestQueueCreatedAtByDriver.set(driverId, millis);
+        }
+      }
 
-        if (active.length > 1) {
-          // Rotation: ang #1 ngayon ay napupunta sa huli.
-          const rotated = [...active.slice(1), active[0]];
-          rotated.forEach((doc, index) => {
-            tx.update(doc.ref, {
-              position: index + 1,
-              updatedAt: FieldValue.serverTimestamp(),
-            });
+      const permanentDrivers = driverAccounts.map((account) => {
+        const driverId = String(account.get("userId") || account.id);
+        const createdAt = account.get("createdAt");
+        const createdAtMillis = createdAt && typeof createdAt.toMillis === "function"
+          ? createdAt.toMillis()
+          : (earliestQueueCreatedAtByDriver.get(driverId) ?? Number.MAX_SAFE_INTEGER);
+        return { driverId, createdAtMillis };
+      }).sort((left, right) =>
+        left.createdAtMillis - right.createdAtMillis ||
+        left.driverId.localeCompare(right.driverId)
+      );
+
+      // Legacy orphaned queue data is a last-resort roster source only when
+      // there are no readable driver accounts at all.
+      if (permanentDrivers.length === 0) {
+        const legacyDrivers = new Map();
+        for (const document of docs) {
+          const driverId = String(document.get("driverId") || "");
+          if (!driverId || legacyDrivers.has(driverId)) continue;
+          legacyDrivers.set(driverId, {
+            driverId,
+            createdAtMillis:
+              earliestQueueCreatedAtByDriver.get(driverId) ?? Number.MAX_SAFE_INTEGER,
           });
+        }
+        permanentDrivers.push(...legacyDrivers.values());
+        permanentDrivers.sort((left, right) =>
+          left.createdAtMillis - right.createdAtMillis ||
+          left.driverId.localeCompare(right.driverId)
+        );
+      }
+
+      const rotationCursorUpdates = {};
+      [1, 0].forEach((key) => {
+        const routeName = key === 1 ? "Marilao" : "Monumento";
+        const cursorDriverField = `rotationStart${routeName}DriverId`;
+        const cursorCreatedAtField = `rotationStart${routeName}CreatedAtMillis`;
+        const previousLeaderId = String(meta.get(cursorDriverField) || "");
+        const previousLeaderCreatedAtRaw = meta.get(cursorCreatedAtField);
+        const previousLeaderCreatedAt =
+          typeof previousLeaderCreatedAtRaw === "number" &&
+          Number.isFinite(previousLeaderCreatedAtRaw)
+            ? previousLeaderCreatedAtRaw
+            : null;
+
+        // Advance against the FULL permanent driver roster. Do not modulo by
+        // the smaller active queue size: that would return to A too early.
+        let startIndex = 0;
+        if (permanentDrivers.length > 1) {
+          if (previousLeaderId) {
+            const previousIndex = permanentDrivers.findIndex(
+              (driver) => driver.driverId === previousLeaderId
+            );
+            if (previousIndex >= 0) {
+              startIndex = (previousIndex + 1) % permanentDrivers.length;
+            } else if (previousLeaderCreatedAt !== null) {
+              const nextIndex = permanentDrivers.findIndex((driver) =>
+                driver.createdAtMillis > previousLeaderCreatedAt ||
+                (driver.createdAtMillis === previousLeaderCreatedAt &&
+                  driver.driverId.localeCompare(previousLeaderId) > 0)
+              );
+              startIndex = nextIndex >= 0 ? nextIndex : 0;
+            } else {
+              startIndex = 1;
+            }
+          } else if (previousLeaderCreatedAt !== null) {
+            const nextIndex = permanentDrivers.findIndex((driver) =>
+              driver.createdAtMillis > previousLeaderCreatedAt
+            );
+            startIndex = nextIndex >= 0 ? nextIndex : 0;
+          } else {
+            // First reset: A goes to the end and B becomes the new #1.
+            startIndex = 1;
+          }
+        }
+
+        const rotatedDrivers = permanentDrivers
+          .slice(startIndex)
+          .concat(permanentDrivers.slice(0, startIndex));
+        const permanentOrder = new Map(
+          rotatedDrivers.map((driver, index) => [driver.driverId, index])
+        );
+
+        const active = docs
+          .filter((document) =>
+            isQueueActive(document.data()) && routeKey(document.get("route")) === key
+          )
+          .sort((left, right) => {
+            const leftId = String(left.get("driverId") || left.id);
+            const rightId = String(right.get("driverId") || right.id);
+            const leftIndex = permanentOrder.get(leftId) ?? Number.MAX_SAFE_INTEGER;
+            const rightIndex = permanentOrder.get(rightId) ?? Number.MAX_SAFE_INTEGER;
+            if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+            return compareQueueEntries(left, right);
+          });
+
+        active.forEach((document, index) => {
+          tx.update(document.ref, {
+            position: index + 1,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        });
+
+        // Save the next head from the FULL roster even when that driver has
+        // no active queue document today. This preserves the complete cycle.
+        if (rotatedDrivers.length > 0) {
+          const newLeader = rotatedDrivers[0];
+          rotationCursorUpdates[cursorDriverField] = newLeader.driverId;
+          rotationCursorUpdates[cursorCreatedAtField] = newLeader.createdAtMillis;
         }
       });
 
       tx.set(
         metaRef,
-        { lastQueueDay: today, updatedAt: FieldValue.serverTimestamp() },
+        {
+          lastQueueDay: today,
+          updatedAt: FieldValue.serverTimestamp(),
+          ...rotationCursorUpdates,
+        },
         { merge: true }
       );
       tx.set(
@@ -290,11 +416,10 @@ exports.dailyQueueReset = onSchedule(
     });
 
     if (rotated) {
-      console.log("dailyQueueReset: na-ikot ang pila para sa bagong araw");
+      console.log("dailyQueueReset: advanced the permanent full-driver cycle by one account");
     }
   }
 );
-
 /**
  * PUSH NOTIFICATION sa dispatch.
  *
@@ -695,6 +820,9 @@ exports.deleteAccount = onCall(
           });
         }
 
+        // Keep historical queue entries, dispatch activity logs, and ledger
+        // records intact. They contain driver-name snapshots and are needed
+        // for audit/report history after an account is deleted.
         tx.delete(userRef);
         tx.delete(secretRef);
         if (plateClaimRef && plateClaim &&
@@ -739,6 +867,7 @@ exports.dispatchQueueVehicle = onCall(
     const queueCollection = db.collection("queue");
     const queueControlRef = db.collection("settings").doc("queueControl");
     const tiersRef = db.collection("settings").doc("deductionTiers");
+    const dispatchActivityRef = db.collection("activityLogs").doc();
 
     try {
       await db.runTransaction(async (tx) => {
@@ -748,6 +877,7 @@ exports.dispatchQueueVehicle = onCall(
           tx.get(queueControlRef),
           tx.get(queueCollection),
         ]);
+        const nextQueueRevision = (control.get("revision") || 0) + 1;
         const currentCallerRole = String(callerSnapshot.get("role") || "").toLowerCase();
         const transactionCaller = {
           role: currentCallerRole,
@@ -767,6 +897,9 @@ exports.dispatchQueueVehicle = onCall(
 
         const currentRoute = String(target.get("route") || "");
         const currentStation = queueRouteStation(currentRoute);
+        const oppositeRoute = currentStation === "marilao"
+          ? "Monumento – Marilao"
+          : "Marilao – Monumento";
         if (!currentStation || !canManageQueueRoute(transactionCaller, currentRoute)) {
           throw new HttpsError("permission-denied", "Sa terminal na nakatalaga lamang maaaring mag-dispatch.");
         }
@@ -820,7 +953,12 @@ exports.dispatchQueueVehicle = onCall(
           );
         }
 
-        const driverName = String(target.get("driverName") || "");
+        const driverName = String(
+          target.get("driverName") || [
+            String(driver.get("firstName") || "").trim(),
+            String(driver.get("lastName") || "").trim(),
+          ].filter(Boolean).join(" ") || "Driver"
+        );
         const plateNumber = String(target.get("plateNumber") || "").trim().toUpperCase();
         const netAmount = income - otherFees;
         const seater = Math.max(0, Math.trunc(Number(driver.get("seater") || 0)));
@@ -864,17 +1002,17 @@ exports.dispatchQueueVehicle = onCall(
             updatedAt: FieldValue.serverTimestamp(),
           });
         });
+        // Keep existing jeeps ahead of this new return trip.
+        // The first successful dispatch to this terminal is position 1,
+        // the next arrival is position 2, and so on.
         oppositeRouteRemaining.forEach((document, index) => {
           tx.update(document.ref, {
-            position: index + 2,
+            position: index + 1,
             updatedAt: FieldValue.serverTimestamp(),
           });
         });
 
         if (shouldRequeue) {
-          const oppositeRoute = currentStation === "marilao"
-            ? "Monumento – Marilao"
-            : "Marilao – Monumento";
           const requeueId = "queue_" + driverId + "_after_" + entryId;
           tx.set(queueCollection.doc(requeueId), {
             id: requeueId,
@@ -882,13 +1020,16 @@ exports.dispatchQueueVehicle = onCall(
             driverName,
             plateNumber,
             route: oppositeRoute,
-            position: 1,
+            position: oppositeRouteRemaining.length + 1,
             status: "Nakapila",
             time: new Intl.DateTimeFormat("en-US", {
               timeZone: "Asia/Manila",
               hour: "2-digit",
               minute: "2-digit",
             }).format(new Date()),
+            accountCreatedAt: driver.get("createdAt") ||
+              target.get("accountCreatedAt") ||
+              FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
           });
         }
@@ -920,9 +1061,32 @@ exports.dispatchQueueVehicle = onCall(
         });
 
         tx.set(queueControlRef, {
-          revision: (control.get("revision") || 0) + 1,
+          revision: nextQueueRevision,
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Record the dispatch in the same transaction as the queue and
+        // ledger updates. This preserves the order of successful dispatches
+        // even when two admin devices receive callable responses at different times.
+        const actorName = [
+          String(callerSnapshot.get("firstName") || "").trim(),
+          String(callerSnapshot.get("lastName") || "").trim(),
+        ].filter(Boolean).join(" ") || "Hindi kilala";
+        tx.set(dispatchActivityRef, {
+          actorName,
+          actorPhone: caller.phone,
+          actorRole: currentCallerRole === "superadmin" ? "Superadmin" : "Admin",
+          action: "Dispatch",
+          driverId,
+          driverName,
+          plateNumber,
+          // Activity history records the trip that was just dispatched.
+          // oppositeRoute is only for the driver's next queue assignment.
+          route: currentRoute,
+          detail: plateNumber + " — " + currentRoute,
+          createdAt: FieldValue.serverTimestamp(),
+          dispatchSequence: nextQueueRevision,
+        });
       });
     } catch (error) {
       if (error instanceof HttpsError) throw error;
@@ -1609,10 +1773,10 @@ exports.completeSecureLogin = onCall(
         tx.get(userRef),
         tx.get(secretRef),
       ]);
-      const role = String(userSnapshot.get("role") || "").toLowerCase();
+      const role = String(userSnapshot.get("role") || "").trim().toLowerCase();
       if (!userSnapshot.exists ||
           !["admin", "superadmin", "driver"].includes(role) ||
-          String(userSnapshot.get("status") || "active").toLowerCase() !== "active") {
+          String(userSnapshot.get("status") || "active").trim().toLowerCase() !== "active") {
         return false;
       }
 

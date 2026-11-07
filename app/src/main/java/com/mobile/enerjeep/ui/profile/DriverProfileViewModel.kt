@@ -58,6 +58,15 @@ class DriverProfileViewModel @Inject constructor(
     val uiState: StateFlow<DriverProfileUiState> =
         _uiState.asStateFlow()
 
+    private val _isSavingProfile = MutableStateFlow(false)
+    val isSavingProfile = _isSavingProfile.asStateFlow()
+
+    private val _isSavingPassword = MutableStateFlow(false)
+    val isSavingPassword = _isSavingPassword.asStateFlow()
+
+    private val _isSigningOut = MutableStateFlow(false)
+    val isSigningOut = _isSigningOut.asStateFlow()
+
     private var listener:
             ListenerRegistration? = null
 
@@ -356,6 +365,9 @@ class DriverProfileViewModel @Inject constructor(
             cleanEmergencyNumber
         )
 
+        if (_isSavingProfile.value) return
+        _isSavingProfile.value = true
+
         viewModelScope.launch {
             try {
                 FirebaseFunctions.getInstance("us-central1")
@@ -394,6 +406,8 @@ class DriverProfileViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang profile. Subukan muli."
                 )
+            } finally {
+                _isSavingProfile.value = false
             }
         }
     }
@@ -423,6 +437,9 @@ class DriverProfileViewModel @Inject constructor(
             ToastFeedback.show("Pumili ng ibang password kaysa sa kasalukuyan.")
             return
         }
+
+        if (_isSavingPassword.value) return
+        _isSavingPassword.value = true
 
         viewModelScope.launch {
             try {
@@ -456,6 +473,8 @@ class DriverProfileViewModel @Inject constructor(
                 ToastFeedback.show(
                     e.message ?: "Hindi ma-update ang password. Subukan muli."
                 )
+            } finally {
+                _isSavingPassword.value = false
             }
         }
     }
@@ -466,7 +485,9 @@ class DriverProfileViewModel @Inject constructor(
      * so Android Back cannot return to the previous driver dashboard.
      */
     fun signOut() {
+        if (_isSigningOut.value) return
         val phone = userSession.userProfile?.phoneNumber.orEmpty()
+        _isSigningOut.value = true
 
         viewModelScope.launch {
             try {
@@ -475,6 +496,7 @@ class DriverProfileViewModel @Inject constructor(
                 // Remove the optional pre-OTP verifier for this account too.
                 SecureLoginCache.clear(phone)
                 userSession.clear()
+                _isSigningOut.value = false
             }
         }
     }

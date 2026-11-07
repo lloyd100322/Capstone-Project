@@ -1,5 +1,7 @@
 package com.mobile.enerjeep.ui.home
 
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,14 +22,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.ui.components.HistoryDateFilterBar
 import com.mobile.enerjeep.ui.components.HistoryFilterState
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.components.filterHistoryRecords
 import com.mobile.enerjeep.ui.theme.*
 import com.mobile.enerjeep.ui.theme.TextSecondary
 
 /*
- * The SUPERADMIN toolbox screens. Only the superadmin can open these
- * (the caller checks the user level): the emergency list of "available
- * admin" contacts, the accountability log and the app settings.
+ * Superadmin-only utility screens: emergency contacts and app settings.
+ * ActivityLogView is retained as a reusable report component and is now
+ * presented inside the Reports tab instead of the account-management area.
  */
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,7 +40,11 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
     val adminAccounts by viewModel.adminAccounts.collectAsStateWithLifecycle()
     val contactsError by viewModel.emergencyContactsError.collectAsStateWithLifecycle()
     val adminAccountsError by viewModel.adminAccountsError.collectAsStateWithLifecycle()
+    val contactsLoading by viewModel.emergencyContactsLoading.collectAsStateWithLifecycle()
+    val adminAccountsLoading by viewModel.adminAccountsLoading.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val isAddingEmergencyContact by viewModel.isAddingEmergencyContact.collectAsStateWithLifecycle()
+    val removingEmergencyContactIds by viewModel.removingEmergencyContactIds.collectAsStateWithLifecycle()
 
     var selectedAdmin by remember {
         mutableStateOf<Pair<String, String>?>(null)
@@ -49,11 +56,11 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
         modifier = Modifier
             .fillMaxWidth()
             .imePadding()
-            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
+            .padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), top = 8.dp, bottom = 32.dp)
     ) {
         Text(
             "Emergency List",
-            fontSize = 22.sp,
+            fontSize = responsiveSectionTitleSize(),
             fontWeight = FontWeight.Bold
         )
 
@@ -87,9 +94,30 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                             fontSize = 12.sp,
                             color = ErrorRed
                         )
-                        OutlinedButton(onClick = viewModel::retryListeners) {
-                            Text("Subukang muli", maxLines = 1)
+                        OutlinedButton(
+                            onClick = viewModel::retryListeners,
+                            enabled = !adminAccountsLoading
+                        ) {
+                            if (adminAccountsLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Subukang muli", maxLines = 1)
+                            }
                         }
+                    }
+                } else if (adminAccountsLoading && adminAccounts.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp,
+                            color = EnerjeepBlue
+                        )
                     }
                 } else if (adminAccounts.isEmpty()) {
                     Text(
@@ -145,16 +173,24 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                                 selectedAdmin = null
                             }
                         },
-                        enabled = selectedAdmin != null,
+                        enabled = selectedAdmin != null && !isAddingEmergencyContact,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = EnerjeepBlue
                         ),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Idagdag ang Admin", maxLines = 1)
+                        if (isAddingEmergencyContact) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                        } else {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Idagdag ang Admin", maxLines = 1)
+                        }
                     }
                 }
             }
@@ -212,15 +248,24 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         manualName = ""
                         manualNumber = ""
                     },
+                    enabled = !isAddingEmergencyContact,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = EnerjeepBlue
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Idagdag ang Numero", maxLines = 1)
+                    if (isAddingEmergencyContact) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Idagdag ang Numero", maxLines = 1)
+                    }
                 }
             }
         }
@@ -248,10 +293,30 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                 )
                 Button(
                     onClick = viewModel::retryListeners,
+                    enabled = !contactsLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
                 ) {
-                    Text("Subukang muli", maxLines = 1)
+                    if (contactsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Subukang muli", maxLines = 1)
+                    }
                 }
+            }
+        } else if (contactsLoading && contacts.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = EnerjeepBlue
+                )
             }
         } else if (contacts.isEmpty()) {
             Text("Walang laman ang listahan.", color = TextSecondary)
@@ -290,13 +355,22 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
                         IconButton(
                             onClick = {
                                 viewModel.removeEmergencyContact(contact)
-                            }
+                            },
+                            enabled = contact.id !in removingEmergencyContactIds
                         ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = "Alisin",
-                                tint = ErrorRed
-                            )
+                            if (contact.id in removingEmergencyContactIds) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = ErrorRed
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Alisin",
+                                    tint = ErrorRed
+                                )
+                            }
                         }
                     }
                 }
@@ -308,15 +382,20 @@ fun EmergencyListView(viewModel: SuperadminViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ActivityLogView(viewModel: SuperadminViewModel) {
+fun ActivityLogView(
+    viewModel: SuperadminViewModel,
+    embeddedInReport: Boolean = false
+) {
     val logs by viewModel.activityLogs.collectAsStateWithLifecycle()
     val logsError by viewModel.activityLogsError.collectAsStateWithLifecycle()
+    val logsLoading by viewModel.activityLogsLoading.collectAsStateWithLifecycle()
 
     /*
      * Mga filter ng talaan: uri ng aksyon at petsa (HistoryDateFilterBar -
      * "Ngayon" ang default, pareho ng ibang history list sa app).
      */
     var selectedAction by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     var historyFilter by remember {
         mutableStateOf(HistoryFilterState())
     }
@@ -330,12 +409,18 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
     }
 
     val visible = remember(
-        logs, selectedAction, historyFilter
+        logs, selectedAction, historyFilter, searchQuery
     ) {
+        val filteredBySearch = logs.filter { log ->
+            searchQuery.isBlank() ||
+                log.plateNumber.contains(searchQuery, ignoreCase = true) ||
+                log.driverName.contains(searchQuery, ignoreCase = true) ||
+                log.detail.contains(searchQuery, ignoreCase = true)
+        }
         val byAction = if (selectedAction.isBlank()) {
-            logs
+            filteredBySearch
         } else {
-            logs.filter { it.action == selectedAction }
+            filteredBySearch.filter { it.action == selectedAction }
         }
         filterHistoryRecords(
             byAction,
@@ -346,18 +431,35 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .fillMaxWidth()
+            .then(
+                if (embeddedInReport) {
+                    Modifier.fillMaxHeight().verticalScroll(rememberScrollState())
+                } else {
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                }
+            )
             .imePadding()
-            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
+            .padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = 8.dp,
+                bottom = 32.dp
+            )
     ) {
         Text(
             "Talaan ng Aktibidad",
-            fontSize = 22.sp,
+            fontSize = responsiveSectionTitleSize(),
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
+        SearchField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = "Hanapin: plaka / pangalan"
+        )
+        Spacer(Modifier.height(12.dp))
 
         /*
          * Filter ng uri ng aksyon (hal. "Settings", "Dispatch"). Mula sa
@@ -433,10 +535,30 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                 )
                 Button(
                     onClick = viewModel::retryListeners,
+                    enabled = !logsLoading,
                     colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
                 ) {
-                    Text("Subukang muli", maxLines = 1)
+                    if (logsLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    } else {
+                        Text("Subukang muli", maxLines = 1)
+                    }
                 }
+            }
+        } else if (logsLoading && logs.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = EnerjeepBlue
+                )
             }
         } else if (logs.isEmpty()) {
             Text("Wala pang naitatalang aktibidad.", color = TextSecondary)
@@ -484,6 +606,13 @@ fun ActivityLogView(viewModel: SuperadminViewModel) {
                                 color = Color.DarkGray
                             )
                         }
+                        if (log.driverName.isNotBlank()) {
+                            Text(
+                                "Driver: ${log.driverName}",
+                                fontSize = 12.sp,
+                                color = Color.DarkGray
+                            )
+                        }
                         Text(
                             "Ni: ${log.actorName}" +
                                     if (log.actorRole.isNotBlank()) {
@@ -508,15 +637,16 @@ fun SettingsView(viewModel: SuperadminViewModel) {
     val tiers by viewModel.tiers.collectAsStateWithLifecycle()
     val cutoffHour by viewModel.cutoffHour.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val isSavingSettings by viewModel.isSavingSettings.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .imePadding()
-            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)
+            .padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), top = 8.dp, bottom = 32.dp)
     ) {
-        Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text("Settings", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold)
 
         Spacer(Modifier.height(16.dp))
 
@@ -662,11 +792,22 @@ fun SettingsView(viewModel: SuperadminViewModel) {
 
         Button(
             onClick = { viewModel.saveSettings() },
+            enabled = !isSavingSettings,
             colors = ButtonDefaults.buttonColors(
                 containerColor = EnerjeepBlue
             ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) { Text("I-save", maxLines = 1) }
+        ) {
+            if (isSavingSettings) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.White
+                )
+            } else {
+                Text("I-save", maxLines = 1)
+            }
+        }
     }
 }

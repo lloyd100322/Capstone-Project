@@ -27,7 +27,10 @@ import com.mobile.enerjeep.navigation.Screen
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
 import com.mobile.enerjeep.ui.theme.ErrorRedLight
 import com.mobile.enerjeep.ui.theme.TextSecondary
+import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.theme.WarningOrangeLight
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,9 +46,9 @@ fun AccountManagementScreen(
     }
 
     /*
-     * Superadmin toolbox: the emergency list, the accountability log
-     * and the settings open INSIDE this screen (no new module needed).
-     * 0 = Mga Account, 1 = Emergency List, 2 = Talaan, 3 = Settings
+     * Superadmin-only Emergency contacts remain accessible from Account
+     * Management. The Activity Log has been moved to the Reports tab so
+     * it can be treated as an operational report alongside the others.
      */
     var superadminView by remember { mutableStateOf(0) }
     val isSuperadmin = viewModel.isSuperadmin()
@@ -79,7 +82,7 @@ fun AccountManagementScreen(
 
                 Text(
                     text = "Pamamahala ng Account",
-                    fontSize = 20.sp,
+                    fontSize = responsiveSectionTitleSize(),
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     maxLines = 2,
@@ -120,7 +123,7 @@ fun AccountManagementScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = responsivePageHorizontalPadding())
         ) {
             /*
              * Superadmin-only toolbox button. An admin never sees
@@ -157,35 +160,11 @@ fun AccountManagementScreen(
                 }
 
                 else -> {
-            OutlinedTextField(
+            SearchField(
                 value = uiState.searchQuery,
-                onValueChange = {
-                    viewModel.updateSearchQuery(it)
-                },
-                placeholder = {
-                    Text(
-                        "Hanapin ayon sa pangalan o numero",
-                        color = TextSecondary
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "Hanapin",
-                        tint = TextSecondary
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = FieldBorderColor,
-                    focusedBorderColor = Color(0xFF1B49B5),
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White
-                ),
-                singleLine = true
+                onValueChange = viewModel::updateSearchQuery,
+                placeholder = "Hanapin: pangalan / numero",
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
             uiState.errorMessage?.let { message ->
@@ -422,12 +401,20 @@ fun AccountCard(
                                     shape = RoundedCornerShape(12.dp)
                                 )
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Burahin ang account ni ${account.name}",
-                                tint = Color.Red,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            if (isBusy) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color.Red,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Burahin ang account ni ${account.name}",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }

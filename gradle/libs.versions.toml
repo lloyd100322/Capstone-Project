@@ -17,6 +17,8 @@ kotlinx-serialization = "1.9.0"
 kotlinx-serialization-json-plugin = "2.2.10"
 googleServices = "4.5.0"
 firebaseBom = "34.17.0"
+intuitSdp = "1.1.1"
+intuitSsp = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -60,6 +62,8 @@ firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "fireb
 firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 firebase-functions = { group = "com.google.firebase", name = "firebase-functions" }
+intuit-sdp = { module = "com.intuit.sdp:sdp-android", version.ref = "intuitSdp" }
+intuit-ssp = { module = "com.intuit.ssp:ssp-android", version.ref = "intuitSsp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
