@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -18,8 +17,6 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,9 +25,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -614,7 +608,6 @@ fun ProfileMainContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileContent(
     profile: ProfileData,
@@ -628,223 +621,35 @@ fun EditProfileContent(
         String
     ) -> Unit
 ) {
-
-    var firstName by remember(profile) {
-        mutableStateOf(profile.firstName)
-    }
-
-    var lastName by remember(profile) {
-        mutableStateOf(profile.lastName)
-    }
-
-    /*
-     * The UI accepts the 10-digit local number while the database
-     * stores +639...
-     */
-    var phone by remember(profile) {
-        mutableStateOf(
-            profile.phoneNumber
-                .removePrefix("+63")
-        )
-    }
-
+    var firstName by remember(profile) { mutableStateOf(profile.firstName) }
+    var lastName by remember(profile) { mutableStateOf(profile.lastName) }
     var emergencyContactName by remember(profile) {
         mutableStateOf(profile.emergencyContactName)
     }
-
     var emergencyContactNumber by remember(profile) {
         mutableStateOf(profile.emergencyContactNumber)
     }
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(
-                    rememberScrollState()
-                )
-                .imePadding()
-    ) {
-
-        TopAppBar(
-            title = {
-                Text(
-                    "I-edit ang Profile",
-                    fontWeight =
-                        FontWeight.Bold
-                )
-            },
-            navigationIcon = {
-                IconButton(
-                    onClick = onBack
-                ) {
-                    Icon(
-                        Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-            }
-        )
-
-        Card(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-            colors =
-                CardDefaults.cardColors(
-                    containerColor =
-                        Color.White
-                ),
-            shape =
-                RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-
-            Column(
-                modifier =
-                    Modifier.padding(24.dp)
-            ) {
-
-                /*
-                 * Picture frame ng profile - bilog na frame na may
-                 * initials (tulad ng driver profile). Walang camera icon
-                 * (walang photo upload sa app).
-                 */
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth(),
-                    contentAlignment =
-                        Alignment.Center
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(80.dp)
-                                .background(
-                                    ProfileBlue,
-                                    CircleShape
-                                ),
-                        contentAlignment =
-                            Alignment.Center
-                    ) {
-                        Text(
-                            text =
-                                profile.initials,
-                            color =
-                                Color.White,
-                            fontWeight =
-                                FontWeight.Bold,
-                            fontSize =
-                                24.sp
-                        )
-                    }
-                }
-
-                Spacer(
-                    modifier =
-                        Modifier.height(24.dp)
-                )
-
-                OutlinedTextField(
-                    value = emergencyContactName,
-                    onValueChange = {
-                        emergencyContactName =
-                            EmergencyContact.sanitizeName(it)
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    label = {
-                        Text("Emergency Contact Name")
-                    },
-                    placeholder = {
-                        Text("Pangalan ng contact")
-                    },
-                    singleLine = true
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(16.dp)
-                )
-
-                OutlinedTextField(
-                    value = emergencyContactNumber,
-                    onValueChange = {
-                        emergencyContactNumber =
-                            EmergencyContact.sanitizeNumber(it)
-                    },
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    label = {
-                        Text("Emergency Contact Number")
-                    },
-                    placeholder = {
-                        Text("09XXXXXXXXX")
-                    },
-                    keyboardOptions =
-                        KeyboardOptions(
-                            keyboardType =
-                                KeyboardType.Phone
-                        ),
-                    singleLine = true
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(32.dp)
-                )
-
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth()
-                ) {
-
-                    OutlinedButton(
-                        onClick = onBack,
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(56.dp)
-                    ) {
-                        Text("Kanselahin")
-                    }
-
-                    Spacer(
-                        modifier =
-                            Modifier.width(16.dp)
-                    )
-
-                    Button(
-                        onClick = {
-                            onSave(
-                                firstName,
-                                lastName,
-                                profile.phoneNumber,
-                                emergencyContactName,
-                                emergencyContactNumber
-                            )
-                        },
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ProfileBlue)
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                        } else {
-                            Text("I-save")
-                        }
-                    }
-                }
-            }
+    SharedEditProfileForm(
+        initials = profile.initials,
+        emergencyContactName = emergencyContactName,
+        emergencyContactNumber = emergencyContactNumber,
+        isSubmitting = isSubmitting,
+        onEmergencyContactNameChange = { emergencyContactName = it },
+        onEmergencyContactNumberChange = { emergencyContactNumber = it },
+        onCancel = onBack,
+        onSave = {
+            onSave(
+                firstName,
+                lastName,
+                profile.phoneNumber,
+                emergencyContactName.trim(),
+                emergencyContactNumber.trim()
+            )
         }
-    }
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SecurityContent(
     isSubmitting: Boolean = false,
@@ -855,148 +660,21 @@ fun SecurityContent(
         String
     ) -> Unit
 ) {
+    var oldPass by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var confirmPass by remember { mutableStateOf("") }
 
-    var oldPass by remember {
-        mutableStateOf("")
-    }
-
-    var newPass by remember {
-        mutableStateOf("")
-    }
-
-    var confirmPass by remember {
-        mutableStateOf("")
-    }
-
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(
-                    rememberScrollState()
-                )
-                .imePadding()
-    ) {
-
-        TopAppBar(
-            title = {
-                Text(
-                    "Seguridad",
-                    fontWeight =
-                        FontWeight.Bold
-                )
-            },
-            navigationIcon = {
-                IconButton(
-                    onClick = onBack
-                ) {
-                    Icon(
-                        Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-            }
-        )
-
-        Card(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-            colors =
-                CardDefaults.cardColors(
-                    containerColor =
-                        Color.White
-                ),
-            shape =
-                RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-
-            Column(
-                modifier =
-                    Modifier.padding(24.dp)
-            ) {
-
-                PasswordTextField(
-                    label = "Lumang Password",
-                    value = oldPass,
-                    onValueChange = {
-                        oldPass = it
-                    }
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(16.dp)
-                )
-
-                PasswordTextField(
-                    label = "Bagong Password",
-                    value = newPass,
-                    onValueChange = {
-                        newPass = it
-                    }
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(16.dp)
-                )
-
-                PasswordTextField(
-                    label = "Kumpirmahin",
-                    value = confirmPass,
-                    onValueChange = {
-                        confirmPass = it
-                    }
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier.height(32.dp)
-                )
-
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth()
-                ) {
-
-                    OutlinedButton(
-                        onClick = onBack,
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(56.dp)
-                    ) {
-                        Text("Kanselahin")
-                    }
-
-                    Spacer(
-                        modifier =
-                            Modifier.width(16.dp)
-                    )
-
-                    Button(
-                        onClick = {
-                            onSave(oldPass, newPass, confirmPass)
-                        },
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ProfileBlue)
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                        } else {
-                            Text("I-save")
-                        }
-                    }
-                }
-            }
-        }
-    }
+    SharedSecurityForm(
+        oldPassword = oldPass,
+        newPassword = newPass,
+        confirmPassword = confirmPass,
+        isSubmitting = isSubmitting,
+        onOldPasswordChange = { oldPass = it },
+        onNewPasswordChange = { newPass = it },
+        onConfirmPasswordChange = { confirmPass = it },
+        onCancel = onBack,
+        onSave = { onSave(oldPass, newPass, confirmPass) }
+    )
 }
 
 @Composable
@@ -1056,54 +734,3 @@ fun MenuRow(
     }
 }
 
-@Composable
-fun PasswordTextField(
-    label: String,
-    value: String,
-    onValueChange: (
-        String
-    ) -> Unit
-) {
-
-    var passwordVisible by remember {
-        mutableStateOf(false)
-    }
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier =
-            Modifier.fillMaxWidth(),
-        label = {
-            Text(label)
-        },
-        singleLine = true,
-        visualTransformation =
-            if (passwordVisible)
-                VisualTransformation.None
-            else
-                PasswordVisualTransformation(),
-        keyboardOptions =
-            KeyboardOptions(
-                keyboardType =
-                    KeyboardType.Password
-            ),
-        trailingIcon = {
-
-            IconButton(
-                onClick = {
-                    passwordVisible =
-                        !passwordVisible
-                }
-            ) {
-                Icon(
-                    if (passwordVisible)
-                        Icons.Default.Visibility
-                    else
-                        Icons.Default.VisibilityOff,
-                    contentDescription = if (passwordVisible) "Itago ang password" else "Ipakita ang password"
-                )
-            }
-        }
-    )
-}
