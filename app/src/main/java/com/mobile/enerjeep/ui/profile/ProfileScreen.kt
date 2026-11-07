@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
-import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.ErrorRedText
 import com.mobile.enerjeep.ui.theme.FieldBorderColor
@@ -621,8 +620,8 @@ fun EditProfileContent(
         String
     ) -> Unit
 ) {
-    var firstName by remember(profile) { mutableStateOf(profile.firstName) }
-    var lastName by remember(profile) { mutableStateOf(profile.lastName) }
+    val firstName = profile.firstName
+    val lastName = profile.lastName
     var emergencyContactName by remember(profile) {
         mutableStateOf(profile.emergencyContactName)
     }
