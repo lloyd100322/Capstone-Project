@@ -35,6 +35,7 @@ import com.mobile.enerjeep.ui.theme.*
 import com.mobile.enerjeep.ui.theme.TextSecondary
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.ui.incident.DriverIncidentScreen
+import com.mobile.enerjeep.ui.incident.IncidentInfoRow
 import com.mobile.enerjeep.ui.kita.KitaScreen
 import com.mobile.enerjeep.ui.profile.DriverProfileScreen
 import android.media.RingtoneManager
@@ -213,6 +214,7 @@ fun DriverContent(
                         activeIncidentTitle = uiState.activeIncidentTitle,
                         activeIncidentDate = uiState.activeIncidentDate,
                         activeIncidentPlate = uiState.activeIncidentPlate,
+                        activeIncidentLocation = uiState.activeIncidentLocation,
                         openIncidentCount = uiState.openIncidentCount,
                         posisyonBukas = uiState.posisyonBukas,
                         isInQueue = uiState.activeQueueDocId.isNotBlank() &&
@@ -282,6 +284,7 @@ fun DriverDashboardContent(
     activeIncidentTitle: String?,
     activeIncidentDate: String?,
     activeIncidentPlate: String?,
+    activeIncidentLocation: String? = null,
     openIncidentCount: Int,
     posisyonBukas: Int = 0,
     isInQueue: Boolean = false,
@@ -562,41 +565,22 @@ fun DriverDashboardContent(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = activeIncidentTitle ?: "Insidente",
+                                modifier = Modifier.fillMaxWidth(),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = Color.Black,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                                softWrap = true
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                // The incident can belong to another driver,
-                                // so the plate of the incident is shown.
-                                // The plate of the signed-in driver is used
-                                // when the record has no plate.
-                                text = "Plaka " + (activeIncidentPlate?.takeIf { it.isNotBlank() }
-                                    ?: plateNumber),
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                            Spacer(modifier = Modifier.height(8.dp))
+                            IncidentInfoRow(
+                                "Plaka ng Sasakyan",
+                                activeIncidentPlate?.takeIf { it.isNotBlank() } ?: plateNumber
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AccessTime,
-                                    contentDescription = null,
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = activeIncidentDate ?: "",
-                                    fontSize = 12.sp,
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            if (!activeIncidentLocation.isNullOrBlank()) {
+                                IncidentInfoRow("Lokasyon", activeIncidentLocation)
+                            }
+                            if (!activeIncidentDate.isNullOrBlank()) {
+                                IncidentInfoRow("Petsa", activeIncidentDate)
                             }
                         }
                     }
