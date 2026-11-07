@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,7 +51,11 @@ import com.mobile.enerjeep.ui.components.ToastFeedback
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
+fun DriverIncidentScreen(
+    focusIncidentId: String? = null,
+    onFocusHandled: (String) -> Unit = {},
+    viewModel: DriverIncidentViewModel = hiltViewModel()
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var historyFilter by remember { mutableStateOf(HistoryFilterState()) }
@@ -60,6 +66,26 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
         historyFilter,
         { it.createdAtMillis.takeIf { millis -> millis > 0 } }
     ) else uiState.filteredIncidents
+    var highlightedIncidentId by remember { mutableStateOf<String?>(null) }
+    var pendingBringIntoViewId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(focusIncidentId, uiState.allIncidents, uiState.isLoading, uiState.errorMessage) {
+        val requestedId = focusIncidentId ?: return@LaunchedEffect
+        val target = uiState.allIncidents.firstOrNull { it.id == requestedId }
+        if (target != null) {
+            viewModel.onSearchQueryChanged("")
+            viewModel.onTabSelected(
+                if (target.isResolved) IncidentTabType.NAAYOS
+                else IncidentTabType.DI_NAAYOS
+            )
+            historyFilter = HistoryFilterState()
+            highlightedIncidentId = target.id
+            pendingBringIntoViewId = target.id
+            onFocusHandled(requestedId)
+        } else if (!uiState.isLoading && uiState.errorMessage == null) {
+            onFocusHandled(requestedId)
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(LightGrayBackground).verticalScroll(rememberScrollState()).imePadding().padding(start = responsivePageHorizontalPadding(), end = responsivePageHorizontalPadding(), bottom = 32.dp)) {
         Spacer(Modifier.height(24.dp))
@@ -117,7 +143,21 @@ fun DriverIncidentScreen(viewModel: DriverIncidentViewModel = hiltViewModel()) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 visibleIncidents.forEach { incident ->
+                    val bringIntoViewRequester = remember(incident.id) {
+                        BringIntoViewRequester()
+                    }
+                    LaunchedEffect(pendingBringIntoViewId, incident.id) {
+                        if (pendingBringIntoViewId == incident.id) {
+                            kotlinx.coroutines.delay(150)
+                            bringIntoViewRequester.bringIntoView()
+                            if (pendingBringIntoViewId == incident.id) {
+                                pendingBringIntoViewId = null
+                            }
+                        }
+                    }
                     DriverIncidentCard(
+                        modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
+                        isHighlighted = incident.id == highlightedIncidentId,
                         incident = incident,
                         isLookingUpDriverPhone =
                             incident.id in uiState.lookingUpDriverPhoneIds,
@@ -173,10 +213,20 @@ fun DriverTabButton(modifier: Modifier = Modifier, text: String, isSelected: Boo
 fun DriverIncidentCard(
     incident: DriverIncident,
     isLookingUpDriverPhone: Boolean = false,
-    onCallDriver: () -> Unit
+    onCallDriver: () -> Unit,
+    modifier: Modifier = Modifier,
+    isHighlighted: Boolean = false
 ) {
     // Contact details are resolved only when the user taps the call action.
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isHighlighted) EnerjeepBlue.copy(alpha = 0.06f) else Color.White
+        ),
+        border = if (isHighlighted) androidx.compose.foundation.BorderStroke(2.dp, EnerjeepBlue) else null,
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
