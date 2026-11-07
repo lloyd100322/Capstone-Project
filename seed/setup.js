@@ -136,6 +136,25 @@ function daysAgo(days, hour, minute) {
   ));
 }
 
+function recentDate(daysBack, hour, minute) {
+  const current = manilaParts(new Date());
+  const safeDaysBack = Math.min(
+    Math.max(0, Math.trunc(daysBack)),
+    Math.max(0, current.day - 1)
+  );
+  let safeHour = hour;
+  let safeMinute = minute;
+
+  if (safeDaysBack === 0 &&
+      (safeHour > current.hour ||
+       (safeHour === current.hour && safeMinute > current.minute))) {
+    safeHour = current.hour;
+    safeMinute = current.minute;
+  }
+
+  return daysAgo(safeDaysBack, safeHour, safeMinute);
+}
+
 function monthDate(monthsAgo, day, hour, minute) {
   const p = manilaParts(new Date());
   const monthIndex = (p.year * 12 + (p.month - 1)) - monthsAgo;
@@ -567,7 +586,7 @@ function buildDataset(accounts, settings) {
     const station = index % 2 === 0 ? "marilao" : "monumento";
     const route = station === "marilao" ? ROUTE_AM : ROUTE_MA;
     routePositions[station] += 1;
-    const joinedAt = daysAgo(0, 5, Math.min(55, index));
+    const joinedAt = recentDate(0, 5, Math.min(55, index));
     const id = "queue_" + safeId(driver.userId) + "_daily";
     add("queue", id, {
       id: id,
@@ -592,7 +611,11 @@ function buildDataset(accounts, settings) {
     const monthOffset = i % DATA_WINDOW_MONTHS;
     const cycle = Math.floor(i / 6);
     const dispatchAt = monthOffset === 0
-      ? daysAgo(0, 6 + ((cycle * 2) % 11), (10 + cycle * 7) % 60)
+      ? recentDate(
+          cycle % 6,
+          6 + ((cycle * 2) % 11),
+          (10 + cycle * 7) % 60
+        )
       : monthDate(monthOffset, [5, 13, 22][cycle % 3], 7 + (cycle % 8), (cycle * 11) % 60);
 
     const joinedAt = addMinutes(dispatchAt, -35);
@@ -666,7 +689,7 @@ function buildDataset(accounts, settings) {
 
   // A cancelled entry remains in history, not among the active queue rows.
   const cancelledDriver = drivers[1];
-  const cancelledAt = daysAgo(0, 5, 45);
+  const cancelledAt = recentDate(0, 5, 45);
   const cancelledId = "queue_" + safeId(cancelledDriver.userId) + "_cancelled";
   add("queue", cancelledId, {
     id: cancelledId,
@@ -677,8 +700,8 @@ function buildDataset(accounts, settings) {
     position: 0,
     status: "cancelled",
     isCancelled: true,
-    time: timeLabel(daysAgo(0, 5, 15)),
-    createdAt: timestamp(daysAgo(0, 5, 15)),
+    time: timeLabel(recentDate(0, 5, 15)),
+    createdAt: timestamp(recentDate(0, 5, 15)),
     cancelledAt: timestamp(cancelledAt),
     updatedAt: timestamp(cancelledAt),
   });
@@ -739,7 +762,7 @@ function buildDataset(accounts, settings) {
   const incidents = incidentTemplates.map(function (template, index) {
     const driver = drivers[index % drivers.length];
     const id = "incident_" + String(index + 1).padStart(2, "0");
-    const createdAt = daysAgo(
+    const createdAt = recentDate(
       template.daysBack,
       template.hour,
       template.minute
@@ -815,7 +838,7 @@ function buildDataset(accounts, settings) {
   ];
 
   donationEntries.forEach(function (entry, index) {
-    const date = daysAgo(entry[0], entry[1], entry[2]);
+    const date = recentDate(entry[0], entry[1], entry[2]);
     const id = "donation_cooperative_" + String(index + 1).padStart(2, "0");
     add("donations", id, {
       id: id,
