@@ -2,6 +2,7 @@ package com.mobile.enerjeep.ui.report
 
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -322,7 +323,7 @@ private fun ReportSectionHeader(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text(title, fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold, color = Color.Black)
     }
 }
 
@@ -686,7 +687,7 @@ fun AddDonasyonFormContent(
     var donor by remember { mutableStateOf("") }; var amount by remember { mutableStateOf("") }; var source by remember { mutableStateOf("") }; var note by remember { mutableStateOf("") }
     val today = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date()); var date by remember { mutableStateOf(today) }
     Column(Modifier.fillMaxWidth().heightIn(max = 640.dp).verticalScroll(rememberScrollState()).imePadding().padding(24.dp).padding(bottom = 32.dp)) {
-        Text(if (isGamit) "Gamit ng Donasyon" else "Idagdag na Donasyon", fontSize = 20.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp))
+        Text(if (isGamit) "Gamit ng Donasyon" else "Idagdag na Donasyon", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp))
         Text(if (isGamit) "Saan / Para kanino ginamit" else "Donor", fontWeight = FontWeight.Medium); OutlinedTextField(donor, { donor = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text(if (isGamit) "Hal: Tulong sa miyembro" else "Pangalan ng donor") })
         Spacer(Modifier.height(12.dp)); Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) { Text("Halaga", fontWeight = FontWeight.Medium); OutlinedTextField(amount, { if (it.isEmpty() || it.all(Char::isDigit)) amount = it }, modifier = Modifier.fillMaxWidth(), leadingIcon = { PesoIcon(modifier = Modifier.padding(start = 12.dp), size = 18.dp, color = TextSecondary) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), placeholder = { Text("0") }) }
