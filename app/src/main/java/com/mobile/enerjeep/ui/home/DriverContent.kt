@@ -584,13 +584,6 @@ fun DriverDashboardContent(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "I-tap para makita sa Insidente",
-                        color = EnerjeepBlue,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
                 }
             }
         } else if (openIncidentCount == 0 && activeIncidentTitle == null) {
