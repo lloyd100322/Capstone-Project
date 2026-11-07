@@ -61,6 +61,8 @@ Ang tool ay hindi gumagamit ng broad database wipe. Tinatanggal lamang nito ang:
 
 Ang ibang Firestore records na hindi pag-aari ng dataset refresh ay pinananatili.
 
+Kasama sa refresh ang fallback cleanup para sa lumang 12-buwang dispatch history na ginawa ng dating generator. Hinahanap nito ang eksaktong `queue_<userId>_history_MM_NN` document IDs at ang katumbas na `_dispatch` ledger entries at dispatch notifications. Buburahin ang mga iyon sa `--apply` bago isulat ang bagong tatlong-buwang dataset, kahit wala o kulang ang dating `settings/operationsIndex`. Hindi nito binubura ang ordinaryong UUID queue entries o ibang ledger records.
+
 ## Bago patakbuhin
 
 1. Siguraduhing may existing active account para sa superadmin, admin, at hindi bababa sa apat na driver.
@@ -113,7 +115,7 @@ Hindi kailangan ng Firebase Functions o Firestore Rules deployment para lamang m
 
 Puwedeng ulitin ang preview at apply. Gumagamit ang script ng stable document IDs at internal index para palitan ang sarili nitong dating records, hindi para magdagdag nang magdagdag ng duplicate entries.
 
-**Huwag magdagdag ng --wipe.** Wala nang broad wipe option ang bagong tool dahil kailangang manatiling ligtas ang kasalukuyang user accounts at credentials.
+**Huwag magdagdag ng --wipe.** Wala nang broad wipe option ang bagong tool dahil kailangang manatiling ligtas ang kasalukuyang user accounts at credentials. Para tuluyang mawala sa app ang lumang generated history, kailangang patakbuhin ang bagong seeder gamit ang `--apply`; ang pag-update o pag-install lang ng APK ay hindi nagbabago ng existing Firestore documents.
 
 ## Kapag may validation error
 
