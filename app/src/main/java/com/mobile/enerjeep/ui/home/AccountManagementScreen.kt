@@ -29,6 +29,8 @@ import com.mobile.enerjeep.ui.theme.ErrorRedLight
 import com.mobile.enerjeep.ui.theme.TextSecondary
 import com.mobile.enerjeep.ui.components.SearchField
 import com.mobile.enerjeep.ui.theme.WarningOrangeLight
+import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
+import com.mobile.enerjeep.ui.theme.responsiveSectionTitleSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,7 +82,7 @@ fun AccountManagementScreen(
 
                 Text(
                     text = "Pamamahala ng Account",
-                    fontSize = 20.sp,
+                    fontSize = responsiveSectionTitleSize(),
                     fontWeight = FontWeight.Bold,
                     color = Color.Black,
                     maxLines = 2,
@@ -121,7 +123,7 @@ fun AccountManagementScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = responsivePageHorizontalPadding())
         ) {
             /*
              * Superadmin-only toolbox button. An admin never sees
