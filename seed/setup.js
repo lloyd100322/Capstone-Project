@@ -240,99 +240,6 @@ function legacyTag(number) {
   return (0xa100 + number).toString(16);
 }
 
-// --------------------------------------------------------------------- old dataset IDs
-// Only the exact operational document IDs from the previous setup.js are
-// removed. Account and password documents are deliberately excluded.
-function previousSetupDocumentIds() {
-  const ids = {
-    queue: [],
-    incidents: [],
-    ledger: [],
-    donations: [],
-    emergencyContacts: [],
-    activityLogs: [],
-    notifications: [],
-  };
-
-  const oldDriverIds = [];
-  for (let i = 3; i <= 35; i++) {
-    oldDriverIds.push("USR-" + String(i).padStart(4, "0"));
-  }
-
-  // Previous active queue entries on Marilao – Monumento.
-  for (let i = 0; i <= 16; i++) {
-    ids.queue.push(
-      "queue_" + oldDriverIds[i] + "_" + legacyTag(i)
-    );
-  }
-
-  // Previous active queue entries on Monumento – Marilao (except #1,
-  // which was the returning queue entry written after a dispatch).
-  for (let i = 1; i <= 15; i++) {
-    ids.queue.push(
-      "queue_" + oldDriverIds[17 + i] + "_" + legacyTag(100 + i)
-    );
-  }
-
-  const oldRogerDispatch =
-    "queue_" + oldDriverIds[0] + "_" + legacyTag(201);
-  const oldJessDispatch =
-    "queue_" + oldDriverIds[1] + "_" + legacyTag(202);
-  const oldJimmyDispatch =
-    "queue_" + oldDriverIds[17] + "_" + legacyTag(203);
-
-  ids.queue.push(oldRogerDispatch);
-  ids.queue.push(oldJessDispatch);
-  ids.queue.push(oldJimmyDispatch);
-  ids.queue.push(
-    "queue_" + oldDriverIds[0] + "_after_" + oldRogerDispatch
-  );
-  ids.queue.push(
-    "queue_" + oldDriverIds[17] + "_after_" + oldJimmyDispatch
-  );
-  ids.queue.push(
-    "queue_" + oldDriverIds[1] + "_" + legacyTag(204)
-  );
-
-  [301, 302, 303, 304].forEach(function (n) {
-    ids.incidents.push("incident_" + legacyTag(n));
-  });
-
-  [oldRogerDispatch, oldJessDispatch, oldJimmyDispatch].forEach(function (id) {
-    ids.ledger.push(id + "_dispatch");
-  });
-  [801, 802].forEach(function (n) {
-    ids.ledger.push("fee_" + legacyTag(n));
-  });
-
-  for (let i = 0; i < 5; i++) {
-    ids.donations.push("donation_" + legacyTag(501 + i));
-  }
-  for (let i = 0; i < 4; i++) {
-    ids.emergencyContacts.push("contact_" + legacyTag(601 + i));
-  }
-  for (let i = 0; i < 5; i++) {
-    ids.activityLogs.push("log_" + legacyTag(701 + i));
-  }
-
-  // The previous incident trigger generated one per-account document
-  // using "incident_" + incidentId. Remove only those exact old IDs.
-  const oldIncidentIds = ids.incidents.map(function (id) {
-    return "incident_" + id;
-  });
-  for (let i = 1; i <= 35; i++) {
-    const phone = "+639171" + String(i).padStart(6, "0");
-    oldIncidentIds.forEach(function (notificationId) {
-      ids.notifications.push({
-        phone: phone,
-        id: notificationId,
-      });
-    });
-  }
-
-  return ids;
-}
-
 // --------------------------------------------------------------------- read accounts
 async function loadExistingAccounts() {
   const snapshot = await db.collection("users").get();
@@ -450,22 +357,12 @@ async function loadExistingAccounts() {
 
 // --------------------------------------------------------------------- settings
 async function loadSettings(drivers) {
-  const refs = {
-    tiers: db.collection("settings").doc("deductionTiers"),
-    rotation: db.collection("settings").doc("queueRotation"),
-    queueControl: db.collection("settings").doc("queueControl"),
+  // Reset all non-account settings with the operational dataset refresh.
+  // These are the system defaults, not values copied from the old test data.
+  const tiers = {
+    "16": 32,
+    "22": 44,
   };
-
-  const snapshots = await Promise.all([
-    refs.tiers.get(),
-    refs.rotation.get(),
-    refs.queueControl.get(),
-  ]);
-
-  const tiersData = snapshots[0].exists ? (snapshots[0].data() || {}) : {};
-  const tiers = Object.assign({}, tiersData);
-  if (!Number.isFinite(Number(tiers["16"]))) tiers["16"] = 32;
-  if (!Number.isFinite(Number(tiers["22"]))) tiers["22"] = 44;
 
   drivers.forEach(function (driver) {
     if (driver.seater > 0 && !Number.isFinite(Number(tiers[String(driver.seater)]))) {
@@ -473,22 +370,10 @@ async function loadSettings(drivers) {
     }
   });
 
-  const storedCutoff = snapshots[1].exists
-    ? Number(snapshots[1].get("cutoffHour"))
-    : 21;
-  const cutoffHour = Number.isInteger(storedCutoff) &&
-    storedCutoff >= 0 && storedCutoff <= 23
-    ? storedCutoff
-    : 21;
-
-  const previousRevision = snapshots[2].exists
-    ? Number(snapshots[2].get("revision") || 0)
-    : 0;
-
   return {
     tiers: tiers,
-    cutoffHour: cutoffHour,
-    nextQueueRevision: previousRevision + 1,
+    cutoffHour: 21,
+    nextQueueRevision: 1,
   };
 }
 
@@ -1021,126 +906,132 @@ function buildDataset(accounts, settings) {
   };
 }
 
-// --------------------------------------------------------------------- manifest + writes
-function previousManifestRefs(manifest) {
-  const refs = [];
-  const collectionIds = manifest && manifest.collectionIds
-    ? manifest.collectionIds
-    : {};
+// --------------------------------------------------------------------- clean-slate cleanup
+const PRESERVED_ACCOUNT_COLLECTIONS = new Set([
+  "users",
+  "userSecrets",
+  "driverPlateClaims",
+  "secureSessions",
+]);
 
-  const allowedCollections = new Set([
-    "queue", "incidents", "ledger", "donations",
-    "emergencyContacts", "activityLogs",
-  ]);
-  Object.keys(collectionIds).forEach(function (collection) {
-    if (!allowedCollections.has(collection)) return;
-    (collectionIds[collection] || []).forEach(function (id) {
-      refs.push(db.collection(collection).doc(id));
-    });
-  });
+/**
+ * Collect every existing document in a collection and all of its
+ * subcollections. Root account documents are handled separately so that
+ * their profile documents are never included in the deletion plan.
+ */
+async function collectCollectionTree(collectionRef, refsByPath, counts, groupName) {
+  const snapshot = await collectionRef.get();
+  counts[groupName] = (counts[groupName] || 0) + snapshot.size;
 
-  (manifest && Array.isArray(manifest.notifications)
-    ? manifest.notifications
-    : []).forEach(function (entry) {
-      (entry.ids || []).forEach(function (id) {
-        refs.push(
-          db.collection("users")
-            .doc(entry.userDocumentId)
-            .collection("notifications")
-            .doc(id)
-        );
-      });
-    });
+  for (const document of snapshot.docs) {
+    refsByPath.set(document.ref.path, document.ref);
 
-  return refs;
-}
-
-function legacyRefs() {
-  const oldIds = previousSetupDocumentIds();
-  const refs = [];
-  Object.keys(oldIds).forEach(function (collection) {
-    if (collection === "notifications") return;
-    oldIds[collection].forEach(function (id) {
-      refs.push(db.collection(collection).doc(id));
-    });
-  });
-  oldIds.notifications.forEach(function (entry) {
-    refs.push(
-      db.collection("users")
-        .doc(entry.phone)
-        .collection("notifications")
-        .doc(entry.id)
-    );
-  });
-  return refs;
+    const childCollections = await document.ref.listCollections();
+    for (const childCollection of childCollections) {
+      await collectCollectionTree(
+        childCollection,
+        refsByPath,
+        counts,
+        groupName
+      );
+    }
+  }
 }
 
 /**
- * Fallback cleanup for dispatch history written by the older twelve-month
- * generator. Its deterministic "_history_MM_NN" document IDs identify only
- * generator-created presentation rows; ordinary app-created UUID/requeue
- * entries do not match this pattern. This also works if operationsIndex is
- * missing or was not written by an interrupted older refresh.
+ * Preserve account profiles, password hashes, Firebase Auth identities,
+ * plate claims, and secure login sessions. Clear every other root collection
+ * recursively. Under /users, retain each account document but clear every
+ * nested collection (including notifications).
  */
-async function legacyHistoricalRefs(activeDrivers, activeMembers) {
-  const prefixes = activeDrivers.map(function (driver) {
-    return "queue_" + safeId(driver.userId) + "_history_";
-  });
-  const historyIdPattern = /^queue_.+_history_\d{2}_\d{2}$/;
-  const [queueSnapshot, ledgerSnapshot] = await Promise.all([
-    db.collection("queue").get(),
-    db.collection("ledger").get(),
-  ]);
-
-  const historyIds = new Set();
+async function collectNonAccountDocumentRefs() {
   const refsByPath = new Map();
+  const counts = {};
+  const rootCollections = await db.listCollections();
 
-  queueSnapshot.docs.forEach(function (document) {
-    const id = document.id;
-    if (!historyIdPattern.test(id) ||
-        !prefixes.some(function (prefix) { return id.startsWith(prefix); })) {
-      return;
+  for (const rootCollection of rootCollections) {
+    if (rootCollection.id === "users") {
+      const accountSnapshot = await rootCollection.get();
+      for (const accountDocument of accountSnapshot.docs) {
+        const childCollections = await accountDocument.ref.listCollections();
+        for (const childCollection of childCollections) {
+          await collectCollectionTree(
+            childCollection,
+            refsByPath,
+            counts,
+            "users/{account} subcollections"
+          );
+        }
+      }
+      continue;
     }
-    historyIds.add(id);
-    refsByPath.set(document.ref.path, document.ref);
-  });
 
-  ledgerSnapshot.docs.forEach(function (document) {
-    const id = document.id;
-    if (!id.endsWith("_dispatch")) return;
-    const queueId = id.slice(0, -"_dispatch".length);
-    if (!historyIdPattern.test(queueId) ||
-        !prefixes.some(function (prefix) { return queueId.startsWith(prefix); })) {
-      return;
+    if (PRESERVED_ACCOUNT_COLLECTIONS.has(rootCollection.id)) {
+      continue;
     }
-    historyIds.add(queueId);
-    refsByPath.set(document.ref.path, document.ref);
-  });
 
-  // Remove only dispatch notifications that reference those same generated
-  // history IDs. Do not touch incident, account, or unrelated notifications.
-  activeMembers.forEach(function (member) {
-    historyIds.forEach(function (queueId) {
-      const ref = db.collection("users")
-        .doc(member.docId)
-        .collection("notifications")
-        .doc("dispatch_" + queueId);
-      refsByPath.set(ref.path, ref);
-    });
-  });
+    await collectCollectionTree(
+      rootCollection,
+      refsByPath,
+      counts,
+      rootCollection.id
+    );
+  }
 
   return {
     refs: Array.from(refsByPath.values()),
-    historyIds: Array.from(historyIds),
+    counts: counts,
   };
 }
 
-function uniqueDocumentRefs(refs) {
-  const unique = new Map();
-  refs.forEach(function (ref) {
-    unique.set(ref.path, ref);
+function cleanupGroupForPath(documentPath) {
+  const parts = documentPath.split("/");
+  return parts[0] === "users"
+    ? "users/{account} subcollections"
+    : parts[0];
+}
+
+/**
+ * Documents which are also targets of the new dataset are overwritten with
+ * fresh records. All remaining non-account documents are deleted.
+ */
+function buildCleanSlatePlan(existingData, writeOperations) {
+  const writePaths = new Set(
+    writeOperations.map(function (operation) {
+      return operation.ref.path;
+    })
+  );
+  const deleteRefs = [];
+  const replacedCounts = {};
+  const deleteCounts = {};
+
+  existingData.refs.forEach(function (ref) {
+    const group = cleanupGroupForPath(ref.path);
+    if (writePaths.has(ref.path)) {
+      replacedCounts[group] = (replacedCounts[group] || 0) + 1;
+    } else {
+      deleteRefs.push(ref);
+      deleteCounts[group] = (deleteCounts[group] || 0) + 1;
+    }
   });
-  return Array.from(unique.values());
+
+  return {
+    deleteRefs: deleteRefs,
+    replacedCounts: replacedCounts,
+    deleteCounts: deleteCounts,
+  };
+}
+
+function logCleanupCounts(title, counts) {
+  const entries = Object.keys(counts).sort();
+  console.log(title);
+  if (entries.length === 0) {
+    console.log("  (none)");
+    return;
+  }
+  entries.forEach(function (name) {
+    console.log("  " + name + ": " + counts[name]);
+  });
 }
 
 async function commitDeletes(refs) {
@@ -1195,7 +1086,7 @@ function buildWriteOperations(dataset, settings, oldQueueRevision) {
   operations.push({
     ref: tiersRef,
     data: settings.tiers,
-    merge: true,
+    merge: false,
   });
   operations.push({
     ref: rotationRef,
@@ -1204,7 +1095,7 @@ function buildWriteOperations(dataset, settings, oldQueueRevision) {
       lastQueueDay: queueDayId(currentTime, settings.cutoffHour),
       updatedAt: FieldValue.serverTimestamp(),
     },
-    merge: true,
+    merge: false,
   });
   operations.push({
     ref: queueControlRef,
@@ -1212,7 +1103,7 @@ function buildWriteOperations(dataset, settings, oldQueueRevision) {
       revision: oldQueueRevision,
       updatedAt: FieldValue.serverTimestamp(),
     },
-    merge: true,
+    merge: false,
   });
 
   return operations;
@@ -1252,44 +1143,31 @@ async function main() {
   const settings = await loadSettings(accounts.activeDrivers);
   const dataset = buildDataset(accounts, settings);
   validateDatasetWindow(dataset, new Date());
-  const previousIndex = await INDEX_REF.get();
-  const previousManifest = previousIndex.exists
-    ? previousIndex.data()
-    : null;
 
-  const allDriverAccounts = accounts.all.filter(function (account) {
-    return account.role === "driver" && Boolean(account.userId);
-  });
-  const fallbackHistory = await legacyHistoricalRefs(
-    allDriverAccounts,
-    accounts.activeMembers
-  );
-  const removeRefs = uniqueDocumentRefs(
-    previousManifestRefs(previousManifest)
-      .concat(legacyRefs())
-      .concat(fallbackHistory.refs)
-  );
   const operations = buildWriteOperations(
     dataset,
     settings,
     settings.nextQueueRevision
   );
   const manifest = buildManifest(dataset);
+  const existingData = await collectNonAccountDocumentRefs();
+  const cleanup = buildCleanSlatePlan(existingData, operations);
 
   console.log("");
-  console.log("EnerJeep — Operational Data Refresh");
+  console.log("EnerJeep — Full Operational Data Reset");
   console.log("Firebase project: " + projectId);
   console.log("Mode: " + (applyChanges ? "APPLY" : "PREVIEW ONLY"));
   console.log("");
-  console.log("Existing accounts (profiles and credentials remain unchanged):");
-  console.log("  Superadmin: " + dataset.counts.activeSuperadmins);
-  console.log("  Admin: " + dataset.counts.activeAdmins);
-  console.log("  Active drivers: " + dataset.counts.activeDrivers);
+  console.log("Accounts preserved:");
+  console.log("  Superadmin profiles: " + dataset.counts.activeSuperadmins);
+  console.log("  Admin profiles: " + dataset.counts.activeAdmins);
+  console.log("  Active driver profiles: " + dataset.counts.activeDrivers);
+  console.log("  Password hashes, Firebase Auth, plate claims, secure sessions: PRESERVED");
   console.log("");
-  console.log("Generated record dates: current and previous two calendar months");
-  console.log("Records to create or replace:");
+  console.log("New generated operational records:");
+  console.log("  Date scope: current Manila calendar month + previous two months only");
   console.log("  Current queue entries: " + dataset.counts.activeQueue);
-  console.log("  Dispatch history (three-month range): " + dataset.counts.historyQueue);
+  console.log("  Dispatch history: " + dataset.counts.historyQueue);
   console.log("  Incident reports: " + dataset.counts.incidents);
   console.log("  Dispatch earnings: " + dataset.counts.dispatchLedger);
   console.log("  Paid fines: " + dataset.counts.fineLedger);
@@ -1298,34 +1176,49 @@ async function main() {
   console.log("  Activity records: " + dataset.counts.activityLogs);
   console.log("  Per-account notifications: " + dataset.counts.notifications);
   console.log("");
-  console.log("Old generated operational document IDs queued for removal: " + removeRefs.length);
-  console.log("Legacy twelve-month dispatch history IDs found: " + fallbackHistory.historyIds.length);
-  console.log("User profiles, password hashes, Auth accounts and plate claims: NOT MODIFIED");
-  console.log("Unrelated Firestore records: PRESERVED");
+  logCleanupCounts("Existing non-account records to be replaced:", cleanup.replacedCounts);
+  logCleanupCounts("Existing non-account records to be deleted:", cleanup.deleteCounts);
+  console.log("");
+  console.log("Old Kita/cooperative-income records to delete: " +
+    (cleanup.deleteCounts.kita || cleanup.replacedCounts.kita || 0));
+  console.log("Old incident records to delete: " +
+    (cleanup.deleteCounts.incidents || cleanup.replacedCounts.incidents || 0));
+  console.log("Total old documents to delete: " + cleanup.deleteRefs.length);
+  console.log("Total existing documents to replace with fresh records: " +
+    Object.keys(cleanup.replacedCounts).reduce(function (total, key) {
+      return total + cleanup.replacedCounts[key];
+    }, 0));
+  console.log("");
+  console.log("No account profile or account credential document is in the deletion plan.");
+  console.log("All other Firestore root collections are cleaned recursively, including legacy test collections.");
+  console.log("All subcollections beneath each /users/{account} document are cleaned (including old notifications).");
 
   if (!applyChanges) {
     console.log("");
-    console.log("Walang binago sa Firestore. Suriin ang bilang sa itaas.");
-    console.log("Kapag tama, ulitin ang command at idagdag ang --apply.");
+    console.log("PREVIEW ONLY — WALANG BINAGO SA FIRESTORE.");
+    console.log("Suriin ang project ID at bilang sa itaas. Mag-backup muna bago mag-apply.");
+    console.log("Kapag tama ang preview, ulitin ang command at idagdag ang --apply.");
     return;
   }
 
+  // Write the fresh replacement records first. This makes a failed write
+  // recoverable without first removing the currently stored operational data.
   console.log("");
-  console.log("Inaalis ang dating generated operational records...");
-  await commitDeletes(removeRefs);
-
-  console.log("Isinusulat ang bagong records...");
+  console.log("Isinusulat ang bagong three-month operational records...");
   await commitWrites(operations);
 
-  console.log("Ina-update ang internal document index...");
+  console.log("Nililinis ang lahat ng lumang non-account records...");
+  await commitDeletes(cleanup.deleteRefs);
+
+  console.log("Ina-update ang bagong internal operations index...");
   await INDEX_REF.set(manifest, { merge: false });
 
   console.log("");
-  console.log("Matagumpay na na-update ang operational data.");
-  console.log("Hindi binago ang kasalukuyang user accounts o password credentials.");
+  console.log("Matagumpay ang full operational data reset.");
+  console.log("Napanatili ang lahat ng account profiles, credentials, Auth users, plate claims at secure sessions.");
+  console.log("Ang natitirang operational records ay bagong dataset lamang na sakop ang kasalukuyan at nakaraang dalawang calendar month.");
   console.log("I-restart ang EnerJeep app upang i-refresh ang lahat ng screens.");
 }
-
 main()
   .then(function () {
     return admin.app().delete();
