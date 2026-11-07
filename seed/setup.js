@@ -89,6 +89,21 @@ const INDEX_REF = db.collection("settings").doc("operationsIndex");
 const ROUTE_AM = "Marilao – Monumento";
 const ROUTE_MA = "Monumento – Marilao";
 
+// Verified corridor locations from the LTFRB route feed for
+// "Heritage Homes - Monumento via NLEX". Keep incident locations within
+// these listed stops/terminal points; do not substitute nearby off-route roads.
+const NLEX_ROUTE_LOCATIONS = Object.freeze({
+  marilaoNlex: "North Luzon Expressway, Marilao, Bulacan",
+  meycauayanCamalig: "Maycauayan Camalig, City of Meycauayan, Bulacan",
+  malhacanNlex: "Malhacan Road / North Luzon Expressway Intersection, City of Meycauayan, Bulacan",
+  valenzuelaMindanao: "North Luzon Expressway / Mindanao Avenue, Valenzuela City",
+  valenzuelaArty: "North Luzon Expressway near Arty Subdivision, Valenzuela City",
+  caloocanNlexComplex: "North Luzon Expressway near NLEX Complex, Caloocan City",
+  caloocanEdsa: "North Luzon Expressway / Epifanio de los Santos Avenue Intersection, Caloocan City",
+  caloocan8thStreet: "Epifanio de los Santos Avenue / 8th Street Intersection, Caloocan City",
+  monumentoSideTerminal: "Lapu-Lapu / Samson Road Intersection, Malabon City",
+});
+
 // --------------------------------------------------------------------- dates
 function manilaParts(date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -618,45 +633,58 @@ function buildDataset(accounts, settings) {
     updatedAt: timestamp(cancelledAt),
   });
 
-  // Incident records: open and resolved items with dates, locations and penalties.
+  // Incident records use actual stops/terminal points on the NLEX corridor.
   const incidentTemplates = [
     {
       title: "Flat tire sa likurang gulong",
-      location: "MacArthur Highway, Marilao, Bulacan",
-      description: "Nabutas ang likurang gulong habang bumibiyahe. Naiparada nang ligtas ang sasakyan at napalitan ang gulong.",
+      location: NLEX_ROUTE_LOCATIONS.marilaoNlex,
+      description: "Nabutas ang likurang gulong habang bumibiyahe sa NLEX. Naipatawag ang roadside assistance at naipasuri ang gulong bago ipinagpatuloy ang biyahe.",
       daysBack: 0, hour: 7, minute: 20, penalty: 0, resolved: false,
     },
     {
       title: "Pag-init ng makina",
-      location: "Lias Road, Marilao, Bulacan",
-      description: "Uminit ang makina habang mabigat ang daloy ng trapiko. Pansamantalang huminto ang driver at sinuri ang cooling system.",
+      location: NLEX_ROUTE_LOCATIONS.malhacanNlex,
+      description: "Tumaas ang temperatura ng makina malapit sa Malhacan Road interchange. Itinigil muna ang biyahe sa ligtas na lugar at sinuri ang cooling system.",
       daysBack: 0, hour: 9, minute: 10, penalty: 0, resolved: false,
     },
     {
-      title: "Minor collision sa gilid ng kalsada",
-      location: "Monumento Circle, Caloocan City",
-      description: "Nagkaroon ng gasgas sa harapang bahagi habang pumapasok sa pila. Walang naiulat na nasaktan at na-inspeksyon ang sasakyan.",
+      title: "Minor collision sa expressway",
+      location: NLEX_ROUTE_LOCATIONS.caloocanNlexComplex,
+      description: "Nagkaroon ng bahagyang banggaan habang mabagal ang takbo ng trapiko sa bahagi ng NLEX Complex. Walang naiulat na nasaktan at na-inspeksyon ang sasakyan.",
       daysBack: 2, hour: 14, minute: 35, penalty: 250, resolved: true,
     },
     {
       title: "Nasirang side mirror",
-      location: "Brgy. Malinta, Valenzuela City",
-      description: "Natamaan ang kanang side mirror sa masikip na kalsada. Napalitan na ang piyesa at nasuri ang pagkakakabit.",
+      location: NLEX_ROUTE_LOCATIONS.valenzuelaMindanao,
+      description: "Natamaan ang kanang side mirror habang dumaraan sa bahagi ng Mindanao Avenue interchange. Napalitan ang piyesa at nasuri ang pagkakakabit.",
       daysBack: 5, hour: 11, minute: 5, penalty: 0, resolved: true,
     },
     {
-      title: "Pagtagas ng hangin sa preno",
-      location: "Longos, Meycauayan City, Bulacan",
-      description: "Napansin ang pagbabago sa tunog ng preno bago bumiyahe. Itinigil muna ang operasyon at ipinatingin ang brake line.",
+      title: "Babala sa sistema ng preno",
+      location: NLEX_ROUTE_LOCATIONS.valenzuelaArty,
+      description: "Napansin ng driver na lumambot ang pedal ng preno habang nasa NLEX. Inihinto muna ang operasyon at ipinatingin ang brake line bago muling bumiyahe.",
       daysBack: 1, hour: 8, minute: 40, penalty: 0, resolved: false,
     },
     {
-      title: "Paglabag sa itinakdang paradahan",
-      location: "Poblacion, Meycauayan City, Bulacan",
-      description: "Nakatanggap ng citation matapos huminto sa bahaging hindi itinalaga para sa pagsasakay at pagbaba ng pasahero.",
+      title: "Minor traffic citation",
+      location: NLEX_ROUTE_LOCATIONS.monumentoSideTerminal,
+      description: "Nakatanggap ng citation matapos hindi masunod ang itinakdang loading at unloading area malapit sa Samson Road terminal.",
       daysBack: 18, hour: 10, minute: 25, penalty: 200, resolved: true,
     },
   ];
+
+  const allowedRouteLocations = new Set(Object.values(NLEX_ROUTE_LOCATIONS));
+  const offRouteIncidents = incidentTemplates.filter(function (template) {
+    return !allowedRouteLocations.has(template.location);
+  });
+  if (offRouteIncidents.length > 0) {
+    throw new Error(
+      "May incident location na wala sa verified NLEX route stops: " +
+      offRouteIncidents.map(function (template) {
+        return template.location;
+      }).join(", ")
+    );
+  }
 
   const incidents = incidentTemplates.map(function (template, index) {
     const driver = drivers[index % drivers.length];
