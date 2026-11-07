@@ -402,11 +402,30 @@ fun IncidentItemCard(
     onViewClick: () -> Unit,
     onMarkResolvedClick: () -> Unit
 ) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-        Column(Modifier.padding(20.dp)) {
-            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.location, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
-            Spacer(Modifier.height(12.dp)); StatusBadge(incident.status, WarningOrangeLight, WarningOrange); Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            IncidentCardHeader(
+                title = incident.title,
+                status = incident.status,
+                isResolved = incident.status == "Naayos"
+            )
+            Spacer(Modifier.height(12.dp))
+            IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+            if (incident.location.isNotBlank()) IncidentInfoRow("Lokasyon", incident.location)
+            if (incident.date.isNotBlank()) IncidentInfoRow("Petsa", incident.date)
+            if (incident.description.isNotBlank()) {
+                IncidentInfoRow("Paglalarawan", incident.description)
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Button(
                     onClick = onMarkResolvedClick,
                     enabled = !isResolving,
@@ -422,8 +441,10 @@ fun IncidentItemCard(
                         Text("Ayusin", maxLines = 1)
                     }
                 }
-                Spacer(Modifier.width(8.dp))
-                OutlinedButton(onClick = onViewClick, modifier = Modifier.weight(1f)) {
+                OutlinedButton(
+                    onClick = onViewClick,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text("Tingnan", maxLines = 1)
                 }
             }
@@ -433,15 +454,32 @@ fun IncidentItemCard(
 
 @Composable
 fun HistoryIncidentItemCard(incident: IncidentItem, onViewClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
-        Column(Modifier.padding(20.dp)) {
-            Text(incident.title, fontSize = 16.sp, fontWeight = FontWeight.Bold); Text(incident.plateNumber, color = TextSecondary); Text(incident.date, color = TextSecondary, fontSize = 12.sp)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            IncidentCardHeader(
+                title = incident.title,
+                status = incident.status,
+                isResolved = incident.status == "Naayos"
+            )
             Spacer(Modifier.height(12.dp))
-            // The "Naayos" tab only holds resolved incidents, but the
-            // badge still follows the real status of the record.
-            val isResolved = incident.status == "Naayos"
-            StatusBadge(incident.status, if (isResolved) SuccessGreenLight else WarningOrangeLight, if (isResolved) SuccessGreen else WarningOrange)
-            Spacer(Modifier.height(12.dp)); OutlinedButton(onClick = onViewClick, modifier = Modifier.fillMaxWidth()) { Text("Tingnan") }
+            IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+            if (incident.location.isNotBlank()) IncidentInfoRow("Lokasyon", incident.location)
+            if (incident.date.isNotBlank()) IncidentInfoRow("Petsa", incident.date)
+            if (incident.description.isNotBlank()) {
+                IncidentInfoRow("Paglalarawan", incident.description)
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onViewClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Tingnan", maxLines = 1)
+            }
         }
     }
 }
@@ -457,24 +495,57 @@ fun IncidentDetailsContent(
     onRecordPayment: (() -> Unit)? = null,
     onCallDriver: (() -> Unit)? = null
 ) {
-    Column(Modifier.fillMaxWidth().padding(24.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Detalye ng Insidente", fontSize = responsiveSectionTitleSize(), fontWeight = FontWeight.Bold); IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Close") } }
-        Spacer(Modifier.height(16.dp)); Text(incident.title, fontSize = 22.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(16.dp))
-        IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber); IncidentInfoRow("Lokasyon", incident.location); IncidentInfoRow("Petsa", incident.date); IncidentInfoRow("Multa", incident.penalty); IncidentInfoRow("Paglalarawan", incident.description); IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
-        /*
-         * Fase 6: tel: call button - tawagan ang driver ng sasakyan
-         * (naka-DIAL para makita muna ang numero bago tumawag).
-         */
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 720.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Detalye ng Insidente",
+                modifier = Modifier.weight(1f),
+                fontSize = responsiveSectionTitleSize(),
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Default.Close, contentDescription = "Isara")
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = incident.title,
+            modifier = Modifier.fillMaxWidth(),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            softWrap = true
+        )
+        Spacer(Modifier.height(12.dp))
+        StatusBadge(
+            incident.status,
+            if (incident.status == "Naayos") SuccessGreenLight else WarningOrangeLight,
+            if (incident.status == "Naayos") SuccessGreen else WarningOrange
+        )
+        Spacer(Modifier.height(16.dp))
+        IncidentInfoRow("Plaka ng Sasakyan", incident.plateNumber)
+        IncidentInfoRow("Lokasyon", incident.location)
+        IncidentInfoRow("Petsa", incident.date)
+        IncidentInfoRow("Multa", incident.penalty)
+        IncidentInfoRow("Paglalarawan", incident.description)
+        IncidentInfoRow("Naipadala sa Driver", incident.sentToDriver)
+
         if (onCallDriver != null) {
             Spacer(Modifier.height(16.dp))
             OutlinedButton(
                 onClick = onCallDriver,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    SuccessGreen
-                )
+                border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen)
             ) {
                 Icon(
                     Icons.Default.Call,
@@ -486,12 +557,11 @@ fun IncidentDetailsContent(
                 Text("Tawagan", color = SuccessGreen, maxLines = 1)
             }
         }
-        /*
-         * "May incident -> nagbayad": kung may multa ang insidente,
-         * maaaring i-record dito ang bayad ng driver (Talaan ay wala na).
-         */
+
         val penaltyDigits = incident.penalty.filter { it.isDigit() }
-        if (onRecordPayment != null && penaltyDigits.isNotEmpty() && (penaltyDigits.toIntOrNull() ?: 0) > 0) {
+        if (onRecordPayment != null && penaltyDigits.isNotEmpty() &&
+            (penaltyDigits.toIntOrNull() ?: 0) > 0
+        ) {
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onRecordPayment,
@@ -504,6 +574,7 @@ fun IncidentDetailsContent(
                 Text("Bayaran", color = Color.White, maxLines = 1)
             }
         }
+
         if (incident.sentToDriver == "Hindi") {
             Spacer(Modifier.height(16.dp))
             Button(
@@ -523,27 +594,88 @@ fun IncidentDetailsContent(
                 }
             }
         }
-        Spacer(Modifier.height(24.dp)); Row(Modifier.fillMaxWidth()) { OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("Isara", maxLines = 1) }; Spacer(Modifier.width(12.dp)); Button(
-            onClick = onResolve,
-            enabled = !isResolving,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+
+        Spacer(Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (isResolving) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = Color.White
-                )
-            } else {
-                Text("Ayusin", maxLines = 1)
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Isara", maxLines = 1)
             }
-        } }
+            Button(
+                onClick = onResolve,
+                enabled = !isResolving,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
+            ) {
+                if (isResolving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text("Ayusin", maxLines = 1)
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun IncidentInfoRow(label: String, value: String) { Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) { Text(label, color = TextSecondary, fontSize = 12.sp); Text(value, fontWeight = FontWeight.Medium) } }
+fun IncidentCardHeader(
+    title: String,
+    status: String,
+    isResolved: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black,
+            softWrap = true
+        )
+        Spacer(Modifier.width(12.dp))
+        StatusBadge(
+            status,
+            if (isResolved) SuccessGreenLight else WarningOrangeLight,
+            if (isResolved) SuccessGreen else WarningOrange
+        )
+    }
+}
+
+@Composable
+fun IncidentInfoRow(label: String, value: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.fillMaxWidth(),
+            color = TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value.ifBlank { "—" },
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.Black,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            softWrap = true
+        )
+    }
+}
 
 @Composable
 fun IncidentFormTextField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String, leadingIcon: (@Composable () -> Unit)? = null, keyboardOptions: KeyboardOptions = KeyboardOptions.Default) {
