@@ -214,6 +214,15 @@ function fullName(account) {
     .trim();
 }
 
+/**
+ * Account document IDs are also Firebase Auth phone identities.
+ * Keep only valid Philippine mobile numbers in E.164 form; never fabricate
+ * replacement numbers in the operational seeder.
+ */
+function isPhilippineE164MobileNumber(value) {
+  return /^\\+63[89]\\d{9}$/.test(String(value || "").trim());
+}
+
 function accountRoleLabel(role) {
   if (role === "superadmin") return "Superadmin";
   if (role === "admin") return "Admin";
@@ -263,6 +272,23 @@ async function loadExistingAccounts() {
   const recognized = accounts.filter(function (account) {
     return isMemberRole(account.role);
   });
+
+  // Cloud Functions resolve /users/{phone} against Firebase Auth by the
+  // exact E.164 phone number. Replacing it with a random-looking number would
+  // disconnect the account from its Auth identity and could collide with a
+  // real subscriber. Validate, then preserve the existing account identity.
+  const invalidAuthPhoneAccounts = recognized.filter(function (account) {
+    return !isPhilippineE164MobileNumber(account.docId);
+  });
+  if (invalidAuthPhoneAccounts.length > 0) {
+    throw new Error(
+      "May account document ID na hindi valid Philippine mobile E.164 format. " +
+      "Hindi papalitan ng seed ang account phone identities. Gamitin ang " +
+      "existing verified Firebase Auth number (+63...), o mag-set up muna " +
+      "ng dedicated Firebase fictional test numbers at hiwalay na migration. " +
+      "Walang account o operational data ang binago."
+    );
+  }
   const activeMembers = recognized.filter(function (account) {
     return account.status !== "inactive";
   });
@@ -1157,7 +1183,9 @@ async function main() {
   console.log("  Superadmin profiles: " + dataset.counts.activeSuperadmins);
   console.log("  Admin profiles: " + dataset.counts.activeAdmins);
   console.log("  Active driver profiles: " + dataset.counts.activeDrivers);
+  console.log("  Existing Philippine E.164 phone identities: " + accounts.all.length + " (PRESERVED)");
   console.log("  Password hashes, Firebase Auth, plate claims, secure sessions: PRESERVED");
+  console.log("  No random or unverified account phone numbers are generated.");
   console.log("");
   console.log("New generated operational records:");
   console.log("  Date scope: current Manila calendar month + previous two months only");
