@@ -11,12 +11,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,18 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mobile.enerjeep.R
-import com.mobile.enerjeep.data.EmergencyContact
 import com.mobile.enerjeep.ui.theme.EnerjeepBlue
 import com.mobile.enerjeep.ui.theme.ErrorRed
 import com.mobile.enerjeep.ui.theme.LightGrayBackground
@@ -442,7 +433,6 @@ fun DriverProfileMainContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DriverEditProfileContent(
     uiState: DriverProfileUiState,
@@ -450,197 +440,18 @@ fun DriverEditProfileContent(
     isSubmitting: Boolean = false,
     onCancel: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                LightGrayBackground
-            )
-            .verticalScroll(
-                rememberScrollState()
-            )
-            .imePadding()
-            .padding(24.dp)
-    ) {
-        Row(
-            verticalAlignment =
-                Alignment.CenterVertically,
-            modifier =
-                Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
-                    if (!isSubmitting) onCancel()
-                }
-        ) {
-            Icon(
-                imageVector =
-                    Icons.Default.ArrowBack,
-                contentDescription = null,
-                tint = Color.Black
-            )
-
-            Spacer(
-                modifier = Modifier.width(8.dp)
-            )
-
-            Text(
-                text = "I-edit ang Profile",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment =
-                        Alignment.Center
-                ) {
-                    Box {
-                        Surface(
-                            modifier =
-                                Modifier.size(80.dp),
-                            shape = CircleShape,
-                            color = EnerjeepBlue
-                        ) {
-                            Box(
-                                contentAlignment =
-                                    Alignment.Center
-                            ) {
-                                Text(
-                                    text = profileInitials(uiState.firstName, uiState.lastName),
-                                    color = Color.White,
-                                    fontSize = 24.sp,
-                                    fontWeight =
-                                        FontWeight.Bold
-                                )
-                            }
-                        }
-
-                    }
-                }
-
-                Spacer(
-                    modifier = Modifier.height(24.dp)
-                )
-
-                Text(
-                    text = "Emergency Contact Name",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                OutlinedTextField(
-                    value = uiState.emergencyContactName,
-                    onValueChange = {
-                        viewModel.updateEmergencyContactName(
-                            EmergencyContact.sanitizeName(it)
-                        )
-                    },
-                    placeholder = {
-                        Text(
-                            "Pangalan ng contact"
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Text(
-                    text = "Emergency Contact Number",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                OutlinedTextField(
-                    value = uiState.emergencyContactNumber,
-                    onValueChange = {
-                        viewModel.updateEmergencyContactNumber(
-                            EmergencyContact.sanitizeNumber(it)
-                        )
-                    },
-                    placeholder = {
-                        Text(
-                            "09XXXXXXXXX"
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(24.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onCancel,
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text(
-                            text = "Kanselahin",
-                            color = Color.Black
-                        )
-                    }
-
-                    Button(
-                        onClick = { viewModel.saveProfile() },
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                        } else {
-                            Text("I-save", color = Color.White)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    SharedEditProfileForm(
+        initials = profileInitials(uiState.firstName, uiState.lastName),
+        emergencyContactName = uiState.emergencyContactName,
+        emergencyContactNumber = uiState.emergencyContactNumber,
+        isSubmitting = isSubmitting,
+        onEmergencyContactNameChange = viewModel::updateEmergencyContactName,
+        onEmergencyContactNumberChange = viewModel::updateEmergencyContactNumber,
+        onCancel = onCancel,
+        onSave = viewModel::saveProfile
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DriverSecurityContent(
     uiState: DriverProfileUiState,
@@ -648,188 +459,15 @@ fun DriverSecurityContent(
     isSubmitting: Boolean = false,
     onCancel: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                LightGrayBackground
-            )
-            .verticalScroll(
-                rememberScrollState()
-            )
-            .imePadding()
-            .padding(24.dp)
-    ) {
-        Row(
-            verticalAlignment =
-                Alignment.CenterVertically,
-            modifier =
-                Modifier.clickable(role = Role.Button) {
-                    if (!isSubmitting) onCancel()
-                }
-        ) {
-            Icon(
-                imageVector =
-                    Icons.Default.ArrowBack,
-                contentDescription = "Bumalik sa profile",
-                tint = Color.Black
-            )
-
-            Spacer(
-                modifier = Modifier.width(8.dp)
-            )
-
-            Text(
-                text = "Seguridad",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White
-            ),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                Spacer(
-                    modifier = Modifier.height(20.dp)
-                )
-
-                Text(
-                    text = "Lumang Password",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                DriverPasswordInputField(
-                    value = uiState.oldPassword,
-                    onValueChange = viewModel::updateOldPassword
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Text(
-                    text = "Bagong Password",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                DriverPasswordInputField(
-                    value = uiState.newPassword,
-                    onValueChange = viewModel::updateNewPassword
-                )
-
-                Spacer(
-                    modifier = Modifier.height(16.dp)
-                )
-
-                Text(
-                    text = "Kumpirmahin",
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                )
-
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
-
-                DriverPasswordInputField(
-                    value = uiState.confirmPassword,
-                    onValueChange = viewModel::updateConfirmPassword
-                )
-
-                Spacer(
-                    modifier = Modifier.height(24.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onCancel,
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text(
-                            text = "Kanselahin",
-                            color = Color.Black
-                        )
-                    }
-
-                    Button(
-                        onClick = { viewModel.savePassword() },
-                        enabled = !isSubmitting,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue)
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                        } else {
-                            Text("I-save", color = Color.White)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DriverPasswordInputField(
-    value: String,
-    onValueChange: (String) -> Unit
-) {
-    var passwordVisible by remember { mutableStateOf(false) }
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        visualTransformation = if (passwordVisible) {
-            VisualTransformation.None
-        } else {
-            PasswordVisualTransformation()
-        },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = {
-            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                Icon(
-                    imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                    contentDescription = if (passwordVisible) "Itago ang password" else "Ipakita ang password",
-                    tint = TextSecondary
-                )
-            }
-        }
+    SharedSecurityForm(
+        oldPassword = uiState.oldPassword,
+        newPassword = uiState.newPassword,
+        confirmPassword = uiState.confirmPassword,
+        isSubmitting = isSubmitting,
+        onOldPasswordChange = viewModel::updateOldPassword,
+        onNewPasswordChange = viewModel::updateNewPassword,
+        onConfirmPasswordChange = viewModel::updateConfirmPassword,
+        onCancel = onCancel,
+        onSave = viewModel::savePassword
     )
 }
