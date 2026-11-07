@@ -70,20 +70,12 @@ fun IncidentScreen(onReportClick: () -> Unit, viewModel: IncidentViewModel = hil
             Spacer(Modifier.height(32.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Insidente", fontSize = responsivePageTitleSize(), fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(
-                        onClick = {
-                            multaPrefillPlate = ""
-                            multaPrefillAmount = ""
-                            multaPrefillIncidentId = null
-                            isSavingMulta = false
-                            showMultaModal = true
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
-                        shape = RoundedCornerShape(16.dp)
-                    ) { Text("Multa", fontSize = 12.sp, color = Color.White) }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = onReportClick, colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue), shape = RoundedCornerShape(16.dp)) { Text("I-report", maxLines = 1) }
+                Button(
+                    onClick = onReportClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = EnerjeepBlue),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("I-report", maxLines = 1)
                 }
             }
             Spacer(Modifier.height(24.dp))
