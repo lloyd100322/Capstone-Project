@@ -449,7 +449,7 @@ fun ActivityLogView(
     ) {
         Text(
             "Talaan ng Aktibidad",
-            fontSize = 22.sp,
+            fontSize = responsiveSectionTitleSize(),
             fontWeight = FontWeight.Bold
         )
 
