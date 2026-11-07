@@ -3,6 +3,7 @@ package com.mobile.enerjeep.ui.home
 import com.mobile.enerjeep.ui.theme.responsivePageHorizontalPadding
 import com.mobile.enerjeep.ui.theme.responsivePageTitleSize
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,7 @@ fun DriverContent(
 ) {
     var selectedTab by remember { mutableStateOf(DriverTab.Home) }
     var showIncidentForm by remember { mutableStateOf(false) }
+    var pendingIncidentFocusId by remember { mutableStateOf<String?>(null) }
     var showEmergencyDialog by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -228,11 +230,23 @@ fun DriverContent(
                         },
                         onEmergencyClick = {
                             showEmergencyDialog = true
+                        },
+                        onIncidentClick = {
+                            pendingIncidentFocusId = uiState.activeIncidentId
+                            selectedTab = DriverTab.Insidente
+                            showIncidentForm = false
                         }
                     )
                 }
                 DriverTab.Insidente -> {
-                    DriverIncidentScreen()
+                    DriverIncidentScreen(
+                        focusIncidentId = pendingIncidentFocusId,
+                        onFocusHandled = { handledId ->
+                            if (pendingIncidentFocusId == handledId) {
+                                pendingIncidentFocusId = null
+                            }
+                        }
+                    )
                 }
                 DriverTab.Kita -> {
                     KitaScreen()
@@ -278,7 +292,8 @@ fun DriverDashboardContent(
     dispatchSecondsLeft: Int = 5,
     onDismissAlert: () -> Unit = {},
     onTaposNa: () -> Unit = {},
-    onEmergencyClick: () -> Unit = {}
+    onEmergencyClick: () -> Unit = {},
+    onIncidentClick: () -> Unit = {}
 ) {
     var showTaposConfirm by remember { mutableStateOf(false) }
 
@@ -490,10 +505,10 @@ fun DriverDashboardContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Incident/Warning Card
+        // Incident/Warning Card - tap to open and focus the highlighted incident.
         if (openIncidentCount > 0) {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onIncidentClick),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(24.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -585,6 +600,13 @@ fun DriverDashboardContent(
                             }
                         }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "I-tap para makita sa Insidente",
+                        color = EnerjeepBlue,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         } else if (openIncidentCount == 0 && activeIncidentTitle == null) {
