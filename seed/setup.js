@@ -1075,6 +1075,74 @@ function legacyRefs() {
   return refs;
 }
 
+/**
+ * Fallback cleanup for dispatch history written by the older twelve-month
+ * generator. Its deterministic "_history_MM_NN" document IDs identify only
+ * generator-created presentation rows; ordinary app-created UUID/requeue
+ * entries do not match this pattern. This also works if operationsIndex is
+ * missing or was not written by an interrupted older refresh.
+ */
+async function legacyHistoricalRefs(activeDrivers, activeMembers) {
+  const prefixes = activeDrivers.map(function (driver) {
+    return "queue_" + safeId(driver.userId) + "_history_";
+  });
+  const historyIdPattern = /^queue_.+_history_\\d{2}_\\d{2}$/;
+  const [queueSnapshot, ledgerSnapshot] = await Promise.all([
+    db.collection("queue").get(),
+    db.collection("ledger").get(),
+  ]);
+
+  const historyIds = new Set();
+  const refsByPath = new Map();
+
+  queueSnapshot.docs.forEach(function (document) {
+    const id = document.id;
+    if (!historyIdPattern.test(id) ||
+        !prefixes.some(function (prefix) { return id.startsWith(prefix); })) {
+      return;
+    }
+    historyIds.add(id);
+    refsByPath.set(document.ref.path, document.ref);
+  });
+
+  ledgerSnapshot.docs.forEach(function (document) {
+    const id = document.id;
+    if (!id.endsWith("_dispatch")) return;
+    const queueId = id.slice(0, -"_dispatch".length);
+    if (!historyIdPattern.test(queueId) ||
+        !prefixes.some(function (prefix) { return queueId.startsWith(prefix); })) {
+      return;
+    }
+    historyIds.add(queueId);
+    refsByPath.set(document.ref.path, document.ref);
+  });
+
+  // Remove only dispatch notifications that reference those same generated
+  // history IDs. Do not touch incident, account, or unrelated notifications.
+  activeMembers.forEach(function (member) {
+    historyIds.forEach(function (queueId) {
+      const ref = db.collection("users")
+        .doc(member.docId)
+        .collection("notifications")
+        .doc("dispatch_" + queueId);
+      refsByPath.set(ref.path, ref);
+    });
+  });
+
+  return {
+    refs: Array.from(refsByPath.values()),
+    historyIds: Array.from(historyIds),
+  };
+}
+
+function uniqueDocumentRefs(refs) {
+  const unique = new Map();
+  refs.forEach(function (ref) {
+    unique.set(ref.path, ref);
+  });
+  return Array.from(unique.values());
+}
+
 async function commitDeletes(refs) {
   for (let start = 0; start < refs.length; start += 450) {
     const batch = db.batch();
@@ -1189,7 +1257,15 @@ async function main() {
     ? previousIndex.data()
     : null;
 
-  const removeRefs = previousManifestRefs(previousManifest).concat(legacyRefs());
+  const fallbackHistory = await legacyHistoricalRefs(
+    accounts.activeDrivers,
+    accounts.activeMembers
+  );
+  const removeRefs = uniqueDocumentRefs(
+    previousManifestRefs(previousManifest)
+      .concat(legacyRefs())
+      .concat(fallbackHistory.refs)
+  );
   const operations = buildWriteOperations(
     dataset,
     settings,
@@ -1220,6 +1296,7 @@ async function main() {
   console.log("  Per-account notifications: " + dataset.counts.notifications);
   console.log("");
   console.log("Old generated operational document IDs queued for removal: " + removeRefs.length);
+  console.log("Legacy twelve-month dispatch history IDs found: " + fallbackHistory.historyIds.length);
   console.log("User profiles, password hashes, Auth accounts and plate claims: NOT MODIFIED");
   console.log("Unrelated Firestore records: PRESERVED");
 
