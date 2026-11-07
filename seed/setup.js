@@ -533,13 +533,13 @@ function buildDataset(accounts, settings) {
     });
   });
 
-  // Dispatch and earnings history spread over the last twelve calendar months.
+  // Dispatch and earnings history stay within the current and previous two calendar months.
   // Every active driver receives at least one matching queue + ledger record.
   const eventCount = Math.max(drivers.length, 36);
   const dispatchEvents = [];
   for (let i = 0; i < eventCount; i++) {
     const driver = drivers[i % drivers.length];
-    const monthOffset = i % 12;
+    const monthOffset = i % 3;
     const cycle = Math.floor(i / 6);
     const dispatchAt = monthOffset === 0
       ? daysAgo(0, 6 + ((cycle * 2) % 11), (10 + cycle * 7) % 60)
@@ -761,7 +761,7 @@ function buildDataset(accounts, settings) {
     [7, 9, 15, "Mga Kaibigan ng Kooperatiba", 3000, "Suporta para sa kaligtasan at operasyon", "Donasyon", "donate"],
     [14, 14, 0, "Pondo ng Kooperatiba", 650, "Mga gamit sa opisina at dokumentasyon", "Operasyon", "gamit"],
     [45, 11, 20, "Pondo ng Kooperatiba", 1200, "Tulong sa agarang pangangailangan ng isang kasapi", "Tulong sa Kasapi", "gamit"],
-    [90, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
+    [60, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
   ];
 
   donationEntries.forEach(function (entry, index) {
@@ -1135,7 +1135,7 @@ async function main() {
   console.log("");
   console.log("Records to create or replace:");
   console.log("  Current queue entries: " + dataset.counts.activeQueue);
-  console.log("  Dispatch history (twelve-month range): " + dataset.counts.historyQueue);
+  console.log("  Dispatch history (three-month range): " + dataset.counts.historyQueue);
   console.log("  Incident reports: " + dataset.counts.incidents);
   console.log("  Dispatch earnings: " + dataset.counts.dispatchLedger);
   console.log("  Paid fines: " + dataset.counts.fineLedger);
