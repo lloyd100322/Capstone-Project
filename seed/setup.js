@@ -1257,8 +1257,11 @@ async function main() {
     ? previousIndex.data()
     : null;
 
+  const allDriverAccounts = accounts.all.filter(function (account) {
+    return account.role === "driver" && Boolean(account.userId);
+  });
   const fallbackHistory = await legacyHistoricalRefs(
-    accounts.activeDrivers,
+    allDriverAccounts,
     accounts.activeMembers
   );
   const removeRefs = uniqueDocumentRefs(
