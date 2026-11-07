@@ -105,4 +105,5 @@ Hindi kailangan ng Firebase Functions o Firestore Rules deployment para lamang p
 
 - Ang pag-install o pag-update ng APK ay hindi naglilinis ng Firestore. Kailangan ang preview at saka ang `--apply`.
 - Huwag i-share ang service-account JSON file o ang laman nito.
+- Firestore-only ang cleanup na ito. Hindi nito binubura ang image/video files na hiwalay na naka-upload sa Firebase Storage; kailangan munang i-review nang hiwalay ang storage paths bago magtanggal ng media.
 - Kapag may validation error sa account records, hihinto ang script bago simulan ang writes. Ayusin muna ang account data at ulitin ang preview.
