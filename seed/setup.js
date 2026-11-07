@@ -85,6 +85,7 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const TIME_ZONE = "Asia/Manila";
+const DATA_WINDOW_MONTHS = 3;
 const INDEX_REF = db.collection("settings").doc("operationsIndex");
 const ROUTE_AM = "Marilao – Monumento";
 const ROUTE_MA = "Monumento – Marilao";
@@ -473,6 +474,55 @@ async function loadSettings(drivers) {
 }
 
 // --------------------------------------------------------------------- dataset generation
+function validateDatasetWindow(dataset, asOf) {
+  const local = manilaParts(asOf);
+  // Start of the first day of the current plus previous two Manila calendar months.
+  const windowStart = new Date(Date.UTC(
+    local.year,
+    local.month - DATA_WINDOW_MONTHS,
+    1,
+    -8,
+    0,
+    0,
+    0
+  ));
+  const records = [];
+
+  Object.keys(dataset.collections).forEach(function (collection) {
+    dataset.collections[collection].forEach(function (item) {
+      records.push({
+        collection: collection,
+        id: item.id,
+        createdAt: item.data.createdAt,
+      });
+    });
+  });
+  dataset.notifications.forEach(function (item) {
+    records.push({
+      collection: "users/{phone}/notifications",
+      id: item.id,
+      createdAt: item.data.createdAt,
+    });
+  });
+
+  const outsideWindow = records.filter(function (record) {
+    const createdAt = record.createdAt &&
+      typeof record.createdAt.toDate === "function"
+      ? record.createdAt.toDate()
+      : null;
+    return !createdAt || createdAt < windowStart || createdAt > asOf;
+  });
+  if (outsideWindow.length > 0) {
+    throw new Error(
+      "May generated record na wala sa " + DATA_WINDOW_MONTHS +
+      "-month data window: " +
+      outsideWindow.slice(0, 5).map(function (record) {
+        return record.collection + "/" + record.id;
+      }).join(", ")
+    );
+  }
+}
+
 function buildDataset(accounts, settings) {
   const drivers = accounts.activeDrivers;
   const admins = accounts.admins;
@@ -539,7 +589,7 @@ function buildDataset(accounts, settings) {
   const dispatchEvents = [];
   for (let i = 0; i < eventCount; i++) {
     const driver = drivers[i % drivers.length];
-    const monthOffset = i % 3;
+    const monthOffset = i % DATA_WINDOW_MONTHS;
     const cycle = Math.floor(i / 6);
     const dispatchAt = monthOffset === 0
       ? daysAgo(0, 6 + ((cycle * 2) % 11), (10 + cycle * 7) % 60)
@@ -761,7 +811,7 @@ function buildDataset(accounts, settings) {
     [7, 9, 15, "Mga Kaibigan ng Kooperatiba", 3000, "Suporta para sa kaligtasan at operasyon", "Donasyon", "donate"],
     [14, 14, 0, "Pondo ng Kooperatiba", 650, "Mga gamit sa opisina at dokumentasyon", "Operasyon", "gamit"],
     [45, 11, 20, "Pondo ng Kooperatiba", 1200, "Tulong sa agarang pangangailangan ng isang kasapi", "Tulong sa Kasapi", "gamit"],
-    [60, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
+    [59, 13, 40, "Mga Kasapi ng Kooperatiba", 1800, "Ambag para sa regular na maintenance", "Mga Kasapi", "donate"],
   ];
 
   donationEntries.forEach(function (entry, index) {
@@ -801,7 +851,7 @@ function buildDataset(accounts, settings) {
       number: account.phoneNumber,
       addedBy: superadminName,
       isActive: true,
-      createdAt: timestamp(daysAgo(20 + index, 9, 0)),
+      createdAt: timestamp(daysAgo(Math.min(20 + index, 59), 9, 0)),
     });
   });
 
@@ -1110,6 +1160,7 @@ async function main() {
   const accounts = await loadExistingAccounts();
   const settings = await loadSettings(accounts.activeDrivers);
   const dataset = buildDataset(accounts, settings);
+  validateDatasetWindow(dataset, new Date());
   const previousIndex = await INDEX_REF.get();
   const previousManifest = previousIndex.exists
     ? previousIndex.data()
@@ -1133,6 +1184,7 @@ async function main() {
   console.log("  Admin: " + dataset.counts.activeAdmins);
   console.log("  Active drivers: " + dataset.counts.activeDrivers);
   console.log("");
+  console.log("Generated record dates: current and previous two calendar months");
   console.log("Records to create or replace:");
   console.log("  Current queue entries: " + dataset.counts.activeQueue);
   console.log("  Dispatch history (three-month range): " + dataset.counts.historyQueue);
