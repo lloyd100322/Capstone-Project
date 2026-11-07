@@ -95,7 +95,7 @@ async function getVerifiedUserContext(request) {
     db.collection("secureSessions").doc(request.auth.uid).get(),
   ]);
   const expiresAt = secureSession.get("expiresAt");
-  const role = String(user.get("role") || "").toLowerCase();
+  const role = String(user.get("role") || "").trim().toLowerCase();
   if (!user.exists ||
       !secureSession.exists ||
       secureSession.get("phoneNumber") !== phone ||
@@ -104,7 +104,7 @@ async function getVerifiedUserContext(request) {
       typeof expiresAt.toMillis !== "function" ||
       expiresAt.toMillis() <= Date.now() ||
       !["admin", "superadmin", "driver"].includes(role) ||
-      String(user.get("status") || "active").toLowerCase() !== "active") {
+      String(user.get("status") || "active").trim().toLowerCase() !== "active") {
     throw new HttpsError("permission-denied", "Kailangan ang aktibong password at OTP-verified session.");
   }
 
@@ -1773,10 +1773,10 @@ exports.completeSecureLogin = onCall(
         tx.get(userRef),
         tx.get(secretRef),
       ]);
-      const role = String(userSnapshot.get("role") || "").toLowerCase();
+      const role = String(userSnapshot.get("role") || "").trim().toLowerCase();
       if (!userSnapshot.exists ||
           !["admin", "superadmin", "driver"].includes(role) ||
-          String(userSnapshot.get("status") || "active").toLowerCase() !== "active") {
+          String(userSnapshot.get("status") || "active").trim().toLowerCase() !== "active") {
         return false;
       }
 
